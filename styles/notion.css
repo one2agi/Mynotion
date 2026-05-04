@@ -2051,7 +2051,8 @@ tbody tr {
 }
 
 pre[class*='language-mermaid'] {
-  @apply bg-gray-50 dark:bg-gray-200 !important;
+  /* 浅色页：浅底；深色页：深底（勿用 gray-200，在 dark 下仍偏浅） */
+  @apply bg-gray-50 dark:bg-gray-900 !important;
 }
 
 /* mermaid 原文隐藏 */
