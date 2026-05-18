@@ -53,7 +53,7 @@ module.exports = {
     artist: '杨家胜 | Jesson Yang',
     url: 'https://cdn.jsdelivr.net/gh/JessonGuitar/mp3-cdn@main/%E4%BC%B4%E4%BD%A0%E5%B7%A6%E5%8F%B3%20beside%20you.mp3',
     cover: ''
-  }
+  },
   {
     name: '喝高的牛仔 Drunk Cowboy',
     artist: '杨家胜 | Jesson Yang',
