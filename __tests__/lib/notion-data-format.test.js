@@ -113,6 +113,118 @@ describe('Notion data format compatibility', () => {
     expect(pageIds).not.toContain('hidden_page')
   })
 
+  it('does not re-add rows hidden by the selected view filter from page_sort', () => {
+    const pageIds = getAllPageIds(
+      {
+        collection_1: {
+          view_1: {
+            collection_group_results: {
+              blockIds: ['page_1']
+            }
+          }
+        }
+      },
+      'collection_1',
+      {
+        view_1: {
+          value: {
+            value: {
+              page_sort: ['page_1', 'hidden_page'],
+              query2: {
+                filter: {
+                  filters: [
+                    {
+                      property: 'year',
+                      filter: {
+                        operator: 'enum_is',
+                        value: { type: 'exact', value: '2026' }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      ['view_1'],
+      {}
+    )
+
+    expect(pageIds).toEqual(['page_1'])
+    expect(pageIds).not.toContain('hidden_page')
+  })
+
+  it('keeps an empty selected view query empty instead of falling back to page_sort', () => {
+    const pageIds = getAllPageIds(
+      {
+        collection_1: {
+          view_1: {
+            collection_group_results: {
+              blockIds: []
+            }
+          }
+        }
+      },
+      'collection_1',
+      {
+        view_1: {
+          value: {
+            value: {
+              page_sort: ['hidden_page'],
+              query2: {
+                filter: {
+                  filters: [
+                    {
+                      property: 'year',
+                      filter: {
+                        operator: 'enum_is',
+                        value: { type: 'exact', value: '2026' }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      ['view_1'],
+      {}
+    )
+
+    expect(pageIds).toEqual([])
+  })
+
+  it('uses selected query results as the source of truth once they are available', () => {
+    const pageIds = getAllPageIds(
+      {
+        collection_1: {
+          view_1: {
+            collection_group_results: {
+              blockIds: ['page_1', 'new_page']
+            }
+          }
+        }
+      },
+      'collection_1',
+      {
+        view_1: {
+          value: {
+            value: {
+              page_sort: ['page_1', 'page_2']
+            }
+          }
+        }
+      },
+      ['view_1'],
+      {}
+    )
+
+    expect(pageIds).toEqual(['page_1', 'new_page'])
+    expect(pageIds).not.toContain('page_2')
+  })
+
   it('falls back to all query blocks when no selected view is available', () => {
     const pageIds = getAllPageIds(
       {
