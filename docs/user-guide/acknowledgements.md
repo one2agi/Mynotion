@@ -31,7 +31,7 @@ NotionNext 的主题系统来自长期社区共建。主题作者、迁移者和
 
 - [主题全览](./themes/THEMES_CATALOG.md)
 - [主题总览](./themes/overview.md)
-- [主题开发与迁移指南（GitHub）](https://github.com/notionnext-org/NotionNext/blob/main/docs/developer/THEME_MIGRATION_GUIDE.zh-CN.md)
+- [主题开发与迁移指南](../developer/THEME_MIGRATION_GUIDE.zh-CN.md)
 
 ## 维护者与协作规则
 
@@ -39,7 +39,7 @@ NotionNext 的主题系统来自长期社区共建。主题作者、迁移者和
 
 - [MAINTAINERS.md](https://github.com/notionnext-org/NotionNext/blob/main/MAINTAINERS.md)
 - [GOVERNANCE.zh-CN.md](https://github.com/notionnext-org/NotionNext/blob/main/GOVERNANCE.zh-CN.md)
-- [维护者运行手册（GitHub）](https://github.com/notionnext-org/NotionNext/blob/main/docs/developer/MAINTAINER_RUNBOOK.zh-CN.md)
+- [维护者运行手册](../developer/MAINTAINER_RUNBOOK.zh-CN.md)
 
 ## 如何加入维护
 

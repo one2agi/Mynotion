@@ -12,7 +12,7 @@ The main repository is maintained by the GitHub organization **[notionnext-org](
 git remote set-url origin https://github.com/notionnext-org/NotionNext.git
 ```
 
-See [Contributing](../CONTRIBUTING.md#repository-and-organization) (and the Chinese contributing guide) for details.
+See [Contributing](https://github.com/notionnext-org/NotionNext/blob/main/CONTRIBUTING.md#repository-and-organization) (and the Chinese contributing guide) for details.
 
 ## Start Here (5 minutes)
 

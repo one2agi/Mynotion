@@ -1,6 +1,6 @@
-﻿# 用户文档维护工作流
+﻿# 文档维护工作流
 
-面向**站长、贡献者、维护者**：如何在仓库内正确新增、修改、排序 NotionNext 使用说明。
+面向**使用者、贡献者、维护者**：如何在仓库内正确新增、修改、排序 NotionNext 文档。
 
 > 策略总纲：[DOCUMENTATION_POLICY.md](../DOCUMENTATION_POLICY.md)  
 > 读者导航：[使用说明目录](./) · 官方 slug 对照：[ARTICLE_INDEX.md](./ARTICLE_INDEX.md)
@@ -9,7 +9,7 @@
 
 ## 一、维护者先记住的三件事
 
-1. **权威位置**：站长向教程在 `docs/user-guide/`（主题统一在 `user-guide/themes/<id>.md`）；`docs/developer/themes/` 仅放开发者深度文档。
+1. **权威位置**：使用教程在 `docs/user-guide/`；架构、贡献、主题迁移和实现细节在 `docs/developer/`。两类文档都进入在线站，目标是让使用者可以自然走向贡献。
 2. **三处必同步**：改一篇教程时，视情况更新 **正文**、**README 目录**、**ARTICLE_INDEX**（新建或废弃时还要动 **MIGRATION_STATUS**）。
 3. **与代码一致**：环境变量名、配置键、默认值以 `conf/*.config.js`、`blog.config.js`、各主题 `themes/*/config.js` 为准；版本号以 `package.json` 为准。
 
@@ -24,15 +24,15 @@
 | 站点配置、URL、搜索 | `docs/user-guide/config/` | 功能名，如 `url-customize.md` |
 | Notion 使用技巧 | `docs/user-guide/notion/` | |
 | 版本与更新说明 | `docs/user-guide/changelog/` | |
-| 主题（站长向） | `docs/user-guide/themes/<id>.md` | 25 篇；`generate-theme-user-docs.mjs` 刷新配置表；Proxio/Heo 含合并专题 |
-| 主题（开发向） | `docs/developer/themes/` | 仅 Claude、Endspace 等全局改动长篇；勿与站长文重复 |
+| 主题使用说明 | `docs/user-guide/themes/<id>.md` | 25 篇；`generate-theme-user-docs.mjs` 刷新配置表；Proxio/Heo 含合并专题 |
+| 主题实现说明 | `docs/developer/themes/` | 主题架构、全局改动、迁移计划、上游来源、许可证；与使用说明互链 |
 | 4.9.x 配置 / Notion 能力 | `docs/user-guide/reference/` | `features.md`、`notion-4x.md`（改 `conf/` 后必同步） |
 | 统计 / 评论 / 挂件 | `analytics/`、`comments/`、`plugins/` | 一篇一插件或一总览 |
-| 开发、架构 | `docs/user-guide/development/` + `docs/developer/GETTING_STARTED.md` 等 | 用户向写短，细节放 `docs/` |
+| 开发、架构 | `docs/user-guide/development/` + `docs/developer/GETTING_STARTED.md` 等 | 入门教程写短路径，进阶细节放 `docs/developer/` |
 | 运营、SEO | `docs/user-guide/operations/` | |
 | 社群、反馈、赞助 | `docs/user-guide/help/` | |
 
-**不要**把站长教程写进 `docs/developer/ARCHITECTURE.md`；**不要**把架构细节塞进 `user-guide` 除非有简短说明并链到 `docs/developer/`。
+使用者能直接看到开发文档，但仍要保持目录职责清晰：操作步骤放 `user-guide`，原理、取舍、维护规则放 `developer`，两边用链接连接。
 
 ---
 
@@ -71,7 +71,7 @@ flowchart LR
 3. `yarn` 无需跑；文档 PR 建议 `docs(user-guide): 说明` 类 commit。  
 4. PR 描述写清：改了什么、是否已与当前 `main` 配置一致。
 
-### 场景 B：新增一篇站长教程
+### 场景 B：新增一篇使用教程
 
 1. **定目录**：按 [第二节](#二文档放在哪目录秩序) 选子目录，文件名用 **小写英文 + 连字符**，如 `deploy/xxx.md`。  
 2. **写正文模板**（复制后填空）：
@@ -103,15 +103,25 @@ https://docs.tangly1024.com/article/slug
 
 与功能 PR **同一 PR** 或 **紧跟的 docs PR** 中：
 
-1. 在 `conf/*.config.js` 加注释时，可写 `参阅 docs/user-guide/...`。  
-2. 在 `user-guide` 中更新对应插件/配置文档（或 `config-site.md` / `config/site-basics.md`）。  
-3. 若影响升级路径，同步 [update.md](./update.md) 或 [changelog/latest.md](./changelog/latest.md)。  
-4. 破坏性变更必须在 changelog 与文档中**显眼注明**。
+1. 先判断用户是否需要“知道如何使用”：新增 API、环境变量、配置项、主题选项、插件开关、部署方式、CLI 命令、迁移步骤时，默认需要补 `docs/user-guide/`。
+2. 在 `conf/*.config.js`、`blog.config.js`、API 注释或 README 中引用文档路径时，可写 `参阅 docs/user-guide/...`。
+3. 在 `user-guide` 中更新对应插件/配置文档（或 `config-site.md` / `config/site-basics.md`）。
+4. 若新增文章或移动路径，同步 VitePress 侧边栏 `.vitepress/config.mts`、栏目索引、[ARTICLE_INDEX.md](./ARTICLE_INDEX.md)。只更新既有文章时，通常无需改导航。
+5. 若影响升级路径，同步 [update.md](./update.md) 或 [changelog/latest.md](./changelog/latest.md)。
+6. 破坏性变更必须在 changelog 与文档中**显眼注明**。
+
+功能 PR 的推荐处理方式：
+
+```text
+能在同一 PR 补文档 → 同一 PR 完成
+需要先合并代码 → 在 PR 描述写 Docs follow-up，并创建紧跟的文档 PR
+不需要文档 → 在 PR 描述说明原因，例如“内部重构，无用户可见行为”
+```
 
 ### 场景 D：主题新增或主题配置大改
 
-1. 站长向：在 `docs/user-guide/themes/<id>.md` 维护（运行 `node scripts/generate-theme-user-docs.mjs` 刷新配置表）。
-2. 仅当主题涉及全局文件 / 架构：在 `docs/developer/themes/` 增补开发者文档，并在 `<id>.md` 中加「开发者深度文档」链接（勿重复站长正文）。
+1. 使用说明：在 `docs/user-guide/themes/<id>.md` 维护（运行 `node scripts/generate-theme-user-docs.mjs` 刷新配置表）。
+2. 实现说明：涉及全局文件、架构取舍、迁移计划、上游来源或许可证时，在 `docs/developer/themes/` 增补文档，并在 `<id>.md` 中加进阶链接（勿重复使用说明正文）。
 3. 更新 [themes/overview.md](./themes/overview.md) 主题列表（与 `themes/` 目录实际文件夹一致）。  
 4. 更新 [ARTICLE_INDEX.md](./ARTICLE_INDEX.md)。
 
@@ -130,6 +140,7 @@ https://docs.tangly1024.com/article/slug
 
 ```markdown
 - [ ] 路径符合 docs/user-guide/ 目录约定
+- [ ] 新功能 / 新配置 / 新 API 已补充使用说明，或在 PR 中说明不需要文档的原因
 - [ ] README.md 已增加/调整链接
 - [ ] ARTICLE_INDEX.md 已更新（新 slug / 新路径）
 - [ ] 无 .env、Token、个人域名 ID、真实 API Key 示例
@@ -156,7 +167,7 @@ https://docs.tangly1024.com/article/slug
 
 - **一篇一主题**：评论插件拆在 `comments/`，不要全部堆进一篇（除非做总览 + 子链）。  
 - **总览 + 分篇**：`overview.md` 只写对比表和链接，细节在子页面。  
-- **勿重复主题正文**：每个主题只维护一篇站长文档 `user-guide/themes/<id>.md`；`docs/developer/themes/PROXIO.md`、`HEO.md` 仅为重定向存根。  
+- **勿重复主题正文**：每个主题只维护一篇使用说明 `user-guide/themes/<id>.md`；实现文档只补充原理、迁移、合规与维护信息。
 - **changelog**：超长历史放 [changelog/v4-history.md](./changelog/v4-history.md) + GitHub Releases，不要在 `user-guide` 根目录贴几千行日志。
 
 ### 与旧站关系
@@ -169,7 +180,7 @@ https://docs.tangly1024.com/article/slug
 
 - 文档专用分支：`docs/xxx` 或 `docs/user-guide-xxx`。  
 - 文档与功能分 PR 时，在功能 PR 中写 `Docs follow-up: #xxx`。  
-- 遵循 [CONTRIBUTION_WORKFLOW.md（GitHub）](https://github.com/notionnext-org/NotionNext/blob/main/docs/developer/CONTRIBUTION_WORKFLOW.md)（lint/test 对纯文档 PR 可选，但勿改无关文件）。
+- 遵循 [CONTRIBUTION_WORKFLOW.md](../developer/CONTRIBUTION_WORKFLOW.md)（lint/test 对纯文档 PR 可选，但勿改无关文件）。
 
 ---
 
@@ -188,7 +199,7 @@ https://docs.tangly1024.com/article/slug
 | 改部署步骤 | `deploy/*.md` + README |
 | 改评论/统计配置说明 | `comments/` 或 `analytics/` + 核对 `conf/` |
 | 改 Proxio 顶栏 | `docs/user-guide/themes/proxio.md` |
-| 改开发环境 | `docs/developer/GETTING_STARTED.md`，user-guide 只保留链接 |
+| 改开发环境 | `docs/developer/GETTING_STARTED.md`，必要时在 `user-guide/development/` 补入口 |
 | 不知道写哪 | 查 [ARTICLE_INDEX.md](./ARTICLE_INDEX.md) |
 | 新功能无文档 | 场景 B + C |
 
@@ -196,4 +207,4 @@ https://docs.tangly1024.com/article/slug
 
 ## English summary
 
-Maintain end-user docs under `docs/user-guide/`. On every add/change: update the article, `README.md`, and `ARTICLE_INDEX.md`. Match env var names to `conf/*.config.js`. Never commit secrets. Use the checklists in Section 5 before opening a PR.
+Maintain user guides under `docs/user-guide/` and advanced contributor docs under `docs/developer/`. Both are published online. On every add/change: update the article, navigation, and indexes when needed. Match env var names to `conf/*.config.js`. Never commit secrets. Use the checklists in Section 5 before opening a PR.
