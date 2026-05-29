@@ -3,7 +3,7 @@ import { siteConfig } from '@/lib/config'
 import Card from '@/themes/hexo/components/Card'
 import { useGlobal } from '@/lib/global'
 import SmartLink from '@/components/SmartLink'
-import { RecentComments } from '@waline/client'
+import { getWalineRecentComments } from '@/lib/plugins/walineRecentComments'
 
 /**
  * @see https://waline.js.org/guide/get-started.html
@@ -15,7 +15,7 @@ const HexoRecentComments = (props) => {
   const { locale } = useGlobal()
   const [onLoading, changeLoading] = useState(true)
   useEffect(() => {
-    RecentComments({
+    getWalineRecentComments({
       serverURL: siteConfig('COMMENT_WALINE_SERVER_URL'),
       count: 5
     }).then(({ comments }) => {

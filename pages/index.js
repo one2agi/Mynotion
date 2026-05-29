@@ -21,6 +21,14 @@ const Index = props => {
   return <DynamicLayout theme={theme} layoutName='LayoutIndex' {...props} />
 }
 
+const cleanLatestPostsForIndex = posts => {
+  if (!Array.isArray(posts)) return posts
+  return posts.map(post => {
+    const { blockMap, ...rest } = post
+    return rest
+  })
+}
+
 /**
  * SSG 获取数据
  * @returns
@@ -112,6 +120,7 @@ export async function getStaticProps(req) {
 
   // 生成全文索引 - 仅在 yarn build 时执行 && process.env.npm_lifecycle_event === 'build'
 
+  props.latestPosts = cleanLatestPostsForIndex(props.latestPosts)
   delete props.allPages
 
   return {

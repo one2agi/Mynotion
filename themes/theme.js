@@ -10,6 +10,39 @@ const baseLayoutCache = new Map()
 const layoutByThemeCache = new Map()
 let domFixTimer = null
 
+const themeLoaders = {
+  claude: () => import('@/themes/claude'),
+  commerce: () => import('@/themes/commerce'),
+  endspace: () => import('@/themes/endspace'),
+  example: () => import('@/themes/example'),
+  fukasawa: () => import('@/themes/fukasawa'),
+  fuwari: () => import('@/themes/fuwari'),
+  game: () => import('@/themes/game'),
+  gitbook: () => import('@/themes/gitbook'),
+  heo: () => import('@/themes/heo'),
+  hexo: () => import('@/themes/hexo'),
+  landing: () => import('@/themes/landing'),
+  magzine: () => import('@/themes/magzine'),
+  matery: () => import('@/themes/matery'),
+  medium: () => import('@/themes/medium'),
+  movie: () => import('@/themes/movie'),
+  nav: () => import('@/themes/nav'),
+  next: () => import('@/themes/next'),
+  nobelium: () => import('@/themes/nobelium'),
+  photo: () => import('@/themes/photo'),
+  plog: () => import('@/themes/plog'),
+  proxio: () => import('@/themes/proxio'),
+  simple: () => import('@/themes/simple'),
+  starter: () => import('@/themes/starter'),
+  thoughtlite: () => import('@/themes/thoughtlite'),
+  typography: () => import('@/themes/typography')
+}
+
+const loadThemeModule = themeFolderName => {
+  const loader = themeLoaders[themeFolderName] || themeLoaders[BLOG.THEME]
+  return loader()
+}
+
 const normalizeThemeName = themeValue => {
   if (!themeValue || typeof themeValue !== 'string') return BLOG.THEME
   const firstTheme = themeValue.split(',')[0].trim()
@@ -30,7 +63,7 @@ const scheduleFixThemeDOM = (delay = 120) => {
 
 async function importThemeConfig(themeFolderName) {
   try {
-    const mod = await import(`@/themes/${themeFolderName}`)
+    const mod = await loadThemeModule(themeFolderName)
     return mod?.THEME_CONFIG ?? null
   } catch (err) {
     console.error(`Failed to load theme config "${themeFolderName}":`, err)
@@ -86,7 +119,7 @@ export const getBaseLayoutByTheme = theme => {
   }
   const DynamicBaseLayout = dynamic(
     () =>
-      import(`@/themes/${normalizedTheme}`).then(m => {
+      loadThemeModule(normalizedTheme).then(m => {
         const Base = m['LayoutBase']
         if (!Base) {
           throw new Error(
@@ -129,7 +162,7 @@ export const useLayoutByTheme = ({ layoutName, theme }) => {
 
   const DynamicLayoutComponent = dynamic(
     () =>
-      import(`@/themes/${themeQuery}`).then(componentsSource => {
+      loadThemeModule(themeQuery).then(componentsSource => {
         const Selected =
           componentsSource[layoutName] || componentsSource.LayoutSlug
         if (!Selected) {

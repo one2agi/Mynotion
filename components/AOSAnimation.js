@@ -1,4 +1,5 @@
 import { loadExternalResource } from '@/lib/utils'
+import { runWhenIdle } from '@/lib/utils/clientIdle'
 import { useEffect } from 'react'
 // import AOS from 'aos'
 
@@ -19,6 +20,8 @@ export default function AOSAnimation() {
     })
   }
   useEffect(() => {
-    initAOS()
+    return runWhenIdle(() => {
+      initAOS()
+    }, 2200)
   }, [])
 }

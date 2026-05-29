@@ -1,6 +1,6 @@
 {
   "name": "notion-next",
-  "version": "4.9.5.7",
+  "version": "4.9.5.8",
   "packageManager": "yarn@1.22.22",
   "homepage": "https://github.com/tangly1024/NotionNext.git",
   "license": "MIT",
@@ -55,6 +55,7 @@
     "final-validation": "node scripts/final-validation.js",
     "perf:baseline": "node scripts/perf-baseline.js",
     "perf:compare": "node scripts/perf-baseline.js --mode=compare",
+    "perf:budget": "node scripts/check-bundle-budget.js",
     "perf:lighthouse": "lhci autorun",
     "perf:audit:themes": "node scripts/audit-theme-performance.js",
     "perf:compress-theme-previews": "node scripts/compress-theme-previews.js",

@@ -33,6 +33,7 @@ const ThemeSwitch = () => {
   const router = useRouter()
   const currentTheme = getQueryParam(router.asPath, 'theme') || theme
   const [sideBarVisible, setSideBarVisible] = useState(false)
+  const [hasOpened, setHasOpened] = useState(false)
 
   const currentMeta = getThemeSwitchMeta(currentTheme)
   const tierLabels = {
@@ -67,9 +68,11 @@ const ThemeSwitch = () => {
                   : 'bg-gradient-to-br from-indigo-500 via-violet-600 to-fuchsia-600 ring-white/30'
               }`}
               onClick={() => {
+                setHasOpened(true)
                 setSideBarVisible(true)
               }}
               onTouchStart={() => {
+                setHasOpened(true)
                 setSideBarVisible(true)
               }}
               title='Open theme panel'>
@@ -93,6 +96,7 @@ const ThemeSwitch = () => {
                     : 'focus-visible:ring-offset-white'
                 }`}
                 onClick={() => {
+                  setHasOpened(true)
                   setSideBarVisible(true)
                 }}
                 title='Click To Switch Theme'>
@@ -124,7 +128,7 @@ const ThemeSwitch = () => {
         onClose={() => {
           setSideBarVisible(false)
         }}>
-        <div className='flex min-h-0 flex-1 flex-col overflow-y-auto'>
+        {hasOpened && <div className='flex min-h-0 flex-1 flex-col overflow-y-auto'>
           <div className='sticky top-0 z-[1] border-b border-gray-100 bg-white/95 px-5 py-4 backdrop-blur-md dark:border-gray-800 dark:bg-gray-950/95'>
             <div className='flex items-start justify-between gap-3'>
               <div className='min-w-0'>
@@ -237,7 +241,7 @@ const ThemeSwitch = () => {
               })}
             </div>
           </div>
-        </div>
+        </div>}
       </SideBarDrawer>
     </>
   )

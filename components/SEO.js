@@ -1,6 +1,7 @@
 import { siteConfig } from '@/lib/config'
 import { useGlobal } from '@/lib/global'
 import { loadExternalResource } from '@/lib/utils'
+import { runWhenIdle } from '@/lib/utils/clientIdle'
 import Head from 'next/head'
 import { useRouter } from 'next/router'
 import { useEffect } from 'react'
@@ -22,6 +23,9 @@ const SEO = props => {
   const webFontUrl = siteConfig('FONT_URL')
 
   useEffect(() => {
+    if (!webFontUrl || webFontUrl.length === 0) return
+
+    return runWhenIdle(() => {
     // 使用WebFontLoader字体加载
     loadExternalResource(
       'https://cdnjs.cloudflare.com/ajax/libs/webfont/1.6.28/webfontloader.js',
@@ -38,7 +42,8 @@ const SEO = props => {
         })
       }
     })
-  }, [])
+    }, 2500)
+  }, [webFontUrl])
 
   // SEO关键词
   const KEYWORDS = siteConfig('KEYWORDS')

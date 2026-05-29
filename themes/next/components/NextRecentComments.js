@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import SmartLink from '@/components/SmartLink'
-import { RecentComments } from '@waline/client'
+import { getWalineRecentComments } from '@/lib/plugins/walineRecentComments'
 import { siteConfig } from '@/lib/config'
 
 /**
@@ -12,7 +12,7 @@ const NextRecentComments = (props) => {
   const [comments, updateComments] = useState([])
   const [onLoading, changeLoading] = useState(true)
   useEffect(() => {
-    RecentComments({
+    getWalineRecentComments({
       serverURL: siteConfig('COMMENT_WALINE_SERVER_URL'),
       count: 5
     }).then(({ comments }) => {

@@ -18,11 +18,9 @@ import ErrorHandler from '@/lib/utils/errorHandler'
 import BLOG from '@/blog.config'
 import ExternalPlugins from '@/components/ExternalPlugins'
 import SEO from '@/components/SEO'
-import { zhCN } from '@clerk/localizations'
 import dynamic from 'next/dynamic'
-// import { ClerkProvider } from '@clerk/nextjs'
-const ClerkProvider = dynamic(() =>
-  import('@clerk/nextjs').then(m => m.ClerkProvider)
+const ClerkRuntimeProvider = dynamic(
+  () => import('@/components/ClerkRuntimeProvider')
 )
 const AppErrorBoundary = ErrorHandler.createErrorBoundary(
   <div style={{ padding: '2rem', textAlign: 'center', minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
@@ -50,6 +48,7 @@ const MyApp = ({ Component, pageProps }) => {
   }, [queryTheme, notionTheme, configTheme])
 
   useEffect(() => {
+    if (process.env.NODE_ENV === 'production') return
     const source = queryTheme
       ? 'url:theme'
       : notionTheme
@@ -95,11 +94,7 @@ const MyApp = ({ Component, pageProps }) => {
   )
   return (
     <>
-      {enableClerk ? (
-        <ClerkProvider localization={zhCN}>{content}</ClerkProvider>
-      ) : (
-        content
-      )}
+      {enableClerk ? <ClerkRuntimeProvider>{content}</ClerkRuntimeProvider> : content}
     </>
   )
 }

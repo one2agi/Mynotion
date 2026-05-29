@@ -1,27 +1,39 @@
 import SmartLink from '@/components/SmartLink'
 import { siteConfig } from '@/lib/config'
+import { compressImage } from '@/lib/db/notion/mapImage'
 import CONFIG from '../config'
 import { IconArrowRight } from '@tabler/icons-react'
+import Head from 'next/head'
 
 /**
  * BlogPostCard Component - Minimalist Light Industrial
  * Post card with clean design
  */
-export const BlogPostCard = ({ post, showSummary = true }) => {
+export const BlogPostCard = ({ post, showSummary = true, priority = false }) => {
   const showPreview = siteConfig('ENDSPACE_POST_LIST_PREVIEW', true, CONFIG)
   const showCover = siteConfig('ENDSPACE_POST_LIST_COVER', true, CONFIG)
   const hasCover = showCover && post.pageCoverThumbnail
+  const cover = hasCover ? compressImage(post.pageCoverThumbnail, priority ? 768 : 640) : null
 
   return (
     <SmartLink href={`/${post.slug}`}>
+      {priority && cover && (
+        <Head>
+          <link rel="preload" as="image" href={cover} fetchPriority="high" />
+          <link rel="preconnect" href="https://images.unsplash.com" />
+        </Head>
+      )}
       <article className={`endspace-frame group mb-6 flex flex-col overflow-hidden relative transition-all duration-300`}>
         
         {/* Cover Image - Top (Full Width) */}
         {hasCover && (
           <div className="w-full aspect-video flex-shrink-0 relative overflow-hidden z-10 bg-black/5">
             <img
-              src={post.pageCoverThumbnail}
+              src={cover}
               alt={post.title}
+              loading={priority ? 'eager' : 'lazy'}
+              fetchPriority={priority ? 'high' : 'auto'}
+              decoding="async"
               className="w-full h-full object-cover transform group-hover:scale-105 transition-transform duration-700"
             />
             {/* Minimalist marker overlay */}
