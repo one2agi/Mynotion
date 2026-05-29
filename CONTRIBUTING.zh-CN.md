@@ -3,6 +3,7 @@
 - [仓库与组织](#仓库与组织)
 - [第一次贡献（推荐路径）](#第一次贡献推荐路径)
 - [环境准备](#环境准备)
+- [AI 辅助主题贡献](#ai-辅助主题贡献)
 - [新建主题](#新建主题)
 - [新增语言](#新增语言)
 - [环境变量](#环境变量)
@@ -68,9 +69,20 @@ Fork 开发与向 `main` 提 PR 的流程不变；PR 的目标仓库请选择 **
 更多文档导航：
 
 - [文档导航入口（中文）](./docs/README.md)
-- [Docs Navigation (English)](./docs/README.en.md)
-- [主题迁移指南（中文）](./docs/THEME_MIGRATION_GUIDE.zh-CN.md)
-- [Theme Migration Guide (English)](./docs/THEME_MIGRATION_GUIDE.md)
+- [主题迁移指南（中文）](./docs/developer/THEME_MIGRATION_GUIDE.zh-CN.md)
+- [Theme Migration Guide (English)](./docs/developer/THEME_MIGRATION_GUIDE.md)
+
+## AI 辅助主题贡献
+
+如果你想用 AI 参与主题开发，推荐从小任务开始：
+
+1. 阅读 [借助 AI 开发 NotionNext](./docs/user-guide/development/notion-next-develop-with-ai.md)。
+2. 复制 [AI 主题开发提示词包](./docs/user-guide/development/ai-theme-prompts.md) 中的提示词。
+3. 从 [主题新手任务池](./docs/community/GOOD_FIRST_THEME_TASKS.zh-CN.md) 选择一个小任务。
+4. 只改一个主题、一个页面或一个组件，避免一次性大改。
+5. 准备贡献主仓库前，对照 [主题迁移指南](./docs/developer/THEME_MIGRATION_GUIDE.zh-CN.md) 的检查清单。
+
+如果你只有主题想法，还没有代码，请先用 Discussions 的“主题风格建议”模板收集反馈。主题生态按 [长期运营模型](./docs/community/THEME_ECOSYSTEM_OPERATING_MODEL.zh-CN.md) 运转，主理人只处理方向判断和高影响改动，日常任务优先由社区接力。
 
 ## 新建主题
 

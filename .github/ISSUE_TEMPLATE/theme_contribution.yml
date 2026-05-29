@@ -1,0 +1,83 @@
+name: Theme contribution （主题贡献）
+description: Propose or track a concrete NotionNext theme contribution.
+title: "theme: "
+labels: ["enhancement", "theme", "help wanted"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        这个模板用于已经相对明确的主题贡献任务。若还在收集想法，请先到 Discussions 使用“主题风格建议”模板。
+        新主题请参考 `docs/developer/THEME_MIGRATION_GUIDE.zh-CN.md` 与 `docs/developer/THEME_ECOSYSTEM_ROADMAP.zh-CN.md`。
+        如果你希望用 AI 辅助开发，可复制 `docs/user-guide/development/ai-theme-prompts.md` 中的提示词。
+  - type: input
+    id: theme-name
+    attributes:
+      label: 主题名称 / 目录名
+      placeholder: 例如 bento、material、portfolio-lite
+    validations:
+      required: true
+  - type: textarea
+    id: target
+    attributes:
+      label: 目标用户与使用场景
+      placeholder: 说明这个主题适合什么站点，以及为什么现有主题无法很好覆盖。
+    validations:
+      required: true
+  - type: textarea
+    id: references
+    attributes:
+      label: 设计参考
+      placeholder: |
+        - 参考站点：
+        - 截图/设计稿：
+        - 需要保留的视觉特征：
+    validations:
+      required: true
+  - type: dropdown
+    id: base-theme
+    attributes:
+      label: 计划基于哪个现有主题开发
+      options:
+        - example
+        - simple
+        - endspace
+        - starter
+        - gitbook
+        - landing
+        - nav
+        - 其他 / 从零开始
+    validations:
+      required: true
+  - type: checkboxes
+    id: page-coverage
+    attributes:
+      label: 页面覆盖范围
+      options:
+        - label: 首页 / 列表页
+        - label: 文章详情页
+        - label: 归档页
+        - label: 分类页
+        - label: 标签页
+        - label: 搜索页
+        - label: 404 页
+        - label: 移动端导航
+        - label: 深色模式
+  - type: checkboxes
+    id: contribution-checklist
+    attributes:
+      label: 合并前检查项
+      options:
+        - label: 主题代码位于 `themes/<id>/`
+        - label: 已补充 `docs/user-guide/themes/<id>.md`
+        - label: 已提交 `public/images/themes-preview/<id>.png`
+        - label: 已提交 `public/images/themes-preview/<id>.webp`
+        - label: 已更新 `conf/themeSwitch.manifest.js`
+        - label: 已验证首页、文章页、列表页、搜索页、404 页
+        - label: 已验证移动端和深色模式
+  - type: textarea
+    id: notes
+    attributes:
+      label: 其他说明
+      placeholder: 风险、依赖、尚未决定的问题或希望社区协助的地方。
+    validations:
+      required: false

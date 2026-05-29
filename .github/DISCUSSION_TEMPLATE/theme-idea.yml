@@ -1,0 +1,66 @@
+title: "🎨 主题风格建议："
+labels: ["enhancement", "theme"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        用于收集新的主题风格、参考站点与适用场景。成熟方向会整理成 `help wanted` / `good first issue` 任务，方便社区认领。
+        如果你已经准备实现主题，请改用 Theme contribution Issue 或直接提交 PR。
+        不知道如何描述风格时，可先参考 `docs/user-guide/development/ai-theme-prompts.md`。
+  - type: textarea
+    id: style
+    attributes:
+      label: 主题风格
+      description: 描述你希望 NotionNext 增加的视觉方向。
+      placeholder: 例如：日式便当卡片、Google Material 扁平化、经典博客致敬、SaaS 官网、极简作品集等。
+    validations:
+      required: true
+  - type: textarea
+    id: audience
+    attributes:
+      label: 适用站点与用户
+      placeholder: 例如：个人博客、开源项目官网、作品集、产品落地页、知识库、导航站。
+    validations:
+      required: true
+  - type: textarea
+    id: references
+    attributes:
+      label: 参考链接或截图
+      description: 可贴参考站点、截图、设计稿、类似主题链接。
+      placeholder: |
+        - https://example.com
+        - 截图或设计稿说明
+    validations:
+      required: false
+  - type: textarea
+    id: components
+    attributes:
+      label: 关键页面或组件
+      placeholder: 例如：首页 Hero、文章列表卡片、文章页、标签页、搜索页、导航、页脚、深色模式。
+    validations:
+      required: false
+  - type: dropdown
+    id: base-theme
+    attributes:
+      label: 可能适合基于哪个主题改造
+      options:
+        - 不确定
+        - example
+        - simple
+        - endspace
+        - starter
+        - gitbook
+        - landing
+        - nav
+        - 其他
+    validations:
+      required: true
+  - type: checkboxes
+    id: participation
+    attributes:
+      label: 参与方式
+      options:
+        - label: 我可以补充参考资料
+        - label: 我愿意尝试用 AI 辅助开发主题
+        - label: 我可以提交 PR
+        - label: 希望维护者或社区拆成可认领任务

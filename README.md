@@ -130,6 +130,7 @@ yarn dev
 | 新手入口 | [从这里开始](https://notionnext.tangly1024.com/user-guide/start-here) |
 | 配置索引 | [全站功能与配置索引](https://notionnext.tangly1024.com/user-guide/reference/features) |
 | 主题说明 | [25 个主题说明](https://notionnext.tangly1024.com/user-guide/themes/THEMES_CATALOG) |
+| AI 主题开发 | [提示词包](./docs/user-guide/development/ai-theme-prompts.md) · [借助 AI 开发](./docs/user-guide/development/notion-next-develop-with-ai.md) |
 | 文档源码 | [docs/](./docs/) |
 | 旧版手册 | [docs.tangly1024.com](https://docs.tangly1024.com/) |
 
@@ -141,6 +142,7 @@ NotionNext 主仓库由 GitHub 组织 [notionnext-org](https://github.com/notion
 | --- | --- |
 | 参与社区 | [community-participate.md](./docs/user-guide/community-participate.md) |
 | 贡献指南 | [CONTRIBUTING.zh-CN.md](./CONTRIBUTING.zh-CN.md) |
+| 主题共创 | [长期活动](./docs/community/THEME_CHALLENGE.zh-CN.md) · [运营模型](./docs/community/THEME_ECOSYSTEM_OPERATING_MODEL.zh-CN.md) · [新手任务池](./docs/community/GOOD_FIRST_THEME_TASKS.zh-CN.md) |
 | 项目治理 | [GOVERNANCE.zh-CN.md](./GOVERNANCE.zh-CN.md) |
 | 维护者 | [MAINTAINERS.md](./MAINTAINERS.md) |
 | 行为准则 | [CODE_OF_CONDUCT.md](./CODE_OF_CONDUCT.md) |

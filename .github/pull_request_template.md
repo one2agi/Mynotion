@@ -37,10 +37,13 @@
 
 ## 用户文档（`docs/user-guide/`）
 
-若本 PR **未** 修改 `docs/user-guide/`、`docs/developer/` 中与站长相关的说明，可勾选「不适用」并跳过本节。
+若本 PR 新增或改变用户可见能力，例如 API、环境变量、配置项、主题选项、插件开关、部署方式、CLI 命令或迁移步骤，请同步维护 `docs/user-guide/` 中对应说明，便于用户知道如何使用。
+
+若本 PR **未** 修改 `docs/user-guide/`、`docs/developer/` 中与站长相关的说明，请勾选「不适用」并在“文档说明”里写明原因。
 
 - [ ] 不适用（无文档改动）
 - [ ] 已按 [维护工作流](https://github.com/notionnext-org/NotionNext/blob/main/docs/user-guide/MAINTENANCE_WORKFLOW.md) 自检
+- [ ] 新功能 / 新配置 / 新 API 已补充使用方法，或已创建紧跟的 docs PR
 - [ ] 路径符合 `docs/user-guide/` 目录约定
 - [ ] 已更新 [user-guide/README.md](https://github.com/notionnext-org/NotionNext/blob/main/docs/user-guide/README.md)（新增/移动文章时）
 - [ ] 已更新 [ARTICLE_INDEX.md](https://github.com/notionnext-org/NotionNext/blob/main/docs/user-guide/ARTICLE_INDEX.md)（新 slug 或路径变更时）
@@ -49,3 +52,16 @@
 - [ ] 保留或更新了「原文链接」（若源自 docs.tangly1024.com）
 
 文档说明（可选）：对应官方 slug / URL、是否与功能 PR 配套
+
+## 主题贡献（如适用）
+
+若本 PR 新增主题、重做主题视觉、或改变主题配置，请对照 [主题迁移指南](https://github.com/notionnext-org/NotionNext/blob/main/docs/developer/THEME_MIGRATION_GUIDE.zh-CN.md) 自检。
+
+- [ ] 不适用（非主题 PR）
+- [ ] 主题代码位于 `themes/<id>/`
+- [ ] 未直接引用其它主题目录的私有组件
+- [ ] 已验证首页、文章页、列表页、搜索页、404 页
+- [ ] 已验证移动端与深色模式
+- [ ] 已补充 `docs/user-guide/themes/<id>.md`
+- [ ] 已提交 `public/images/themes-preview/<id>.png` 与 `.webp`
+- [ ] 已更新 `conf/themeSwitch.manifest.js`

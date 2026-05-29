@@ -97,6 +97,7 @@
 | ⌨ 开发教程 | `your-own-theme` | [development/own-theme.md](./development/own-theme.md) |
 | ⌨ 开发教程 | `notion-next-click-effect` | [development/notion-next-click-effect.md](./development/notion-next-click-effect.md) |
 | ⌨ 开发教程 | `notion-next-develop-with-ai` | [development/notion-next-develop-with-ai.md](./development/notion-next-develop-with-ai.md) |
+| ⌨ 开发教程 | `ai-theme-prompts` | [development/ai-theme-prompts.md](./development/ai-theme-prompts.md) |
 | ⌨ 开发教程 | `react-jsx` | [development/react-jsx.md](./development/react-jsx.md) |
 | ⌨ 开发教程 | `next-js` | [development/nextjs.md](./development/nextjs.md) |
 | ⌨ 开发教程 | `about-tailwindcss` | [development/about-tailwindcss.md](./development/about-tailwindcss.md) |

@@ -113,6 +113,40 @@
    - 菜单行为（`customNav`、`CUSTOM_MENU`）
    - 公告、广告、插件槽、联系卡
 
+### 6.1 AI 辅助主题开发流程
+
+如果使用 AI 辅助迁移或二次创作主题，不建议直接把参考站点丢给 AI 并要求“一次性写完整主题”。推荐按以下顺序推进：
+
+1. **拆解参考站点**
+   - 先让 AI 输出布局、组件、色彩、字号、间距、动效、移动端表现。
+   - 不要在第一步写代码，先确认哪些视觉特征值得迁移。
+
+2. **选择基准主题**
+   - `example`：适合学习主题结构和从零开始。
+   - `simple`：适合轻量博客和普通内容流。
+   - `endspace`：适合稳定阅读体验。
+   - `starter` / `landing`：适合官网和产品介绍。
+   - `gitbook`：适合文档站和知识库。
+
+3. **拆成小 PR 或小提交**
+   - 首页布局
+   - 文章卡片
+   - 导航与移动端菜单
+   - 文章详情页
+   - 深色模式
+   - 配置项与文档
+
+4. **让 AI 先列改造清单**
+   - 要求 AI 指明计划修改的文件和原因。
+   - 每次只改一个页面或组件族，避免大面积不可审阅改动。
+
+5. **人工验收**
+   - 检查是否破坏 NotionNext 数据契约。
+   - 检查是否直接耦合其它主题组件。
+   - 检查移动端、深色模式、空数据、无封面文章等边界。
+
+入门教程见 [借助 AI 开发 NotionNext](../user-guide/development/notion-next-develop-with-ai.md)，主题生态计划见 [主题生态与 AI 开发教程计划](./THEME_ECOSYSTEM_ROADMAP.zh-CN.md)。
+
 ## 7）联系邮箱（CONTACT_EMAIL）约定
 
 环境变量 `NEXT_PUBLIC_CONTACT_EMAIL` 会在构建阶段写入 `conf/contact.config.js`，并以 Base64 形式保存在 `siteConfig('CONTACT_EMAIL')` 中，用于避免在静态页面里直接暴露明文邮箱。迁移或新增主题时请务必按用途选用下列方式，否则会出现「mailto 乱码」或 Gravatar 不匹配等问题。
@@ -230,4 +264,41 @@ const CONTACT_EMAIL = siteConfig('CONTACT_EMAIL')
   - 避免把 Markdown 文档直接放在 `themes/<theme>/` 下（部分构建链路会把主题目录当运行时模块处理）
   - 主题说明建议统一放在 `docs/developer/themes/`
 - **页面跳转体感**：补轻量过渡动效，接近源主题的交互节奏。
+
+## 12）主题贡献合并检查清单
+
+新主题或大幅主题改造在进入主仓库前，至少确认：
+
+- **主题目录**
+  - 代码位于 `themes/<id>/`，目录名小写、稳定、可作为主题 ID。
+  - 不直接 import 其它主题目录的私有组件。
+  - 主题专属组件留在 `themes/<id>/components/`。
+
+- **页面覆盖**
+  - 首页 / 列表页
+  - 文章详情页
+  - 归档页
+  - 分类页
+  - 标签页
+  - 搜索页
+  - 404 页
+  - 移动端菜单
+  - 深色模式
+
+- **数据与配置**
+  - 使用 NotionNext 现有 props 和 `siteConfig()`，不硬编码站点私有数据。
+  - 新增可配置能力写入 `themes/<id>/config.js`。
+  - 对无封面、无摘要、无分类、无标签、无目录等情况做空值保护。
+
+- **文档与预览**
+  - 补充 `docs/user-guide/themes/<id>.md`。
+  - 如有开发者细节，补充 `docs/developer/themes/<ID>.md`。
+  - 提交 `public/images/themes-preview/<id>.png`。
+  - 提交 `public/images/themes-preview/<id>.webp`。
+  - 更新 `conf/themeSwitch.manifest.js` 的 `name`、`summary`、预览图和 `tier`。
+
+- **社区任务**
+  - 只有想法时，优先使用 Discussions 的“主题风格建议”模板。
+  - 已明确要实现时，使用 Issue 的“Theme contribution”模板跟踪。
+  - 适合新贡献者的主题小任务可加 `good first issue`；需要社区协作的任务可加 `help wanted`。
 

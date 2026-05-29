@@ -88,12 +88,67 @@ NotionNext 已由个人仓库移交至组织 **[notionnext-org](https://github.c
 
 ---
 
+## 帖三：长期主题共创与 AI 辅助开发（建议链在帖一或主题讨论区置顶）
+
+**标题：** `【长期活动】NotionNext 主题共创与 AI 辅助开发`
+
+**正文：**
+
+---
+
+NotionNext 的主题生态欢迎更多设计风格与二次创作。很多普通站长选择建站工具时，第一眼看的不是技术架构，而是主题是否符合自己想要的网站气质。
+
+这是一个**长期活动**，目标是让社区自己形成闭环：站长提供想法，社区整理参考，新贡献者用 AI 做小任务，主题维护者 Review，主理人只处理方向判断和高影响 PR。
+
+### 欢迎建议这些方向
+
+- 日式便当 / 卡片式圆角矩形布局
+- Google Material / 扁平化内容布局
+- 经典博客主题致敬，例如 Hexo、WordPress、Typecho 风格
+- 极简作品集 / 个人品牌站
+- SaaS / Product Hunt / 开源项目官网
+- Magazine / Starter / GitBook 这类功能型主题
+
+### 如何参与
+
+| 我想… | 建议入口 |
+| --- | --- |
+| 只提供主题想法或参考站点 | 使用 **主题风格建议** Discussion 模板 |
+| 已经准备实现一个主题 | 使用 **Theme contribution** Issue 模板 |
+| 想学习用 AI 改主题 | 阅读 [借助 AI 开发 NotionNext](https://notionnext.tangly1024.com/user-guide/development/notion-next-develop-with-ai) |
+| 不知道怎么问 AI | 复制 [AI 主题开发提示词包](https://github.com/notionnext-org/NotionNext/blob/main/docs/user-guide/development/ai-theme-prompts.md) |
+| 想找低门槛任务 | 查看 [主题新手任务池](https://github.com/notionnext-org/NotionNext/blob/main/docs/community/GOOD_FIRST_THEME_TASKS.zh-CN.md) |
+| 想了解活动怎么长期运转 | 查看 [主题生态长期运营模型](https://github.com/notionnext-org/NotionNext/blob/main/docs/community/THEME_ECOSYSTEM_OPERATING_MODEL.zh-CN.md) |
+| 想贡献到主仓库 | 阅读 [主题迁移指南](https://github.com/notionnext-org/NotionNext/blob/main/docs/developer/THEME_MIGRATION_GUIDE.zh-CN.md) |
+
+### 建议提交的信息
+
+- 主题名称或设计方向
+- 目标用户与适用站点
+- 参考站点、截图或设计稿
+- 你认为最重要的页面：首页、文章页、列表页、标签页、搜索页、404 页等
+- 是否愿意用 AI 辅助开发并提交 PR
+
+成熟方向会被整理为 `help wanted` / `good first issue`，方便社区认领。
+
+### 社区如何自运转
+
+- 想法不清楚：先补参考站点和适用场景。
+- 想法成熟：主题协调员或志愿者转成 Issue。
+- 范围太大：拆成文档、截图、单组件、单页面等小任务。
+- 开始开发：先开 Draft PR，不要求一次完成。
+- 重复问题：沉淀到文档、提示词或任务池。
+- 需要主理人：只在方向争议、全局架构或高风险 PR 时 @。
+
+---
+
 ## 已发布（2026-05-17）
 
 | 帖 | 链接 |
 | --- | --- |
 | 欢迎参与社区 | https://github.com/notionnext-org/NotionNext/discussions/4069 |
 | 维护者分工与合并约定 | https://github.com/notionnext-org/NotionNext/discussions/4070 |
+| 长期主题共创与 AI 辅助开发 | 待发布 |
 
 分类：**Announcements**。请在 Discussions 列表对以上两帖各点一次 **Pin discussion** 置顶（API 暂不支持自动 Pin）。
 
