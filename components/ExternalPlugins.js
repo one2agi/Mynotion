@@ -9,9 +9,7 @@ import { initGoogleAdsense } from './GoogleAdsense'
 
 import Head from 'next/head'
 import ExternalScript from './ExternalScript'
-import WebWhiz from './Webwhiz'
 import { useGlobal } from '@/lib/global'
-import IconFont from './IconFont'
 import { runWhenIdle } from '@/lib/utils/clientIdle'
 
 /**
@@ -524,6 +522,12 @@ const Coze = dynamic(() => import('@/components/Coze'), {
   ssr: false
 })
 const LA51 = dynamic(() => import('@/components/LA51'), {
+  ssr: false
+})
+const WebWhiz = dynamic(() => import('@/components/Webwhiz'), {
+  ssr: false
+})
+const IconFont = dynamic(() => import('@/components/IconFont'), {
   ssr: false
 })
 const TianliGPT = dynamic(() => import('@/components/TianliGPT'), {

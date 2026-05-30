@@ -74,45 +74,47 @@ const NotionPage = ({ post, className }) => {
     const articleRoot =
       document.getElementById('notion-article') || document.body
     const hasAnyImage = Boolean(articleRoot.querySelector('img'))
-    if (!hasAnyImage) {
-      return
-    }
+    let observer
 
-    const observer = new MutationObserver((mutationsList, observer) => {
-      mutationsList.forEach(mutation => {
-        if (
-          mutation.type === 'attributes' &&
-          mutation.attributeName === 'class'
-        ) {
-          if (mutation.target.classList.contains('medium-zoom-image--opened')) {
-            // 等待动画完成后替换为更高清的图像
-            setTimeout(() => {
-              // 获取该元素的 src 属性
-              const src = mutation?.target?.getAttribute('src')
-              //   替换为更高清的图像
-              mutation?.target?.setAttribute(
-                'src',
-                compressImage(src, IMAGE_ZOOM_IN_WIDTH)
-              )
-            }, 800)
+    if (POST_DISABLE_GALLERY_CLICK && hasAnyImage) {
+      observer = new MutationObserver(mutationsList => {
+        mutationsList.forEach(mutation => {
+          if (
+            mutation.type === 'attributes' &&
+            mutation.attributeName === 'class'
+          ) {
+            if (mutation.target.classList.contains('medium-zoom-image--opened')) {
+              // 等待动画完成后替换为更高清的图像
+              setTimeout(() => {
+                // 获取该元素的 src 属性
+                const src = mutation?.target?.getAttribute('src')
+                //   替换为更高清的图像
+                mutation?.target?.setAttribute(
+                  'src',
+                  compressImage(src, IMAGE_ZOOM_IN_WIDTH)
+                )
+              }, 800)
+            }
           }
-        }
+        })
       })
-    })
 
-    // 监视正文容器，避免对整个 document.body 做高开销监听
-    observer.observe(articleRoot, {
-      attributes: true,
-      subtree: true,
-      attributeFilter: ['class']
-    })
+      // 监视正文容器，避免对整个 document.body 做高开销监听
+      observer.observe(articleRoot, {
+        attributes: true,
+        subtree: true,
+        attributeFilter: ['class']
+      })
+    }
 
     return () => {
       disposed = true
       if (zoomRef.current && zoomRef.current.detach) {
         zoomRef.current.detach()
       }
-      observer.disconnect()
+      if (observer) {
+        observer.disconnect()
+      }
     }
   }, [post])
 
