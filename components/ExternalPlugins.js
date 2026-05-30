@@ -170,18 +170,17 @@ const ExternalPlugin = props => {
 
   const router = useRouter()
   useEffect(() => {
-    // 异步渲染谷歌广告
-    if (ADSENSE_GOOGLE_ID) {
-      setTimeout(() => {
+    if (DISABLE_PLUGIN) return
+    return runWhenIdle(() => {
+      // 异步渲染谷歌广告
+      if (ADSENSE_GOOGLE_ID) {
         initGoogleAdsense(ADSENSE_GOOGLE_ID)
-      }, 3000)
-    }
+      }
 
-    setTimeout(() => {
       // 映射url
       convertInnerUrl({ allPages: props?.allNavPages, lang: lang })
-    }, 500)
-  }, [ADSENSE_GOOGLE_ID, lang, props?.allNavPages, router])
+    }, 1200)
+  }, [ADSENSE_GOOGLE_ID, DISABLE_PLUGIN, lang, props?.allNavPages, router])
 
   useEffect(() => {
     // 执行注入脚本
