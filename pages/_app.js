@@ -20,7 +20,8 @@ import ExternalPlugins from '@/components/ExternalPlugins'
 import SEO from '@/components/SEO'
 import dynamic from 'next/dynamic'
 const ClerkRuntimeProvider = dynamic(
-  () => import('@/components/ClerkRuntimeProvider')
+  () => import('@/components/ClerkRuntimeProvider'),
+  { ssr: false }
 )
 const AppErrorBoundary = ErrorHandler.createErrorBoundary(
   <div style={{ padding: '2rem', textAlign: 'center', minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>

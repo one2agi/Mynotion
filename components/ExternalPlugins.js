@@ -3,7 +3,7 @@ import { convertInnerUrl } from '@/lib/db/notion/convertInnerUrl'
 import { isBrowser, loadExternalResource } from '@/lib/utils'
 import dynamic from 'next/dynamic'
 import { useRouter } from 'next/router'
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { GlobalStyle } from './GlobalStyle'
 import { initGoogleAdsense } from './GoogleAdsense'
 
@@ -130,6 +130,7 @@ const ExternalPlugin = props => {
 
   const UMAMI_HOST = siteConfig('UMAMI_HOST', null, NOTION_CONFIG)
   const UMAMI_ID = siteConfig('UMAMI_ID', null, NOTION_CONFIG)
+  const [isPluginIdleReady, setIsPluginIdleReady] = useState(false)
 
   // 自定义样式css和js引入
   useEffect(() => {
@@ -191,6 +192,13 @@ const ExternalPlugin = props => {
     }
   }, [GLOBAL_JS])
 
+  useEffect(() => {
+    if (DISABLE_PLUGIN) return
+    return runWhenIdle(() => {
+      setIsPluginIdleReady(true)
+    }, 900)
+  }, [DISABLE_PLUGIN])
+
   if (DISABLE_PLUGIN) {
     return null
   }
@@ -202,6 +210,8 @@ const ExternalPlugin = props => {
       {ENABLE_ICON_FONT && <IconFont />}
       {MOUSE_FOLLOW && <MouseFollow />}
       {THEME_SWITCH && <ThemeSwitch />}
+      {isPluginIdleReady && (
+        <>
       {DEBUG && <DebugPanel />}
       {ANALYTICS_ACKEE_TRACKER && <Ackee />}
       {ANALYTICS_GOOGLE_ID && <Gtag />}
@@ -452,6 +462,8 @@ const ExternalPlugin = props => {
             `
           }}
         />
+      )}
+        </>
       )}
     </>
   )

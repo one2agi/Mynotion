@@ -1,4 +1,5 @@
 import { isBrowser } from '@/lib/utils';
+import { runWhenIdle } from '@/lib/utils/clientIdle';
 import { useEffect } from 'react';
 
 /**
@@ -24,10 +25,17 @@ const useAdjustStyle = () => {
 
   useEffect(() => {
     if (isBrowser) {
-      adjustCalloutImg();
-      window.addEventListener('resize', adjustCalloutImg);
+      let removeResizeListener;
+      const cancelIdle = runWhenIdle(() => {
+        adjustCalloutImg();
+        window.addEventListener('resize', adjustCalloutImg);
+        removeResizeListener = () =>
+          window.removeEventListener('resize', adjustCalloutImg);
+      }, 1200);
+
       return () => {
-        window.removeEventListener('resize', adjustCalloutImg);
+        cancelIdle?.();
+        removeResizeListener?.();
       };
     }
   }, []);
