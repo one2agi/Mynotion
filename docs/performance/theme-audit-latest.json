@@ -1,0 +1,512 @@
+[
+  {
+    "theme": "claude",
+    "url": "http://localhost:3000/?theme=claude",
+    "scores": {
+      "performance": null,
+      "seo": null,
+      "accessibility": null,
+      "bestPractices": null
+    },
+    "metrics": {
+      "lcpMs": null,
+      "inpMs": null,
+      "cls": null,
+      "fcpMs": null,
+      "tbtMs": null,
+      "speedIndexMs": null,
+      "jsKb": null,
+      "totalKb": null
+    },
+    "error": "Lighthouse failed for http://localhost:3000/?theme=claude"
+  },
+  {
+    "theme": "commerce",
+    "url": "http://localhost:3000/?theme=commerce",
+    "scores": {
+      "performance": 95,
+      "seo": 100,
+      "accessibility": 100,
+      "bestPractices": 96
+    },
+    "metrics": {
+      "lcpMs": 2157,
+      "inpMs": null,
+      "cls": 0,
+      "fcpMs": 1961,
+      "tbtMs": 0,
+      "speedIndexMs": 3930,
+      "jsKb": 0,
+      "totalKb": 169
+    }
+  },
+  {
+    "theme": "endspace",
+    "url": "http://localhost:3000/?theme=endspace",
+    "scores": {
+      "performance": 96,
+      "seo": 100,
+      "accessibility": 100,
+      "bestPractices": 96
+    },
+    "metrics": {
+      "lcpMs": 2293,
+      "inpMs": null,
+      "cls": 0,
+      "fcpMs": 2143,
+      "tbtMs": 0,
+      "speedIndexMs": 2635,
+      "jsKb": 0,
+      "totalKb": 169
+    }
+  },
+  {
+    "theme": "example",
+    "url": "http://localhost:3000/?theme=example",
+    "scores": {
+      "performance": 97,
+      "seo": 100,
+      "accessibility": 100,
+      "bestPractices": 96
+    },
+    "metrics": {
+      "lcpMs": 2106,
+      "inpMs": null,
+      "cls": 0,
+      "fcpMs": 1888,
+      "tbtMs": 0,
+      "speedIndexMs": 2539,
+      "jsKb": 0,
+      "totalKb": 169
+    }
+  },
+  {
+    "theme": "fukasawa",
+    "url": "http://localhost:3000/?theme=fukasawa",
+    "scores": {
+      "performance": 97,
+      "seo": 100,
+      "accessibility": 100,
+      "bestPractices": 96
+    },
+    "metrics": {
+      "lcpMs": 2150,
+      "inpMs": null,
+      "cls": 0,
+      "fcpMs": 1890,
+      "tbtMs": 0,
+      "speedIndexMs": 2564,
+      "jsKb": 0,
+      "totalKb": 169
+    }
+  },
+  {
+    "theme": "fuwari",
+    "url": "http://localhost:3000/?theme=fuwari",
+    "scores": {
+      "performance": 96,
+      "seo": 100,
+      "accessibility": 100,
+      "bestPractices": 96
+    },
+    "metrics": {
+      "lcpMs": 2291,
+      "inpMs": null,
+      "cls": 0,
+      "fcpMs": 2140,
+      "tbtMs": 0,
+      "speedIndexMs": 2639,
+      "jsKb": 0,
+      "totalKb": 169
+    }
+  },
+  {
+    "theme": "game",
+    "url": "http://localhost:3000/?theme=game",
+    "scores": {
+      "performance": 97,
+      "seo": 100,
+      "accessibility": 100,
+      "bestPractices": 96
+    },
+    "metrics": {
+      "lcpMs": 2106,
+      "inpMs": null,
+      "cls": 0,
+      "fcpMs": 1891,
+      "tbtMs": 0,
+      "speedIndexMs": 2549,
+      "jsKb": 0,
+      "totalKb": 169
+    }
+  },
+  {
+    "theme": "gitbook",
+    "url": "http://localhost:3000/?theme=gitbook",
+    "scores": {
+      "performance": 97,
+      "seo": 100,
+      "accessibility": 100,
+      "bestPractices": 96
+    },
+    "metrics": {
+      "lcpMs": 2109,
+      "inpMs": null,
+      "cls": 0,
+      "fcpMs": 1901,
+      "tbtMs": 0,
+      "speedIndexMs": 2546,
+      "jsKb": 0,
+      "totalKb": 169
+    }
+  },
+  {
+    "theme": "heo",
+    "url": "http://localhost:3000/?theme=heo",
+    "scores": {
+      "performance": 95,
+      "seo": 100,
+      "accessibility": 100,
+      "bestPractices": 96
+    },
+    "metrics": {
+      "lcpMs": 2152,
+      "inpMs": null,
+      "cls": 0,
+      "fcpMs": 1938,
+      "tbtMs": 0,
+      "speedIndexMs": 3967,
+      "jsKb": 0,
+      "totalKb": 169
+    }
+  },
+  {
+    "theme": "hexo",
+    "url": "http://localhost:3000/?theme=hexo",
+    "scores": {
+      "performance": 96,
+      "seo": 100,
+      "accessibility": 100,
+      "bestPractices": 96
+    },
+    "metrics": {
+      "lcpMs": 2279,
+      "inpMs": null,
+      "cls": 0,
+      "fcpMs": 2128,
+      "tbtMs": 0,
+      "speedIndexMs": 2632,
+      "jsKb": 0,
+      "totalKb": 169
+    }
+  },
+  {
+    "theme": "landing",
+    "url": "http://localhost:3000/?theme=landing",
+    "scores": {
+      "performance": 97,
+      "seo": 100,
+      "accessibility": 100,
+      "bestPractices": 96
+    },
+    "metrics": {
+      "lcpMs": 2107,
+      "inpMs": null,
+      "cls": 0,
+      "fcpMs": 1888,
+      "tbtMs": 0,
+      "speedIndexMs": 2563,
+      "jsKb": 0,
+      "totalKb": 169
+    }
+  },
+  {
+    "theme": "magzine",
+    "url": "http://localhost:3000/?theme=magzine",
+    "scores": {
+      "performance": 96,
+      "seo": 100,
+      "accessibility": 100,
+      "bestPractices": 96
+    },
+    "metrics": {
+      "lcpMs": 2107,
+      "inpMs": null,
+      "cls": 0,
+      "fcpMs": 1867,
+      "tbtMs": 0,
+      "speedIndexMs": 3956,
+      "jsKb": 0,
+      "totalKb": 169
+    }
+  },
+  {
+    "theme": "matery",
+    "url": "http://localhost:3000/?theme=matery",
+    "scores": {
+      "performance": null,
+      "seo": null,
+      "accessibility": null,
+      "bestPractices": null
+    },
+    "metrics": {
+      "lcpMs": null,
+      "inpMs": null,
+      "cls": null,
+      "fcpMs": null,
+      "tbtMs": null,
+      "speedIndexMs": null,
+      "jsKb": null,
+      "totalKb": null
+    },
+    "error": "Lighthouse failed for http://localhost:3000/?theme=matery"
+  },
+  {
+    "theme": "medium",
+    "url": "http://localhost:3000/?theme=medium",
+    "scores": {
+      "performance": 96,
+      "seo": 100,
+      "accessibility": 100,
+      "bestPractices": 96
+    },
+    "metrics": {
+      "lcpMs": 2106,
+      "inpMs": null,
+      "cls": 0,
+      "fcpMs": 1886,
+      "tbtMs": 0,
+      "speedIndexMs": 3975,
+      "jsKb": 0,
+      "totalKb": 169
+    }
+  },
+  {
+    "theme": "movie",
+    "url": "http://localhost:3000/?theme=movie",
+    "scores": {
+      "performance": 97,
+      "seo": 100,
+      "accessibility": 100,
+      "bestPractices": 96
+    },
+    "metrics": {
+      "lcpMs": 2164,
+      "inpMs": null,
+      "cls": 0,
+      "fcpMs": 1910,
+      "tbtMs": 0,
+      "speedIndexMs": 2489,
+      "jsKb": 0,
+      "totalKb": 169
+    }
+  },
+  {
+    "theme": "nav",
+    "url": "http://localhost:3000/?theme=nav",
+    "scores": {
+      "performance": 80,
+      "seo": 100,
+      "accessibility": 100,
+      "bestPractices": 96
+    },
+    "metrics": {
+      "lcpMs": 3272,
+      "inpMs": null,
+      "cls": 0,
+      "fcpMs": 3121,
+      "tbtMs": 0,
+      "speedIndexMs": 7756,
+      "jsKb": 0,
+      "totalKb": 168
+    }
+  },
+  {
+    "theme": "next",
+    "url": "http://localhost:3000/?theme=next",
+    "scores": {
+      "performance": 96,
+      "seo": 100,
+      "accessibility": 100,
+      "bestPractices": 96
+    },
+    "metrics": {
+      "lcpMs": 2314,
+      "inpMs": null,
+      "cls": 0,
+      "fcpMs": 2161,
+      "tbtMs": 0,
+      "speedIndexMs": 2581,
+      "jsKb": 0,
+      "totalKb": 169
+    }
+  },
+  {
+    "theme": "nobelium",
+    "url": "http://localhost:3000/?theme=nobelium",
+    "scores": {
+      "performance": null,
+      "seo": null,
+      "accessibility": null,
+      "bestPractices": null
+    },
+    "metrics": {
+      "lcpMs": null,
+      "inpMs": null,
+      "cls": null,
+      "fcpMs": null,
+      "tbtMs": null,
+      "speedIndexMs": null,
+      "jsKb": null,
+      "totalKb": null
+    },
+    "error": "Lighthouse failed for http://localhost:3000/?theme=nobelium"
+  },
+  {
+    "theme": "photo",
+    "url": "http://localhost:3000/?theme=photo",
+    "scores": {
+      "performance": null,
+      "seo": null,
+      "accessibility": null,
+      "bestPractices": null
+    },
+    "metrics": {
+      "lcpMs": null,
+      "inpMs": null,
+      "cls": null,
+      "fcpMs": null,
+      "tbtMs": null,
+      "speedIndexMs": null,
+      "jsKb": null,
+      "totalKb": null
+    },
+    "error": "Lighthouse failed for http://localhost:3000/?theme=photo"
+  },
+  {
+    "theme": "plog",
+    "url": "http://localhost:3000/?theme=plog",
+    "scores": {
+      "performance": null,
+      "seo": null,
+      "accessibility": null,
+      "bestPractices": null
+    },
+    "metrics": {
+      "lcpMs": null,
+      "inpMs": null,
+      "cls": null,
+      "fcpMs": null,
+      "tbtMs": null,
+      "speedIndexMs": null,
+      "jsKb": null,
+      "totalKb": null
+    },
+    "error": "Lighthouse failed for http://localhost:3000/?theme=plog"
+  },
+  {
+    "theme": "proxio",
+    "url": "http://localhost:3000/?theme=proxio",
+    "scores": {
+      "performance": null,
+      "seo": null,
+      "accessibility": null,
+      "bestPractices": null
+    },
+    "metrics": {
+      "lcpMs": null,
+      "inpMs": null,
+      "cls": null,
+      "fcpMs": null,
+      "tbtMs": null,
+      "speedIndexMs": null,
+      "jsKb": null,
+      "totalKb": null
+    },
+    "error": "Lighthouse failed for http://localhost:3000/?theme=proxio"
+  },
+  {
+    "theme": "simple",
+    "url": "http://localhost:3000/?theme=simple",
+    "scores": {
+      "performance": null,
+      "seo": null,
+      "accessibility": null,
+      "bestPractices": null
+    },
+    "metrics": {
+      "lcpMs": null,
+      "inpMs": null,
+      "cls": null,
+      "fcpMs": null,
+      "tbtMs": null,
+      "speedIndexMs": null,
+      "jsKb": null,
+      "totalKb": null
+    },
+    "error": "Lighthouse failed for http://localhost:3000/?theme=simple"
+  },
+  {
+    "theme": "starter",
+    "url": "http://localhost:3000/?theme=starter",
+    "scores": {
+      "performance": null,
+      "seo": null,
+      "accessibility": null,
+      "bestPractices": null
+    },
+    "metrics": {
+      "lcpMs": null,
+      "inpMs": null,
+      "cls": null,
+      "fcpMs": null,
+      "tbtMs": null,
+      "speedIndexMs": null,
+      "jsKb": null,
+      "totalKb": null
+    },
+    "error": "Lighthouse failed for http://localhost:3000/?theme=starter"
+  },
+  {
+    "theme": "thoughtlite",
+    "url": "http://localhost:3000/?theme=thoughtlite",
+    "scores": {
+      "performance": null,
+      "seo": null,
+      "accessibility": null,
+      "bestPractices": null
+    },
+    "metrics": {
+      "lcpMs": null,
+      "inpMs": null,
+      "cls": null,
+      "fcpMs": null,
+      "tbtMs": null,
+      "speedIndexMs": null,
+      "jsKb": null,
+      "totalKb": null
+    },
+    "error": "Lighthouse failed for http://localhost:3000/?theme=thoughtlite"
+  },
+  {
+    "theme": "typography",
+    "url": "http://localhost:3000/?theme=typography",
+    "scores": {
+      "performance": null,
+      "seo": null,
+      "accessibility": null,
+      "bestPractices": null
+    },
+    "metrics": {
+      "lcpMs": null,
+      "inpMs": null,
+      "cls": null,
+      "fcpMs": null,
+      "tbtMs": null,
+      "speedIndexMs": null,
+      "jsKb": null,
+      "totalKb": null
+    },
+    "error": "Lighthouse failed for http://localhost:3000/?theme=typography"
+  }
+]

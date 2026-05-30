@@ -1,5 +1,6 @@
 import { siteConfig } from '@/lib/config'
 import { loadExternalResource } from '@/lib/utils'
+import { runWhenIdle } from '@/lib/utils/clientIdle'
 import { useEffect } from 'react'
 
 /**
@@ -66,7 +67,7 @@ export const initGoogleAdsense = ADSENSE_GOOGLE_ID => {
     `https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=${ADSENSE_GOOGLE_ID}`,
     'js'
   ).then(url => {
-    setTimeout(() => {
+    runWhenIdle(() => {
       // 页面加载完成后加载一次广告
       const ads = document.querySelectorAll('ins.adsbygoogle')
       if (window.adsbygoogle && ads.length > 0) {
@@ -101,7 +102,7 @@ export const initGoogleAdsense = ADSENSE_GOOGLE_ID => {
           document.body,
         observerConfig
       )
-    }, 100)
+    }, 1200)
   })
 }
 
@@ -181,7 +182,7 @@ const AdEmbed = () => {
   const ADSENSE_GOOGLE_TEST = siteConfig('ADSENSE_GOOGLE_TEST')
   const ADSENSE_GOOGLE_SLOT_AUTO = siteConfig('ADSENSE_GOOGLE_SLOT_AUTO')
   useEffect(() => {
-    setTimeout(() => {
+    return runWhenIdle(() => {
       // 找到所有 class 为 notion-text 且内容为 '<ins/>' 的 div 元素
       const notionTextElements = document.querySelectorAll(
         '#article-wrapper #notion-article div.notion-text'
@@ -207,8 +208,8 @@ const AdEmbed = () => {
           element?.parentNode?.replaceChild(newInsElement, element)
         }
       })
-    }, 1000)
-  }, [])
+    }, 1800)
+  }, [ADSENSE_GOOGLE_ID, ADSENSE_GOOGLE_SLOT_AUTO, ADSENSE_GOOGLE_TEST])
   return <></>
 }
 

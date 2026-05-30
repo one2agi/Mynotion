@@ -9,7 +9,13 @@ const themesDir = path.join(root, 'themes')
 const reportDir = path.join(root, '.perf', 'theme-audit')
 const rawDir = path.join(reportDir, 'raw')
 const docsPerfDir = path.join(root, 'docs', 'performance')
-const lighthouseBin = path.join(root, 'node_modules', '.bin', 'lighthouse')
+const lighthouseBin = (() => {
+  const base = path.join(root, 'node_modules', '.bin', 'lighthouse')
+  if (process.platform === 'win32') {
+    return `${base}.cmd`
+  }
+  return base
+})()
 const baseUrl = process.env.THEME_AUDIT_BASE_URL || 'http://localhost:3000'
 const includeThemes = (process.env.THEME_AUDIT_THEMES || '')
   .split(',')
@@ -39,14 +45,18 @@ function runLighthouse(url, outputPath) {
     '--max-wait-for-load=45000',
     '--throttling-method=simulate'
   ]
-  const result = spawnSync(lighthouseBin, args, {
+  const options = {
     cwd: root,
     stdio: 'pipe',
-    env: process.env
-  })
+    env: process.env,
+    shell: process.platform === 'win32'
+  }
+  const result = spawnSync(lighthouseBin, args, options)
   if (result.status !== 0) {
     const errorText = result.stderr?.toString() || result.stdout?.toString() || ''
-    throw new Error(`Lighthouse failed for ${url}\n${errorText}`)
+    const errnoText = result.error?.toString() || ''
+    const fullMessage = `Lighthouse failed for ${url}\n${errnoText}\n${errorText}`
+    throw new Error(fullMessage)
   }
 }
 
@@ -92,29 +102,64 @@ function getThemeResult(theme, lhr) {
   }
 }
 
+function getFailedThemeResult(theme, url, errorMessage) {
+  return {
+    theme,
+    url,
+    scores: {
+      performance: null,
+      seo: null,
+      accessibility: null,
+      bestPractices: null
+    },
+    metrics: {
+      lcpMs: null,
+      inpMs: null,
+      cls: null,
+      fcpMs: null,
+      tbtMs: null,
+      speedIndexMs: null,
+      jsKb: null,
+      totalKb: null
+    },
+    error: errorMessage
+  }
+}
+
 function writeMarkdown(results, reportPath) {
-  const sorted = [...results].sort(
-    (a, b) => a.scores.performance - b.scores.performance
-  )
+  const sorted = [...results].sort((a, b) => {
+    const aPerf = a.scores.performance ?? Number.MAX_SAFE_INTEGER
+    const bPerf = b.scores.performance ?? Number.MAX_SAFE_INTEGER
+    return aPerf - bPerf
+  })
+
   const lines = []
   lines.push('# Theme Performance Audit')
   lines.push('')
   lines.push(`Base URL: ${baseUrl}`)
   lines.push(`Generated: ${new Date().toISOString()}`)
   lines.push('')
-  lines.push('| Theme | Perf | SEO | LCP(ms) | INP(ms) | CLS | JS(KB) | Total(KB) |')
-  lines.push('|---|---:|---:|---:|---:|---:|---:|---:|')
+  lines.push(
+    '| Theme | Perf | SEO | LCP(ms) | INP(ms) | CLS | JS(KB) | Total(KB) | Error |'
+  )
+  lines.push(
+    '|---|---:|---:|---:|---:|---:|---:|---:|---|'
+  )
   for (const item of sorted) {
+    const score = item.scores.performance
     lines.push(
-      `| ${item.theme} | ${item.scores.performance} | ${item.scores.seo} | ${item.metrics.lcpMs ?? '-'} | ${item.metrics.inpMs ?? '-'} | ${item.metrics.cls ?? '-'} | ${item.metrics.jsKb ?? '-'} | ${item.metrics.totalKb ?? '-'} |`
+      `| ${item.theme} | ${score == null ? 'FAIL' : score} | ${item.scores.seo ?? '-'} | ${item.metrics.lcpMs ?? '-'} | ${item.metrics.inpMs ?? '-'} | ${item.metrics.cls ?? '-'} | ${item.metrics.jsKb ?? '-'} | ${item.metrics.totalKb ?? '-'} | ${item.error ? item.error : ''}`
     )
   }
   lines.push('')
   lines.push('## Top Priority Themes')
   const worstPerf = sorted.slice(0, 5)
   for (const item of worstPerf) {
+    const score = item.scores.performance == null ? 'FAIL' : item.scores.performance
     lines.push(
-      `- ${item.theme}: Perf ${item.scores.performance}, LCP ${item.metrics.lcpMs ?? '-'}ms, JS ${item.metrics.jsKb ?? '-'}KB`
+      `- ${item.theme}: Perf ${score}, LCP ${item.metrics.lcpMs ?? '-'}ms, JS ${item.metrics.jsKb ?? '-'}KB${
+        item.error ? `, Error: ${item.error}` : ''
+      }`
     )
   }
   fs.writeFileSync(reportPath, lines.join('\n'))
@@ -125,7 +170,7 @@ function ensureDirs() {
   fs.mkdirSync(docsPerfDir, { recursive: true })
 }
 
-async function main() {
+function main() {
   if (!fs.existsSync(lighthouseBin)) {
     throw new Error('Missing lighthouse binary. Run `yarn install` first.')
   }
@@ -136,13 +181,21 @@ async function main() {
   }
 
   const results = []
+  const failedThemes = []
   for (const theme of themes) {
     const url = `${baseUrl}/?theme=${theme}`
     const out = path.join(rawDir, `${theme}.json`)
     console.log(`Auditing ${theme} -> ${url}`)
-    runLighthouse(url, out)
-    const lhr = readJson(out)
-    results.push(getThemeResult(theme, lhr))
+    try {
+      runLighthouse(url, out)
+      const lhr = readJson(out)
+      results.push(getThemeResult(theme, lhr))
+    } catch (err) {
+      failedThemes.push(theme)
+      results.push(
+        getFailedThemeResult(theme, url, err?.message?.split('\n')[0] || 'Unknown error')
+      )
+    }
   }
 
   const summaryPath = path.join(reportDir, 'summary.json')
@@ -159,9 +212,14 @@ async function main() {
   console.log(
     `\nTheme audit finished. Results: ${path.relative(root, trackedMarkdownPath)}`
   )
+  if (failedThemes.length > 0) {
+    console.warn(`Theme audit completed with failures: ${failedThemes.join(',')}`)
+  }
 }
 
-main().catch(err => {
+try {
+  main()
+} catch (err) {
   console.error(err.message || err)
   process.exit(1)
-})
+}
