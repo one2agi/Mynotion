@@ -1,13 +1,5 @@
 ﻿import { useEffect } from 'react'
-import Prism from 'prismjs'
 // 所有语言的prismjs 使用autoloader引入
-// import 'prismjs/plugins/autoloader/prism-autoloader'
-import 'prismjs/plugins/toolbar/prism-toolbar'
-import 'prismjs/plugins/toolbar/prism-toolbar.min.css'
-import 'prismjs/plugins/show-language/prism-show-language'
-import 'prismjs/plugins/copy-to-clipboard/prism-copy-to-clipboard'
-import 'prismjs/plugins/line-numbers/prism-line-numbers'
-import 'prismjs/plugins/line-numbers/prism-line-numbers.css'
 
 // mermaid图
 import { loadExternalResource } from '@/lib/utils'
@@ -59,28 +51,38 @@ const PrismMac = () => {
       prismThemePrefixPath
     )
     // 折叠代码
-    loadExternalResource(prismjsAutoLoader, 'js')
-      .then(() => {
-        if (isDisposed) return
-        try {
-          if (typeof window !== 'undefined' && !window.Prism) {
-            window.Prism = Prism
-          }
-          if (window?.Prism?.plugins?.autoloader) {
-            window.Prism.plugins.autoloader.languages_path = prismjsPath
-          }
-
-          const dispose = renderPrismMac(codeLineNumbers, codeMacBar)
-          stopLineNumbers = typeof dispose === 'function' ? dispose : () => {}
-          renderMermaid(mermaidCDN)
-          renderCollapseCode(codeCollapse, codeCollapseExpandDefault)
-        } catch (err) {
-          console.warn('[PrismMac] render failed:', err)
+    ;(async () => {
+      try {
+        const prismModule = await import('prismjs')
+        const PrismInstance = prismModule?.default || prismModule
+        if (typeof window !== 'undefined' && !window.Prism) {
+          window.Prism = PrismInstance
         }
-      })
-      .catch(err => {
-        console.warn('[PrismMac] prism autoloader load failed:', err)
-      })
+
+        await Promise.all([
+          import('prismjs/plugins/toolbar/prism-toolbar'),
+          import('prismjs/plugins/show-language/prism-show-language'),
+          import('prismjs/plugins/copy-to-clipboard/prism-copy-to-clipboard'),
+          import('prismjs/plugins/line-numbers/prism-line-numbers'),
+          import('prismjs/plugins/toolbar/prism-toolbar.min.css'),
+          import('prismjs/plugins/line-numbers/prism-line-numbers.css')
+        ])
+
+        await loadExternalResource(prismjsAutoLoader, 'js')
+        if (isDisposed) return
+
+        if (window?.Prism?.plugins?.autoloader) {
+          window.Prism.plugins.autoloader.languages_path = prismjsPath
+        }
+
+        const dispose = renderPrismMac(codeLineNumbers, codeMacBar)
+        stopLineNumbers = typeof dispose === 'function' ? dispose : () => {}
+        renderMermaid(mermaidCDN)
+        renderCollapseCode(codeCollapse, codeCollapseExpandDefault)
+      } catch (err) {
+        console.warn('[PrismMac] prism render failed:', err)
+      }
+    })()
 
     return () => {
       isDisposed = true
@@ -289,6 +291,7 @@ const renderMermaid = mermaidCDN => {
 
 function renderPrismMac(codeLineNumbers, codeMacBar) {
   const container = getNotionArticle()
+  const Prism = window?.Prism
 
   // Add line numbers
   if (codeLineNumbers) {
@@ -345,6 +348,7 @@ function renderPrismMac(codeLineNumbers, codeMacBar) {
  */
 const fixCodeLineStyle = () => {
   const article = getNotionArticle()
+  const Prism = window?.Prism
   if (!article) {
     return () => {}
   }

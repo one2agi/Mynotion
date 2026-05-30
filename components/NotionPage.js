@@ -2,8 +2,6 @@ import { siteConfig } from '@/lib/config'
 import { compressImage, mapImgUrl } from '@/lib/db/notion/mapImage'
 import NotionLink from '@/components/NotionLink'
 import { isBrowser, loadExternalResource } from '@/lib/utils'
-import mediumZoom from '@fisch0920/medium-zoom'
-import 'katex/dist/katex.min.css'
 import dynamic from 'next/dynamic'
 import { useEffect, useRef } from 'react'
 import { NotionRenderer } from 'react-notion-x'
@@ -30,21 +28,44 @@ const NotionPage = ({ post, className }) => {
 
   // 页面文章发生变化时会执行的勾子
   useEffect(() => {
+    let disposed = false
+
+    const loadGalleryZoom = async () => {
+      if (!POST_DISABLE_GALLERY_CLICK || !isBrowser || disposed) return
+
+      if (!zoomRef.current) {
+        try {
+          const { default: mediumZoom } = await import('@fisch0920/medium-zoom')
+          if (disposed) return
+          zoomRef.current = mediumZoom({
+            background: 'rgba(0, 0, 0, 0.2)',
+            margin: getMediumZoomMargin()
+          })
+        } catch (err) {
+          console.warn('[NotionPage] medium-zoom load failed:', err)
+          return
+        }
+      }
+
+      processGalleryImg(zoomRef.current)
+    }
+
     // 相册视图点击禁止跳转，只能放大查看图片
     if (POST_DISABLE_GALLERY_CLICK) {
-      if (!zoomRef.current && isBrowser) {
-        zoomRef.current = mediumZoom({
-          background: 'rgba(0, 0, 0, 0.2)',
-          margin: getMediumZoomMargin()
-        })
-      }
+      loadGalleryZoom()
       // 针对页面中的gallery视图，点击后是放大图片还是跳转到gallery的内部页面
-      processGalleryImg(zoomRef?.current)
     }
 
     // 页内数据库点击禁止跳转，只能查看
     if (POST_DISABLE_DATABASE_CLICK) {
       processDisableDatabaseUrl()
+    }
+
+    // 仅在存在公式块时才加载 KaTeX 样式
+    if (hasEquation(post?.blockMap)) {
+      import('katex/dist/katex.min.css').catch(() => {
+        console.warn('[NotionPage] katex css load failed')
+      })
     }
 
     /**
@@ -87,6 +108,10 @@ const NotionPage = ({ post, className }) => {
     })
 
     return () => {
+      disposed = true
+      if (zoomRef.current && zoomRef.current.detach) {
+        zoomRef.current.detach()
+      }
       observer.disconnect()
     }
   }, [post])
@@ -139,6 +164,14 @@ const hasCodeBlock = blockMap => {
   if (!blocks) return false
   return Object.values(blocks).some(
     item => item?.value?.type === 'code'
+  )
+}
+
+const hasEquation = blockMap => {
+  const blocks = blockMap?.block
+  if (!blocks) return false
+  return Object.values(blocks).some(
+    item => item?.value?.type === 'equation'
   )
 }
 
