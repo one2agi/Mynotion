@@ -183,12 +183,14 @@ const ExternalPlugin = props => {
   }, [ADSENSE_GOOGLE_ID, DISABLE_PLUGIN, lang, props?.allNavPages, router])
 
   useEffect(() => {
-    // 执行注入脚本
-    // eslint-disable-next-line no-eval
-    if (GLOBAL_JS && GLOBAL_JS.trim() !== '') {
-      // console.log('Inject JS:', GLOBAL_JS);
-      eval(GLOBAL_JS)
-    }
+    return runWhenIdle(() => {
+      // 执行注入脚本
+      // eslint-disable-next-line no-eval
+      if (GLOBAL_JS && GLOBAL_JS.trim() !== '') {
+        // console.log('Inject JS:', GLOBAL_JS);
+        eval(GLOBAL_JS)
+      }
+    }, 700)
   }, [GLOBAL_JS])
 
   useEffect(() => {
