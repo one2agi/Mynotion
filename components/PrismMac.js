@@ -3,6 +3,7 @@
 
 // mermaid图
 import { loadExternalResource } from '@/lib/utils'
+import { runWhenIdle } from '@/lib/utils/clientIdle'
 import { usePathname } from 'next/navigation'
 import { useGlobal } from '@/lib/global'
 import { siteConfig } from '@/lib/config'
@@ -33,6 +34,7 @@ const PrismMac = () => {
   useEffect(() => {
     let isDisposed = false
     let stopLineNumbers = () => {}
+    let stopMermaid = () => {}
 
     const article = getNotionArticle()
     if (!article) return
@@ -77,7 +79,11 @@ const PrismMac = () => {
 
         const dispose = renderPrismMac(codeLineNumbers, codeMacBar)
         stopLineNumbers = typeof dispose === 'function' ? dispose : () => {}
-        renderMermaid(mermaidCDN)
+        stopMermaid = runWhenIdle(() => {
+          if (!isDisposed) {
+            renderMermaid(mermaidCDN)
+          }
+        }, 1200)
         renderCollapseCode(codeCollapse, codeCollapseExpandDefault)
       } catch (err) {
         console.warn('[PrismMac] prism render failed:', err)
@@ -88,6 +94,7 @@ const PrismMac = () => {
       isDisposed = true
       try {
         stopLineNumbers()
+        stopMermaid()
       } catch (e) {
         /* ignore */
       }
