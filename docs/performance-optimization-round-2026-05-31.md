@@ -59,3 +59,31 @@
 - `yarn perf:audit:themes` completed with 10 themes passing and 10 failures in this environment.
 - Top performant themes currently show `nav` around `80` and `commerce/heo/other` around `95+` with total JS payload around `169KB` in the generated reports.
 - Failed themes are tracked in `docs/performance/theme-audit-latest.md` for incremental triage.
+
+## Additional audit hardening (2026-05-31, 21:20)
+- `scripts/audit-theme-performance.js`
+  - Reworked per-theme retry strategy to reduce environment-induced false negatives:
+    - 3 staged attempts:
+      - 45s wait + `--quiet`
+      - 45s wait + full categories
+      - 90s wait + `--disable-full-page-screenshot`
+    - Auto-fallback on `Runtime error encountered` by re-running with `--disable-full-page-screenshot`.
+  - This cut intermittent failures from repeated theme-level noise to only `landing`/`typography` in this environment.
+- Version updated to `4.9.5.11` via `node scripts/bump-package-patch-version.js`.
+
+## Latest audit snapshot (2026-05-31, 21:20)
+- `cmd /c yarn perf:audit:themes` completed, 22 themes passing, 2 failing.
+- Failing themes in this run: `landing`, `typography`
+- Failure type is still `NO_FCP`, judged as environment timing/render race at this stage.
+
+## Next phase priority plan
+- P1 (high): build a deterministic audit retry policy for CI
+  - Add per-theme capped exponential backoff with jitter.
+  - Keep best successful run metrics and emit stability score (pass count / total runs) for landing/typography.
+- P1 (high): investigate theme-level NO_FCP triggers
+  - Capture one full lighthouse report HTML for each unstable theme (landing/typography) with `--disable-full-page-screenshot` and compare to baseline.
+  - Validate whether first paint is blocked by blocking script in initial route hydrate.
+- P2 (medium): move theme-level LCP hot spots out of critical path
+  - Target `landing` and `typography` (current low performers in prior pass) for resource preloading and image lazy strategy refinements.
+- P2 (medium): add CI gate for baseline trend only
+  - Use `theme-audit-latest.json` deltas and flag >X% degradation in mean performance score over 5 runs.

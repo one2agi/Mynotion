@@ -23,6 +23,7 @@ const includeThemes = (process.env.THEME_AUDIT_THEMES || '')
   .filter(Boolean)
 const chromeFlags =
   '--headless=new --no-sandbox --disable-dev-shm-usage --disable-gpu'
+const suppressOutput = ['--disable-full-page-screenshot']
 
 function getThemes() {
   const entries = fs.readdirSync(themesDir, { withFileTypes: true })
@@ -35,14 +36,12 @@ function getThemes() {
 }
 
 function runLighthouse(url, outputPath) {
-  const args = [
+  const baseArgs = [
     url,
-    '--quiet',
     '--only-categories=performance,seo,best-practices,accessibility',
     '--output=json',
     `--output-path=${outputPath}`,
     `--chrome-flags=${chromeFlags}`,
-    '--max-wait-for-load=45000',
     '--throttling-method=simulate'
   ]
   const options = {
@@ -51,13 +50,51 @@ function runLighthouse(url, outputPath) {
     env: process.env,
     shell: process.platform === 'win32'
   }
-  const result = spawnSync(lighthouseBin, args, options)
-  if (result.status !== 0) {
-    const errorText = result.stderr?.toString() || result.stdout?.toString() || ''
+  const attempts = [
+    [...baseArgs, '--max-wait-for-load=45000', '--quiet'],
+    [...baseArgs, '--max-wait-for-load=45000'],
+    [...baseArgs, '--max-wait-for-load=90000', ...suppressOutput]
+  ]
+  const lastError = []
+  for (let attempt = 0; attempt < attempts.length; attempt += 1) {
+    const cmdArgs = attempts[attempt]
+    const result = spawnSync(lighthouseBin, cmdArgs, options)
+    if (result.status === 0) {
+      return
+    }
+    const err = result.stderr?.toString() || result.stdout?.toString() || ''
     const errnoText = result.error?.toString() || ''
-    const fullMessage = `Lighthouse failed for ${url}\n${errnoText}\n${errorText}`
-    throw new Error(fullMessage)
+    lastError.push(
+      `Attempt ${attempt + 1} failed: ${errnoText || 'exit ' + result.status} ${err.split('\n').slice(0, 3).join(' | ')}`
+    )
+    if (err.includes('Runtime error encountered:')) {
+      const fallbackArgs = [...cmdArgs, ...suppressOutput]
+      const fallbackResult = spawnSync(lighthouseBin, fallbackArgs, options)
+      if (fallbackResult.status === 0) {
+        return
+      }
+      const fallbackErr =
+        fallbackResult.stderr?.toString() || fallbackResult.stdout?.toString() || ''
+      lastError.push(
+        `Attempt ${attempt + 1} fallback failed: ${fallbackErr
+          .split('\n')
+          .slice(0, 3)
+          .join(' | ')}`
+      )
+    }
+    if (attempt < attempts.length - 1) {
+      continue
+    }
   }
+  const fullMessage = `Lighthouse failed for ${url}\n${lastError.join('\n')}`
+  throw new Error(fullMessage)
+}
+
+function normalizeErrorMessage(message) {
+  if (!message) {
+    return 'Unknown error'
+  }
+  return message.split('\n')[0] || 'Unknown error'
 }
 
 function readJson(filePath) {
@@ -193,7 +230,11 @@ function main() {
     } catch (err) {
       failedThemes.push(theme)
       results.push(
-        getFailedThemeResult(theme, url, err?.message?.split('\n')[0] || 'Unknown error')
+        getFailedThemeResult(
+          theme,
+          url,
+          normalizeErrorMessage(err?.message)
+        )
       )
     }
   }
