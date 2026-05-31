@@ -87,3 +87,20 @@
   - Target `landing` and `typography` (current low performers in prior pass) for resource preloading and image lazy strategy refinements.
 - P2 (medium): add CI gate for baseline trend only
   - Use `theme-audit-latest.json` deltas and flag >X% degradation in mean performance score over 5 runs.
+
+## Stability refactor completed (2026-05-31, 13:10)
+- `scripts/audit-theme-performance.js`
+  - Added per-theme multi-run support via `THEME_AUDIT_RUNS` (capped at 5), defaulting to 1 and now documented in report output.
+  - Added `auditThemeWithStability` flow:
+    - executes multiple runs per theme with jittered backoff between attempts,
+    - records per-run status, performance and LCP,
+    - computes `runs / successes / passRate` as a stability signal,
+    - keeps the best successful run (highest performance then lowest LCP).
+  - Kept failure behavior compatible: failed themes still emit a row (with `runs`, `stability`, and `error`) instead of aborting the whole audit job.
+  - Markdown report now shows `Run count` (when >1), `Runs`, `Stability` columns and keeps existing scoring fields for compatibility.
+- Verification
+  - `cmd /c yarn eslint scripts\\audit-theme-performance.js`
+  - `THEME_AUDIT_RUNS=2 cmd /c yarn perf:audit:themes` (single theme smoke check passed)
+  - `cmd /c yarn perf:audit:themes` (full pass: 25 themes, 25 passed, average stability 100.00%)
+- Version
+  - Bumped package version to `4.9.5.12` via `node scripts/bump-package-patch-version.js`.

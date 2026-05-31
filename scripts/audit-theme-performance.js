@@ -19,20 +19,40 @@ const lighthouseBin = (() => {
 const baseUrl = process.env.THEME_AUDIT_BASE_URL || 'http://localhost:3000'
 const includeThemes = (process.env.THEME_AUDIT_THEMES || '')
   .split(',')
-  .map(v => v.trim())
+  .map((v) => v.trim())
   .filter(Boolean)
 const chromeFlags =
   '--headless=new --no-sandbox --disable-dev-shm-usage --disable-gpu'
 const suppressOutput = ['--disable-full-page-screenshot']
+const stableRunLimit = (() => {
+  const requested = Number.parseInt(process.env.THEME_AUDIT_RUNS || '1', 10)
+  if (!Number.isFinite(requested) || requested <= 1) return 1
+  return Math.min(requested, 5)
+})()
+const baseWaitMs = 1200
+const maxWaitMs = 8000
+
+function sleep(ms) {
+  const end = Date.now() + ms
+  while (Date.now() < end) {
+    // sync wait keeps this script simple and deterministic
+  }
+}
+
+function getJitteredBackoff(attempt) {
+  const cap = Math.min(baseWaitMs * 2 ** attempt, maxWaitMs)
+  const jitter = Math.floor(Math.random() * 300)
+  return cap + jitter
+}
 
 function getThemes() {
   const entries = fs.readdirSync(themesDir, { withFileTypes: true })
   const all = entries
-    .filter(entry => entry.isDirectory())
-    .map(entry => entry.name)
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => entry.name)
     .sort()
   if (includeThemes.length === 0) return all
-  return all.filter(theme => includeThemes.includes(theme))
+  return all.filter((theme) => includeThemes.includes(theme))
 }
 
 function runLighthouse(url, outputPath) {
@@ -56,6 +76,7 @@ function runLighthouse(url, outputPath) {
     [...baseArgs, '--max-wait-for-load=90000', ...suppressOutput]
   ]
   const lastError = []
+
   for (let attempt = 0; attempt < attempts.length; attempt += 1) {
     const cmdArgs = attempts[attempt]
     const result = spawnSync(lighthouseBin, cmdArgs, options)
@@ -83,7 +104,7 @@ function runLighthouse(url, outputPath) {
       )
     }
     if (attempt < attempts.length - 1) {
-      continue
+      sleep(getJitteredBackoff(attempt + 1))
     }
   }
   const fullMessage = `Lighthouse failed for ${url}\n${lastError.join('\n')}`
@@ -163,6 +184,79 @@ function getFailedThemeResult(theme, url, errorMessage) {
   }
 }
 
+function getBestResult(results) {
+  return results.reduce((winner, candidate) => {
+    if (!winner) {
+      return candidate
+    }
+
+    const winnerPerf = winner.scores.performance || 0
+    const candidatePerf = candidate.scores.performance || 0
+    if (candidatePerf > winnerPerf) {
+      return candidate
+    }
+    if (candidatePerf < winnerPerf) {
+      return winner
+    }
+
+    const winnerLcp = winner.metrics.lcpMs ?? Number.POSITIVE_INFINITY
+    const candidateLcp = candidate.metrics.lcpMs ?? Number.POSITIVE_INFINITY
+    if (candidateLcp < winnerLcp) {
+      return candidate
+    }
+    return winner
+  }, null)
+}
+
+function auditThemeWithStability(theme, url, outputPath) {
+  const runs = []
+  const successful = []
+
+  for (let run = 1; run <= stableRunLimit; run += 1) {
+    const suffix = stableRunLimit > 1 ? `-run-${run}` : ''
+    const runOutputPath = outputPath.replace(/\.json$/, `${suffix}.json`)
+
+    try {
+      runLighthouse(url, runOutputPath)
+      const lhr = readJson(runOutputPath)
+      const result = getThemeResult(theme, lhr)
+      successful.push(result)
+      runs.push({
+        run,
+        status: 'passed',
+        performance: result.scores.performance,
+        lcpMs: result.metrics.lcpMs
+      })
+    } catch (err) {
+      const msg = normalizeErrorMessage(err?.message)
+      runs.push({ run, status: 'failed', error: msg })
+      if (run < stableRunLimit) {
+        sleep(getJitteredBackoff(run))
+      }
+    }
+  }
+
+  const stability = {
+    runs: runs.length,
+    successes: successful.length,
+    passRate: Number(((successful.length / runs.length) * 100).toFixed(2))
+  }
+
+  if (!successful.length) {
+    return {
+      ...getFailedThemeResult(theme, url, runs.at(-1)?.error || 'Unknown error'),
+      runs,
+      stability
+    }
+  }
+
+  return {
+    ...getBestResult(successful),
+    runs,
+    stability
+  }
+}
+
 function writeMarkdown(results, reportPath) {
   const sorted = [...results].sort((a, b) => {
     const aPerf = a.scores.performance ?? Number.MAX_SAFE_INTEGER
@@ -175,17 +269,19 @@ function writeMarkdown(results, reportPath) {
   lines.push('')
   lines.push(`Base URL: ${baseUrl}`)
   lines.push(`Generated: ${new Date().toISOString()}`)
+  if (stableRunLimit > 1) {
+    lines.push(`Run count: ${stableRunLimit} per theme`)
+  }
   lines.push('')
   lines.push(
-    '| Theme | Perf | SEO | LCP(ms) | INP(ms) | CLS | JS(KB) | Total(KB) | Error |'
+    '| Theme | Perf | SEO | LCP(ms) | INP(ms) | CLS | JS(KB) | Total(KB) | Runs | Stability | Error |'
   )
-  lines.push(
-    '|---|---:|---:|---:|---:|---:|---:|---:|---|'
-  )
+  lines.push('|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|')
   for (const item of sorted) {
     const score = item.scores.performance
+    const stability = item.stability ? `${item.stability.successes}/${item.stability.runs}` : '-'
     lines.push(
-      `| ${item.theme} | ${score == null ? 'FAIL' : score} | ${item.scores.seo ?? '-'} | ${item.metrics.lcpMs ?? '-'} | ${item.metrics.inpMs ?? '-'} | ${item.metrics.cls ?? '-'} | ${item.metrics.jsKb ?? '-'} | ${item.metrics.totalKb ?? '-'} | ${item.error ? item.error : ''}`
+      `| ${item.theme} | ${score == null ? 'FAIL' : score} | ${item.scores.seo ?? '-'} | ${item.metrics.lcpMs ?? '-'} | ${item.metrics.inpMs ?? '-'} | ${item.metrics.cls ?? '-'} | ${item.metrics.jsKb ?? '-'} | ${item.metrics.totalKb ?? '-'} | ${stability} | ${item.stability?.passRate != null ? `${item.stability.passRate}%` : '-'} | ${item.error ? item.error : ''}`
     )
   }
   lines.push('')
@@ -193,8 +289,9 @@ function writeMarkdown(results, reportPath) {
   const worstPerf = sorted.slice(0, 5)
   for (const item of worstPerf) {
     const score = item.scores.performance == null ? 'FAIL' : item.scores.performance
+    const stability = item.stability ? `, Stability: ${item.stability.passRate}% (${item.stability.successes}/${item.stability.runs})` : ''
     lines.push(
-      `- ${item.theme}: Perf ${score}, LCP ${item.metrics.lcpMs ?? '-'}ms, JS ${item.metrics.jsKb ?? '-'}KB${
+      `- ${item.theme}: Perf ${score}, LCP ${item.metrics.lcpMs ?? '-'}ms, JS ${item.metrics.jsKb ?? '-'}KB${stability}${
         item.error ? `, Error: ${item.error}` : ''
       }`
     )
@@ -223,20 +320,11 @@ function main() {
     const url = `${baseUrl}/?theme=${theme}`
     const out = path.join(rawDir, `${theme}.json`)
     console.log(`Auditing ${theme} -> ${url}`)
-    try {
-      runLighthouse(url, out)
-      const lhr = readJson(out)
-      results.push(getThemeResult(theme, lhr))
-    } catch (err) {
+    const result = auditThemeWithStability(theme, url, out)
+    if (result.scores.performance == null) {
       failedThemes.push(theme)
-      results.push(
-        getFailedThemeResult(
-          theme,
-          url,
-          normalizeErrorMessage(err?.message)
-        )
-      )
     }
+    results.push(result)
   }
 
   const summaryPath = path.join(reportDir, 'summary.json')
@@ -244,15 +332,12 @@ function main() {
   fs.writeFileSync(summaryPath, JSON.stringify(results, null, 2))
   writeMarkdown(results, markdownPath)
 
-  // 可提交产物：作为主题性能基线与协作规范的一部分
   const trackedJsonPath = path.join(docsPerfDir, 'theme-audit-latest.json')
   const trackedMarkdownPath = path.join(docsPerfDir, 'theme-audit-latest.md')
   fs.writeFileSync(trackedJsonPath, JSON.stringify(results, null, 2))
   writeMarkdown(results, trackedMarkdownPath)
 
-  console.log(
-    `\nTheme audit finished. Results: ${path.relative(root, trackedMarkdownPath)}`
-  )
+  console.log(`\nTheme audit finished. Results: ${path.relative(root, trackedMarkdownPath)}`)
   if (failedThemes.length > 0) {
     console.warn(`Theme audit completed with failures: ${failedThemes.join(',')}`)
   }
