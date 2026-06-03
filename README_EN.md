@@ -32,7 +32,9 @@ You can set up your personal website in just a few minutes. Here is the link to 
 
 <hr/>
 
-A static blog system built with NextJS and Notion API, deployed on Vercel. Designed for Notion and all creators.
+NotionNext turns your Notion workspace into a fast, customizable website.
+
+Built with **Next.js + Notion API**, it lets you publish a blog, portfolio, knowledge base, directory, or product site without running your own server. Deploy it on Vercel, Cloudflare Pages, Netlify, Docker, or a VPS, and keep writing where your content already lives.
 
 **Repository hosting:** The main repository is maintained by the GitHub organization **[notionnext-org](https://github.com/notionnext-org)** (canonical: `https://github.com/notionnext-org/NotionNext`). Contributions are welcome; see the org page for collaboration. If you cloned before the transfer, run `git remote set-url origin https://github.com/notionnext-org/NotionNext.git` and verify with `git remote -v`.
 

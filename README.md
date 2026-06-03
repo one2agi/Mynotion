@@ -4,9 +4,9 @@
 
 # NotionNext
 
-用 Notion 搭建自己的独立站
+把 Notion 变成你的独立网站
 
-继续在 Notion 写作，一键发布为博客、作品集、知识库、导航站或产品官网。
+基于 Next.js 与 Notion API 的开源静态站点生成器。继续用 Notion 管理内容，一键发布为博客、作品集、知识库、导航站或产品官网。
 
 <p>
   <a href="https://preview.tangly1024.com/">在线预览</a>
@@ -43,7 +43,9 @@
 
 ## NotionNext 是什么？
 
-NotionNext 是一个基于 **Next.js + Notion API** 的开源站点系统。你继续用 Notion 管理文章、分类、标签、菜单和页面，NotionNext 负责把这些内容发布成可访问、可搜索、可运营的独立网站。
+NotionNext 是一个基于 **Next.js + Notion API** 的开源静态站点系统。你继续用 Notion 管理文章、分类、标签、菜单和页面，NotionNext 负责把这些内容发布成可访问、可搜索、可运营的独立网站。
+
+它不需要自建服务器，支持 Vercel、Cloudflare Pages、Netlify、Docker、VPS 等多种部署方式，让创作者可以用很低的成本把 Notion 内容变成真正属于自己的站点。
 
 它适合想长期沉淀内容的人：内容创作者、独立开发者、设计师、摄影师、课程作者、开源项目维护者，以及需要快速搭建产品官网或知识库的小团队。
 

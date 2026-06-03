@@ -28,7 +28,9 @@
 
 [Roadmap](https://github.com/tangly1024/NotionNext/wiki/Roadmap)
 
-使用 NextJS + Notion API 实现的，支持多种部署方案的静态博客，无需服务器、零门槛搭建网站，为Notion和所有创作者设计。 (A static blog built with NextJS and Notion API, supporting multiple deployment options. No server required, zero threshold t...
+NotionNext 是一个基于 **Next.js + Notion API** 的开源静态站点系统，让你继续在 Notion 写作，同时发布为可访问、可搜索、可运营的独立网站。它无需自建服务器，支持 Vercel、Cloudflare Pages、Netlify、Docker、VPS 等多种部署方式，适合博客、作品集、知识库、导航站和产品官网等场景。
+
+NotionNext turns your Notion workspace into a fast, customizable website. Built with **Next.js + Notion API**, it supports multiple deployment options without requiring you to run your own server. It is designed for Notion users, content creators, independent developers, and teams who want to publish with more control.
 
 
 ## 2. 赞助
