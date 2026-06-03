@@ -1,8 +1,8 @@
-﻿# 主题性能优化（第 1 轮）
+# 主题性能优化（第 1 轮）
 
 日期：2026-06-03
 分支：`codex/performance-optimization-main`
-版本目标：`4.9.5.8`
+版本目标：`4.9.5.9`
 
 ## 本轮变更
 
@@ -19,6 +19,21 @@
   - `LayoutSearch` 中将 `replaceSearchResult` 迁移为按需动态 import（仅在搜索页生效时触发），避免首页/文章页初始包裹入这部分代码。
   - 将搜索高亮挂载改为延后执行（`requestIdleCallback` 或 fallback timeout），降低首屏阻塞。
 
+### 3) 搜索高亮逻辑统一优化（跨主题）
+- 文件：`components/Mark.js`
+- 改动：
+  - 将 `mark.js` 库加载改为一次性 Promise 缓存，避免同一次会话内重复请求。
+  - 对搜索关键词进行安全转义，避免异常正则导致高亮路径中断。
+  - 用 `requestIdleCallback`（兼容 fallback）将高亮执行延后，减少直接阻塞主线程高峰。
+  - 保持现有高亮输出（className/element）与配置不变。
+
+### 4) 主题性能审计脚本跨平台兼容修复
+- 文件：`scripts/audit-theme-performance.js`
+- 改动：
+  - 按平台选择 `lighthouse` 可执行路径（Windows 优先 `lighthouse.cmd`，未命中时降级到 `lighthouse` 或包内 CLI 入口）。
+  - `runLighthouse` 执行路径改为变量化，避免 Windows 下 `spawnSync` 识别问题。
+  - `main` 改为同步流程，移除 `async`/.`catch` 的不匹配调用。
+
 ## 验证
 
 - `yarn type-check`：通过
@@ -32,3 +47,4 @@
 ## 下一步计划（P2）
 - 继续梳理主题层面仍有较重的首屏逻辑（特别是搜索、目录、高频 DOM 遍历逻辑），按影响面优先落地。
 - 建立可复用的主题级延迟执行基线（空闲/滚动触发），并补齐多主题对比的自动化 Lighthouse 报告。
+
