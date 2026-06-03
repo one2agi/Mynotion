@@ -72,7 +72,7 @@ const LayoutBase = props => {
       floatButtonGroup?.current?.classList.replace('bottom-12', 'bottom-24')
     }
 
-    document.addEventListener('scroll', scrollListener)
+    document.addEventListener('scroll', scrollListener, { passive: true })
     return () => document.removeEventListener('scroll', scrollListener)
   }, [showRightFloat])
 

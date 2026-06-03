@@ -44,7 +44,7 @@ const TopNav = (props) => {
   useEffect(() => {
     if (siteConfig('NEXT_NAV_TYPE', null, CONFIG) === 'autoCollapse') {
       scrollTrigger()
-      window.addEventListener('scroll', scrollTrigger)
+      window.addEventListener('scroll', scrollTrigger, { passive: true })
     }
     return () => {
       siteConfig('NEXT_NAV_TYPE', null, CONFIG) === 'autoCollapse' && window.removeEventListener('scroll', scrollTrigger)

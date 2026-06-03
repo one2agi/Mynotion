@@ -21,8 +21,8 @@ const FloatingControls = ({ toc, ...props }) => {
   
   // -- TOC Logic --
   useEffect(() => {
-    window.addEventListener('scroll', updateProgress)
-    window.addEventListener('scroll', actionSectionScrollSpy)
+    window.addEventListener('scroll', updateProgress, { passive: true })
+    window.addEventListener('scroll', actionSectionScrollSpy, { passive: true })
     return () => {
         window.removeEventListener('scroll', updateProgress)
       window.removeEventListener('scroll', actionSectionScrollSpy)

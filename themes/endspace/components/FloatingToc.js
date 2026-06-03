@@ -17,8 +17,8 @@ const FloatingToc = ({ toc }) => {
 
   // Listen to scroll events
   useEffect(() => {
-    window.addEventListener('scroll', actionSectionScrollSpy)
-    window.addEventListener('scroll', updateProgress)
+    window.addEventListener('scroll', actionSectionScrollSpy, { passive: true })
+    window.addEventListener('scroll', updateProgress, { passive: true })
     actionSectionScrollSpy()
     updateProgress()
     return () => {

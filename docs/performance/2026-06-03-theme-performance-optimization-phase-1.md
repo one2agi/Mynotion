@@ -2,7 +2,7 @@
 
 日期：2026-06-03
 分支：`codex/performance-optimization-main`
-版本目标：`4.9.5.9`
+版本目标：`4.9.5.10`
 
 ## 本轮变更
 
@@ -33,6 +33,13 @@
   - 按平台选择 `lighthouse` 可执行路径（Windows 优先 `lighthouse.cmd`，未命中时降级到 `lighthouse` 或包内 CLI 入口）。
   - `runLighthouse` 执行路径改为变量化，避免 Windows 下 `spawnSync` 识别问题。
   - `main` 改为同步流程，移除 `async`/.`catch` 的不匹配调用。
+
+### 5) 主题级滚动监听优化（跨主题）
+- 文件：`themes/*/components/*.js`
+- 改动：
+  - 将大量仅读滚动位置/进度的监听器改为 `passive: true` 注册，减少滚动事件对主线程调度压力。
+  - 覆盖范围：Catalog、Progress、浮动导航、BackToTop 等大量主题内滚动场景（共 70+ 处）。
+  - 保持行为一致（监听逻辑和卸载仍保持原有回调匹配）。
 
 ## 验证
 

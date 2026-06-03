@@ -12,7 +12,7 @@ import Progress from './Progress'
 const Toc = ({ toc }) => {
   // 监听滚动事件
   useEffect(() => {
-    window.addEventListener('scroll', actionSectionScrollSpy)
+    window.addEventListener('scroll', actionSectionScrollSpy, { passive: true })
     actionSectionScrollSpy()
     return () => {
       window.removeEventListener('scroll', actionSectionScrollSpy)
