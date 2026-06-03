@@ -2,7 +2,7 @@
 
 鏃ユ湡锛?026-06-03
 鍒嗘敮锛歚codex/performance-optimization-main`
-鐗堟湰鐩爣锛歚4.9.5.11`
+鐗堟湰鐩爣锛歚4.10.0`
 
 ## 鏈疆鍙樻洿
 
@@ -29,7 +29,7 @@
 
 ## 2026-06-03 Follow-up: Next and Endspace scroll rendering pass
 
-Version: `4.9.5.12`
+Version: `4.10.0`
 
 ### Scope
 - `themes/next/components/BlogPostListScroll.js`
