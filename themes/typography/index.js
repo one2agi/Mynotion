@@ -1,6 +1,4 @@
-import { AdSlot } from '@/components/GoogleAdsense'
 import replaceSearchResult from '@/components/Mark'
-import NotionPage from '@/components/NotionPage'
 import { siteConfig } from '@/lib/config'
 import { useGlobal } from '@/lib/global'
 import { isBrowser } from '@/lib/utils'
@@ -8,10 +6,22 @@ import dynamic from 'next/dynamic'
 import SmartLink from '@/components/SmartLink'
 import { useRouter } from 'next/router'
 import { createContext, useContext, useEffect, useRef } from 'react'
-import BlogPostBar from './components/BlogPostBar'
 import CONFIG from './config'
 import { Style } from './style'
-import Catalog from './components/Catalog'
+
+const AdSlot = dynamic(
+  () => import('@/components/GoogleAdsense').then(mod => mod.AdSlot),
+  { ssr: false }
+)
+const BlogPostBar = dynamic(() => import('./components/BlogPostBar'), {
+  ssr: true
+})
+const Catalog = dynamic(() => import('./components/Catalog'), {
+  ssr: true
+})
+const NotionPage = dynamic(() => import('@/components/NotionPage'), {
+  ssr: true
+})
 
 const AlgoliaSearchModal = dynamic(
   () => import('@/components/AlgoliaSearchModal'),
