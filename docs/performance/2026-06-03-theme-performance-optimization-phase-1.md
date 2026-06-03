@@ -27,3 +27,34 @@
 ## 椋庨櫓涓庡奖鍝?- 澶栭儴鑴氭湰鍔犺浇鏀逛负寤惰繜锛屼笉褰卞搷鐜版湁閰嶇疆椤逛笌鎻掍欢寮€鍏抽€昏緫锛坄DISABLE_PLUGIN` 绛変繚鎸佷笉鍙橈級銆?- `GLOBAL_JS` 鍙湪鍐呭鍙樺寲鏃舵墽琛岋紝琛屼负涓庨厤缃粨鏋滀繚鎸佷竴鑷达紝浣嗛檷浣庝簡閲嶅娉ㄥ叆椋庨櫓銆?
 ## 涓嬩竴姝ヨ鍒掞紙P2锛?- 缁х画姊崇悊涓婚灞傞潰浠嶆湁杈冮噸鐨勯灞忛€昏緫锛堢壒鍒槸鎼滅储銆佺洰褰曘€侀珮棰?DOM 閬嶅巻閫昏緫锛夛紝鎸夊奖鍝嶉潰浼樺厛钀藉湴銆?- 寤虹珛鍙鐢ㄧ殑涓婚绾у欢杩熸墽琛屽熀绾匡紙绌洪棽/婊氬姩瑙﹀彂锛夛紝骞惰ˉ榻愬涓婚瀵规瘮鐨勮嚜鍔ㄥ寲 Lighthouse 鎶ュ憡銆?
 
+## 2026-06-03 Follow-up: Next and Endspace scroll rendering pass
+
+Version: `4.9.5.12`
+
+### Scope
+- `themes/next/components/BlogPostListScroll.js`
+- `themes/next/components/StickyBar.js`
+- `themes/next/components/Toc.js`
+- `themes/next/components/TopNav.js`
+- `themes/endspace/components/FloatingControls.js`
+- `themes/endspace/components/FloatingToc.js`
+- `themes/endspace/components/MobileToc.js`
+
+### Meaning
+- Replaced high-frequency lodash throttle scroll handlers with `requestAnimationFrame` scheduling where the UI is tied to visual scroll state.
+- Collapsed duplicated progress and TOC scroll listeners in Endspace into a single scroll pipeline per component.
+- Added ref-based state guards for reading progress and active TOC section to avoid repeated React state updates with the same value.
+- Cached DOM targets such as sticky navigation elements through refs instead of querying on every scroll tick.
+- Kept theme APIs, config switches, visual behavior, and plugin behavior unchanged.
+
+### Acceptance
+- `yarn -s eslint` on affected files: passed.
+- `.\\node_modules\\.bin\\tsc.cmd --noEmit --pretty false`: passed.
+- `yarn -s build`: passed.
+- Browser validation:
+  - `/article/guide?theme=next`: desktop and mobile scroll progress updates, no console errors.
+  - `/article/guide?theme=endspace`: desktop and mobile TOC/progress controls remain visible and update on scroll, no console errors.
+
+### Next optimization target
+- Build output still warns that `/` and selected article page-data exceed 128KB. The next priority should be reducing serialized page props and trimming data sent to the client before pursuing smaller per-component scroll wins.
+
