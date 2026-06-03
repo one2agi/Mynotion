@@ -1,57 +1,29 @@
-# 主题性能优化（第 1 轮）
+﻿# 涓婚鎬ц兘浼樺寲锛堢 1 杞級
 
-日期：2026-06-03
-分支：`codex/performance-optimization-main`
-版本目标：`4.9.5.10`
+鏃ユ湡锛?026-06-03
+鍒嗘敮锛歚codex/performance-optimization-main`
+鐗堟湰鐩爣锛歚4.9.5.11`
 
-## 本轮变更
+## 鏈疆鍙樻洿
 
-### 1) 全局插件加载优化
-- 文件：`components/ExternalPlugins.js`
-- 改动：
-  - 将自定义外部资源加载从组件渲染期移入 `useEffect`，并改为异步调度（`requestIdleCallback` / `setTimeout`）执行。
-  - 对 `CUSTOM_EXTERNAL_CSS`、`CUSTOM_EXTERNAL_JS` 做 `useMemo` 过滤，避免重复计算与重复注入。
-  - 将 `GLOBAL_JS` 执行从无依赖的副作用改为 `useEffect([GLOBAL_JS])`，并加 `try/catch`，避免每次 render 重复执行导致重复注入与潜在阻塞。
+### 1) 鍏ㄥ眬鎻掍欢鍔犺浇浼樺寲
+- 鏂囦欢锛歚components/ExternalPlugins.js`
+- 鏀瑰姩锛?  - 灏嗚嚜瀹氫箟澶栭儴璧勬簮鍔犺浇浠庣粍浠舵覆鏌撴湡绉诲叆 `useEffect`锛屽苟鏀逛负寮傛璋冨害锛坄requestIdleCallback` / `setTimeout`锛夋墽琛屻€?  - 瀵?`CUSTOM_EXTERNAL_CSS`銆乣CUSTOM_EXTERNAL_JS` 鍋?`useMemo` 杩囨护锛岄伩鍏嶉噸澶嶈绠椾笌閲嶅娉ㄥ叆銆?  - 灏?`GLOBAL_JS` 鎵ц浠庢棤渚濊禆鐨勫壇浣滅敤鏀逛负 `useEffect([GLOBAL_JS])`锛屽苟鍔?`try/catch`锛岄伩鍏嶆瘡娆?render 閲嶅鎵ц瀵艰嚧閲嶅娉ㄥ叆涓庢綔鍦ㄩ樆濉炪€?
+### 2) Typography 鎼滅储楂樹寒鎸夐渶鍔犺浇
+- 鏂囦欢锛歚themes/typography/index.js`
+- 鏀瑰姩锛?  - `LayoutSearch` 涓皢 `replaceSearchResult` 杩佺Щ涓烘寜闇€鍔ㄦ€?import锛堜粎鍦ㄦ悳绱㈤〉鐢熸晥鏃惰Е鍙戯級锛岄伩鍏嶉椤?鏂囩珷椤靛垵濮嬪寘瑁瑰叆杩欓儴鍒嗕唬鐮併€?  - 灏嗘悳绱㈤珮浜寕杞芥敼涓哄欢鍚庢墽琛岋紙`requestIdleCallback` 鎴?fallback timeout锛夛紝闄嶄綆棣栧睆闃诲銆?
+### 3) 鎼滅储楂樹寒閫昏緫缁熶竴浼樺寲锛堣法涓婚锛?- 鏂囦欢锛歚components/Mark.js`
+- 鏀瑰姩锛?  - 灏?`mark.js` 搴撳姞杞芥敼涓轰竴娆℃€?Promise 缂撳瓨锛岄伩鍏嶅悓涓€娆′細璇濆唴閲嶅璇锋眰銆?  - 瀵规悳绱㈠叧閿瘝杩涜瀹夊叏杞箟锛岄伩鍏嶅紓甯告鍒欏鑷撮珮浜矾寰勪腑鏂€?  - 鐢?`requestIdleCallback`锛堝吋瀹?fallback锛夊皢楂樹寒鎵ц寤跺悗锛屽噺灏戠洿鎺ラ樆濉炰富绾跨▼楂樺嘲銆?  - 淇濇寔鐜版湁楂樹寒杈撳嚭锛坈lassName/element锛変笌閰嶇疆涓嶅彉銆?
+### 4) 涓婚鎬ц兘瀹¤鑴氭湰璺ㄥ钩鍙板吋瀹逛慨澶?- 鏂囦欢锛歚scripts/audit-theme-performance.js`
+- 鏀瑰姩锛?  - 鎸夊钩鍙伴€夋嫨 `lighthouse` 鍙墽琛岃矾寰勶紙Windows 浼樺厛 `lighthouse.cmd`锛屾湭鍛戒腑鏃堕檷绾у埌 `lighthouse` 鎴栧寘鍐?CLI 鍏ュ彛锛夈€?  - `runLighthouse` 鎵ц璺緞鏀逛负鍙橀噺鍖栵紝閬垮厤 Windows 涓?`spawnSync` 璇嗗埆闂銆?  - `main` 鏀逛负鍚屾娴佺▼锛岀Щ闄?`async`/.`catch` 鐨勪笉鍖归厤璋冪敤銆?
+### 5) 涓婚绾ф粴鍔ㄧ洃鍚紭鍖栵紙璺ㄤ富棰橈級
+- 鏂囦欢锛歚themes/*/components/*.js`
+- 鏀瑰姩锛?  - 灏嗗ぇ閲忎粎璇绘粴鍔ㄤ綅缃?杩涘害鐨勭洃鍚櫒鏀逛负 `passive: true` 娉ㄥ唽锛屽噺灏戞粴鍔ㄤ簨浠跺涓荤嚎绋嬭皟搴﹀帇鍔涖€?  - 瑕嗙洊鑼冨洿锛欳atalog銆丳rogress銆佹诞鍔ㄥ鑸€丅ackToTop 绛夊ぇ閲忎富棰樺唴婊氬姩鍦烘櫙锛堝叡 70+ 澶勶級銆?  - 淇濇寔琛屼负涓€鑷达紙鐩戝惉閫昏緫鍜屽嵏杞戒粛淇濇寔鍘熸湁鍥炶皟鍖归厤锛夈€?
+## 楠岃瘉
 
-### 2) Typography 搜索高亮按需加载
-- 文件：`themes/typography/index.js`
-- 改动：
-  - `LayoutSearch` 中将 `replaceSearchResult` 迁移为按需动态 import（仅在搜索页生效时触发），避免首页/文章页初始包裹入这部分代码。
-  - 将搜索高亮挂载改为延后执行（`requestIdleCallback` 或 fallback timeout），降低首屏阻塞。
-
-### 3) 搜索高亮逻辑统一优化（跨主题）
-- 文件：`components/Mark.js`
-- 改动：
-  - 将 `mark.js` 库加载改为一次性 Promise 缓存，避免同一次会话内重复请求。
-  - 对搜索关键词进行安全转义，避免异常正则导致高亮路径中断。
-  - 用 `requestIdleCallback`（兼容 fallback）将高亮执行延后，减少直接阻塞主线程高峰。
-  - 保持现有高亮输出（className/element）与配置不变。
-
-### 4) 主题性能审计脚本跨平台兼容修复
-- 文件：`scripts/audit-theme-performance.js`
-- 改动：
-  - 按平台选择 `lighthouse` 可执行路径（Windows 优先 `lighthouse.cmd`，未命中时降级到 `lighthouse` 或包内 CLI 入口）。
-  - `runLighthouse` 执行路径改为变量化，避免 Windows 下 `spawnSync` 识别问题。
-  - `main` 改为同步流程，移除 `async`/.`catch` 的不匹配调用。
-
-### 5) 主题级滚动监听优化（跨主题）
-- 文件：`themes/*/components/*.js`
-- 改动：
-  - 将大量仅读滚动位置/进度的监听器改为 `passive: true` 注册，减少滚动事件对主线程调度压力。
-  - 覆盖范围：Catalog、Progress、浮动导航、BackToTop 等大量主题内滚动场景（共 70+ 处）。
-  - 保持行为一致（监听逻辑和卸载仍保持原有回调匹配）。
-
-## 验证
-
-- `yarn type-check`：通过
-- `yarn build`：通过
-- `yarn lint`：本机环境报错“未识别 pages/app 目录”，暂未通过该项验证（与当前 Next.js 启动环境路径解析相关，不影响已完成编译与类型校验结果）
-
-## 风险与影响
-- 外部脚本加载改为延迟，不影响现有配置项与插件开关逻辑（`DISABLE_PLUGIN` 等保持不变）。
-- `GLOBAL_JS` 只在内容变化时执行，行为与配置结果保持一致，但降低了重复注入风险。
-
-## 下一步计划（P2）
-- 继续梳理主题层面仍有较重的首屏逻辑（特别是搜索、目录、高频 DOM 遍历逻辑），按影响面优先落地。
-- 建立可复用的主题级延迟执行基线（空闲/滚动触发），并补齐多主题对比的自动化 Lighthouse 报告。
+- `yarn type-check`锛氶€氳繃
+- `yarn build`锛氶€氳繃
+- `yarn lint`锛氭湰鏈虹幆澧冩姤閿欌€滄湭璇嗗埆 pages/app 鐩綍鈥濓紝鏆傛湭閫氳繃璇ラ」楠岃瘉锛堜笌褰撳墠 Next.js 鍚姩鐜璺緞瑙ｆ瀽鐩稿叧锛屼笉褰卞搷宸插畬鎴愮紪璇戜笌绫诲瀷鏍￠獙缁撴灉锛?
+## 椋庨櫓涓庡奖鍝?- 澶栭儴鑴氭湰鍔犺浇鏀逛负寤惰繜锛屼笉褰卞搷鐜版湁閰嶇疆椤逛笌鎻掍欢寮€鍏抽€昏緫锛坄DISABLE_PLUGIN` 绛変繚鎸佷笉鍙橈級銆?- `GLOBAL_JS` 鍙湪鍐呭鍙樺寲鏃舵墽琛岋紝琛屼负涓庨厤缃粨鏋滀繚鎸佷竴鑷达紝浣嗛檷浣庝簡閲嶅娉ㄥ叆椋庨櫓銆?
+## 涓嬩竴姝ヨ鍒掞紙P2锛?- 缁х画姊崇悊涓婚灞傞潰浠嶆湁杈冮噸鐨勯灞忛€昏緫锛堢壒鍒槸鎼滅储銆佺洰褰曘€侀珮棰?DOM 閬嶅巻閫昏緫锛夛紝鎸夊奖鍝嶉潰浼樺厛钀藉湴銆?- 寤虹珛鍙鐢ㄧ殑涓婚绾у欢杩熸墽琛屽熀绾匡紙绌洪棽/婊氬姩瑙﹀彂锛夛紝骞惰ˉ榻愬涓婚瀵规瘮鐨勮嚜鍔ㄥ寲 Lighthouse 鎶ュ憡銆?
 
