@@ -1,4 +1,3 @@
-import replaceSearchResult from '@/components/Mark'
 import { siteConfig } from '@/lib/config'
 import { useGlobal } from '@/lib/global'
 import { isBrowser } from '@/lib/utils'
@@ -166,17 +165,52 @@ const LayoutSearch = props => {
   const { keyword } = props
 
   useEffect(() => {
-    if (isBrowser) {
-      replaceSearchResult({
-        doms: document.getElementById('posts-wrapper'),
-        search: keyword,
-        target: {
-          element: 'span',
-          className: 'text-red-500 border-b border-dashed'
-        }
-      })
+    if (!isBrowser || !keyword) {
+      return
     }
-  }, [])
+
+    let isAborted = false
+    const markTask = () => {
+      if (isAborted) {
+        return
+      }
+      import('@/components/Mark')
+        .then(module => {
+          if (isAborted) {
+            return
+          }
+          const replaceSearchResult = module.default
+          const doms = document.getElementById('posts-wrapper')
+          if (doms && replaceSearchResult) {
+            replaceSearchResult({
+              doms,
+              search: keyword,
+              target: {
+                element: 'span',
+                className: 'text-red-500 border-b border-dashed'
+              }
+            })
+          }
+        })
+        .catch(error => {
+          console.error('Failed to load mark component:', error)
+        })
+    }
+
+    if (window.requestIdleCallback) {
+      const taskId = window.requestIdleCallback(markTask)
+      return () => {
+        isAborted = true
+        window.cancelIdleCallback(taskId)
+      }
+    }
+
+    const timeoutId = window.setTimeout(markTask, 120)
+    return () => {
+      isAborted = true
+      window.clearTimeout(timeoutId)
+    }
+  }, [keyword])
 
   return <LayoutPostList {...props} />
 }
