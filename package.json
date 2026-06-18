@@ -131,6 +131,10 @@
     "vitepress": "^1.6.3",
     "webpack-bundle-analyzer": "^4.5.0"
   },
+  "optionalDependencies": {
+    "@img/sharp-win32-x64": false,
+    "@img/sharp-win32-ia32": false
+  },
   "resolutions": {
     "axios": ">=0.21.1",
     "esbuild": "^0.25.0",
