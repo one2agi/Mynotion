@@ -137,7 +137,20 @@
     "@img/sharp-win32-arm64": false,
     "@img/sharp-darwin-x64": false,
     "@img/sharp-darwin-arm64": false,
-    "@img/sharp-freebsd-x64": false
+    "@img/sharp-linux-ppc64": false,
+    "@img/sharp-linux-s390x": false,
+    "@img/sharp-linux-riscv64": false,
+    "@img/sharp-wasm32": false,
+    "@img/sharp-linuxmusl-x64": false,
+    "@img/sharp-linuxmusl-arm64": false,
+    "@img/sharp-libvips-darwin-x64": false,
+    "@img/sharp-libvips-linux-arm": false,
+    "@img/sharp-libvips-linux-ppc64": false,
+    "@img/sharp-libvips-linux-s390x": false,
+    "@img/sharp-libvips-darwin-arm64": false,
+    "@img/sharp-libvips-linux-riscv64": false,
+    "@img/sharp-libvips-linuxmusl-x64": false,
+    "@img/sharp-libvips-linuxmusl-arm64": false
   },
   "resolutions": {
     "axios": ">=0.21.1",
