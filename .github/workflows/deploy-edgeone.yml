@@ -1,0 +1,33 @@
+# 推送到 main 分支后自动构建并部署到 EdgeOne Pages
+name: Deploy to EdgeOne
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:  # 支持手动触发
+
+concurrency:
+  group: edgeone-deploy-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    name: Build & Deploy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: yarn
+
+      - name: Install dependencies
+        run: yarn install --frozen-lockfile
+
+      - name: Build static site
+        run: yarn export
+
+      - name: Deploy to EdgeOne Pages
+        run: npx npx edgeone pages deploy ./out -n notionnext -e production -t ${{ secrets.EDGEONE_API_TOKEN }}
