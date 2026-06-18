@@ -133,7 +133,11 @@
   },
   "optionalDependencies": {
     "@img/sharp-win32-x64": false,
-    "@img/sharp-win32-ia32": false
+    "@img/sharp-win32-ia32": false,
+    "@img/sharp-win32-arm64": false,
+    "@img/sharp-darwin-x64": false,
+    "@img/sharp-darwin-arm64": false,
+    "@img/sharp-freebsd-x64": false
   },
   "resolutions": {
     "axios": ">=0.21.1",
