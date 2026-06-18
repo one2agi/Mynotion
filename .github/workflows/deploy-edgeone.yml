@@ -26,8 +26,8 @@ jobs:
       - name: Install dependencies
         run: yarn install --frozen-lockfile
 
-      - name: Build static site
-        run: yarn export
+      - name: Build
+        run: yarn build
 
       - name: Deploy to EdgeOne Pages
-        run: npx npx edgeone pages deploy ./out -n notionnext -e production -t ${{ secrets.EDGEONE_API_TOKEN }}
+        run: npx edgeone pages deploy ./.next -n notionnext -e production -t ${{ secrets.EDGEONE_API_TOKEN }}
