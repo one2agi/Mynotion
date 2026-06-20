@@ -2,5 +2,12 @@
   "nodeVersion": "22",
   "buildCommand": "pnpm build",
   "installCommand": "pnpm install",
-  "outputDirectory": ".next"
+  "outputDirectory": ".next",
+  "redirects": [
+    {
+      "source": "$host",
+      "destination": "$wwwhost",
+      "statusCode": 301
+    }
+  ]
 }
