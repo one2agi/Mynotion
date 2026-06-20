@@ -21,9 +21,10 @@ const { createOrderPage } = require('@/lib/notion-order')
 function mkRes() {
   const send = jest.fn()
   const end = jest.fn()
-  const status = jest.fn(() => ({ send, end }))
-  const type = jest.fn(() => ({ send, end }))
-  const result = { status, send, end, type, _sent: null }
+  const setHeader = jest.fn()
+  const status = jest.fn(() => ({ send, end, setHeader }))
+  const type = jest.fn(() => ({ send, end, setHeader }))
+  const result = { status, send, end, type, setHeader, _sent: null }
   status.mockReturnThis()
   type.mockReturnThis()
   return result
@@ -55,7 +56,7 @@ describe('POST /api/pay/notify', () => {
 
     await handler(req, res)
 
-    expect(res.type).toHaveBeenCalledWith('text/plain')
+    expect(res.setHeader).toHaveBeenCalledWith('Content-Type', expect.stringContaining('text/plain'))
     expect(res.status).toHaveBeenCalledWith(200)
     expect(res.send).toHaveBeenCalledWith('error')
   })
@@ -83,7 +84,7 @@ describe('POST /api/pay/notify', () => {
 
     await handler(req, res)
 
-    expect(res.type).toHaveBeenCalledWith('text/plain')
+    expect(res.setHeader).toHaveBeenCalledWith('Content-Type', expect.stringContaining('text/plain'))
     expect(res.status).toHaveBeenCalledWith(200)
     expect(res.send).toHaveBeenCalledWith('success')
     expect(createOrderPage).toHaveBeenCalledWith(expect.objectContaining({

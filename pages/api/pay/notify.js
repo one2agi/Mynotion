@@ -20,7 +20,8 @@ export default async function handler(req, res) {
     // 验签
     if (!verifySign(params)) {
       console.error('回调验签失败:', params.out_trade_no)
-      return res.status(200).type('text/plain').send('error')
+      res.setHeader('Content-Type', 'text/plain; charset=utf-8')
+      return res.status(200).send('error')
     }
 
     const outTradeNo = params.out_trade_no
@@ -29,7 +30,8 @@ export default async function handler(req, res) {
     const zpayResult = await queryZpayOrder(outTradeNo)
     if (zpayResult.tradeStatus !== 'TRADE_SUCCESS') {
       // 非成功订单也返回 success，避免 Z-Pay 重复通知
-      return res.status(200).type('text/plain').send('success')
+      res.setHeader('Content-Type', 'text/plain; charset=utf-8')
+      return res.status(200).send('success')
     }
 
     // 解析附加参数
@@ -53,11 +55,13 @@ export default async function handler(req, res) {
       paidAt: new Date().toISOString()
     })
 
-    return res.status(200).type('text/plain').send('success')
+    res.setHeader('Content-Type', 'text/plain; charset=utf-8')
+    return res.status(200).send('success')
   } catch (error) {
     console.error('回调处理异常:', error)
     // 注意：回调处理失败也返回 success，避免 Z-Pay 无限重试
     // 实际可通过日志告警处理
-    return res.status(200).type('text/plain').send('success')
+    res.setHeader('Content-Type', 'text/plain; charset=utf-8')
+    return res.status(200).send('success')
   }
 }

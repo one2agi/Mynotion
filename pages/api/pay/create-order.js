@@ -5,12 +5,13 @@
 import { createNativeOrder } from '@/lib/zpay'
 import { lookupDiscountCode } from '@/lib/notion-discount'
 import { siteConfig } from '@/lib/config'
+import starterConfig from '@/themes/starter/config'
 
 // 商品配置映射
-// pricingIndex 1 → starter-basic → STARTER_PRICING_1 (入门版 ¥19.9)
-// pricingIndex 2 → starter-pro → STARTER_PRICING_2 (基础版 ¥39.9)
-// pricingIndex 3 → starter-premium → STARTER_PRICING_3 (高级版 ¥59.9)
-// 注意：PayModal 通过 pricingIndex 1|2|3 生成 productId 'basic'|'pro'|'premium'
+// pricingIndex 1 → starter-basic → STARTER_PRICING_1 (入门版)
+// pricingIndex 2 → starter-pro → STARTER_PRICING_2 (基础版)
+// pricingIndex 3 → starter-premium → STARTER_PRICING_3 (高级版)
+// PayModal 通过 pricingIndex 1|2|3 生成 productId 'basic'|'pro'|'premium'
 const PRODUCT_MAP = {
   'starter-basic': { index: 1 },
   'starter-pro': { index: 2 },
@@ -19,13 +20,15 @@ const PRODUCT_MAP = {
 
 /**
  * 获取商品配置
+ * 注：服务端 API Route 无法访问 React Context 的 THEME_CONFIG，
+ * 必须显式传入 starterConfig 作为 siteConfig 的 extendConfig 参数。
  * @param {number} index - 商品索引
  * @returns {{ name: string, price: number }}
  */
 function getProductConfig(index) {
   return {
-    name: siteConfig(`STARTER_PRICING_${index}_TITLE`),
-    price: parseFloat(siteConfig(`STARTER_PRICING_${index}_PRICE`, '0'))
+    name: siteConfig(`STARTER_PRICING_${index}_TITLE`, null, starterConfig),
+    price: parseFloat(siteConfig(`STARTER_PRICING_${index}_PRICE`, '0', starterConfig))
   }
 }
 
@@ -83,7 +86,7 @@ export default async function handler(req, res) {
     const outTradeNo = generateOutTradeNo()
 
     // 回调地址
-    const notifyUrl = siteConfig('STARTER_PAYMENT_NOTIFY_URL', process.env.ZPAY_NOTIFY_URL)
+    const notifyUrl = siteConfig('STARTER_PAYMENT_NOTIFY_URL', process.env.ZPAY_NOTIFY_URL, starterConfig)
 
     // 附加参数（回调时返回，用于写入 Notion）
     const param = JSON.stringify({ email, name, discountCode: discountCode || '' })

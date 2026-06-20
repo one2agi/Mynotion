@@ -17,6 +17,15 @@ if (!OUT_TRADE_NO) {
   process.exit(1)
 }
 
+if (!ZPAY_KEY) {
+  console.error('错误：未设置 ZPAY_KEY 环境变量')
+  console.error('签名计算需要 ZPAY_KEY，否则生成的签名会与 notify.js 验证时不匹配。')
+  console.error('')
+  console.error('用法 1（推荐）：node --env-file=.env.local scripts/mock-zpay-notify.js <out_trade_no> [money]')
+  console.error('用法 2：ZPAY_KEY=xxx ZPAY_NOTIFY_URL=xxx node scripts/mock-zpay-notify.js <out_trade_no> [money]')
+  process.exit(1)
+}
+
 // 构造模拟的 Z-Pay 回调参数
 const params = {
   trade_no: 'MOCK_' + Date.now(),
