@@ -7,10 +7,14 @@ import { lookupDiscountCode } from '@/lib/notion-discount'
 import { siteConfig } from '@/lib/config'
 
 // 商品配置映射
+// pricingIndex 1 → starter-basic → STARTER_PRICING_1 (入门版 ¥19.9)
+// pricingIndex 2 → starter-pro → STARTER_PRICING_2 (基础版 ¥39.9)
+// pricingIndex 3 → starter-premium → STARTER_PRICING_3 (高级版 ¥59.9)
+// 注意：PayModal 通过 pricingIndex 1|2|3 生成 productId 'basic'|'pro'|'premium'
 const PRODUCT_MAP = {
-  'starter-basic': { index: 2 },
-  'starter-pro': { index: 3 },
-  'starter-premium': { index: 1 }
+  'starter-basic': { index: 1 },
+  'starter-pro': { index: 2 },
+  'starter-premium': { index: 3 }
 }
 
 /**
@@ -72,8 +76,8 @@ export default async function handler(req, res) {
       discountAmount = discount.amount
     }
 
-    // 计算实付金额
-    const amount = Math.max(0, originalAmount - discountAmount)
+    // 计算实付金额（保留 2 位小数，避免浮点精度问题）
+    const amount = Math.round(Math.max(0, originalAmount - discountAmount) * 100) / 100
 
     // 生成订单号
     const outTradeNo = generateOutTradeNo()

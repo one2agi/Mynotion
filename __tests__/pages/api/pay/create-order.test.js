@@ -66,9 +66,10 @@ describe('POST /api/pay/create-order', () => {
     const jsonData = res.json.mock.calls[0][0]
     expect(jsonData.success).toBe(true)
     expect(jsonData.data.qrcode).toBe('weixin://wxpay/xxx')
-    expect(jsonData.data.originalAmount).toBe(39.9)
+    // starter-basic maps to STARTER_PRICING_1 (入门版 ¥19.9)
+    expect(jsonData.data.originalAmount).toBe(19.9)
     expect(jsonData.data.discountAmount).toBe(0)
-    expect(jsonData.data.amount).toBe(39.9)
+    expect(jsonData.data.amount).toBe(19.9)
   })
 
   test('有效优惠码抵扣成功', async () => {
@@ -91,9 +92,10 @@ describe('POST /api/pay/create-order', () => {
     expect(res.status).toHaveBeenCalledWith(200)
     const jsonData = res.json.mock.calls[0][0]
     expect(jsonData.success).toBe(true)
-    expect(jsonData.data.originalAmount).toBe(39.9)
+    // starter-basic ¥19.9 - SAVE10 ¥10 = 实付 ¥9.9
+    expect(jsonData.data.originalAmount).toBe(19.9)
     expect(jsonData.data.discountAmount).toBe(10)
-    expect(jsonData.data.amount).toBe(29.9)
+    expect(jsonData.data.amount).toBe(9.9)
   })
 
   test('无效优惠码返回错误', async () => {
