@@ -93,6 +93,7 @@
     "remixicon-react": "^1.0.0"
   },
   "devDependencies": {
+    "@next/bundle-analyzer": "^12.3.7",
     "@notionhq/client": "^2.2.15",
     "@waline/client": "^3.5.0",
     "@types/node": "22.19.19",
