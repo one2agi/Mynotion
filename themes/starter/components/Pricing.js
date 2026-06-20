@@ -1,11 +1,24 @@
+import { useState } from 'react'
 import { siteConfig } from '@/lib/config'
 import SmartLink from '@/components/SmartLink'
+import PayModal from './PayModal'
 
 /**
  * 价格板块
  * @returns
  */
 export const Pricing = () => {
+  const [payModalVisible, setPayModalVisible] = useState(false)
+  const [selectedPricing, setSelectedPricing] = useState(1)
+
+  /**
+   * 打开支付弹窗
+   * @param {number} index - 定价套餐索引
+   */
+  const openPayModal = (index) => {
+    setSelectedPricing(index)
+    setPayModalVisible(true)
+  }
   return (
     <>
       {/* <!-- ====== Pricing Section Start --> */}
@@ -66,11 +79,11 @@ export const Pricing = () => {
                       })}
                   </div>
                 </div>
-                <SmartLink
-                  href={siteConfig('STARTER_PRICING_1_BUTTON_URL', '')}
+                <button
+                  onClick={() => openPayModal(1)}
                   className='inline-block rounded-md bg-primary px-7 py-3 text-center text-base font-medium text-white transition hover:bg-blue-dark'>
                   {siteConfig('STARTER_PRICING_1_BUTTON_TEXT')}
-                </SmartLink>
+                </button>
               </div>
             </div>
 
@@ -118,11 +131,11 @@ export const Pricing = () => {
                       })}
                   </div>
                 </div>
-                <SmartLink
-                  href={siteConfig('STARTER_PRICING_2_BUTTON_URL', '')}
+                <button
+                  onClick={() => openPayModal(2)}
                   className='inline-block rounded-md bg-primary px-7 py-3 text-center text-base font-medium text-white transition hover:bg-blue-dark'>
                   {siteConfig('STARTER_PRICING_2_BUTTON_TEXT')}
-                </SmartLink>
+                </button>
               </div>
             </div>
 
@@ -162,17 +175,22 @@ export const Pricing = () => {
                       })}
                   </div>
                 </div>
-                <SmartLink
-                  href={siteConfig('STARTER_PRICING_3_BUTTON_URL', '')}
+                <button
+                  onClick={() => openPayModal(3)}
                   className='inline-block rounded-md bg-primary px-7 py-3 text-center text-base font-medium text-white transition hover:bg-blue-dark'>
                   {siteConfig('STARTER_PRICING_3_BUTTON_TEXT')}
-                </SmartLink>
+                </button>
               </div>
             </div>
           </div>
         </div>
       </section>
       {/* <!-- ====== Pricing Section End --> */}
+      <PayModal
+        visible={payModalVisible}
+        onClose={() => setPayModalVisible(false)}
+        pricingIndex={selectedPricing}
+      />
     </>
   )
 }
