@@ -30,7 +30,13 @@ const ArchiveIndex = props => {
   return <DynamicLayout theme={theme} layoutName='LayoutArchive' {...props} />
 }
 
-export async function getStaticProps({ locale }) {
+// SSR (was getStaticProps) — required so the /_next/data/{buildId}/zh-CN/archive.json
+// data endpoint is generated at request time, not as a pre-built file at the page's
+// literal path. With rewrites for locale stripping (next.config.js), Next.js does not
+// generate data files for rewritten source paths — it only generates them for actual
+// page file paths. Converting to getServerSideProps skips that lookup and fixes the
+// client-side router's prefetch 404 (which previously forced full page reloads).
+export async function getServerSideProps({ locale }) {
   const props = await fetchGlobalAllData({ from: 'archive-index', locale })
   // 处理分页
   props.posts = props.allPages?.filter(
@@ -58,16 +64,7 @@ export async function getStaticProps({ locale }) {
   props.archivePosts = archivePosts
   delete props.allPages
 
-  return {
-    props,
-    revalidate: process.env.EXPORT
-      ? undefined
-      : siteConfig(
-          'NEXT_REVALIDATE_SECOND',
-          BLOG.NEXT_REVALIDATE_SECOND,
-          props.NOTION_CONFIG
-        )
-  }
+  return { props }
 }
 
 export default ArchiveIndex
