@@ -45,14 +45,14 @@ describe('Notion 订单写入', () => {
       expect.objectContaining({
         parent: { database_id: process.env.NOTION_DATABASE_ID },
         properties: expect.objectContaining({
-          'Name': { title: [{ text: { content: 'Starter 基础版' } }] },
+          '客户名': { title: [{ text: { content: '测试用户' } }] },
           '订单号': { rich_text: [{ text: { content: 'TEST123456' } }] },
           '客户邮箱': { email: 'test@example.com' },
-          '姓名': { rich_text: [{ text: { content: '测试用户' } }] },
+          '商品名': { rich_text: [{ text: { content: 'Starter 基础版' } }] },
           '金额': { number: 29.9 },
-          '优惠码': { rich_text: [{ text: { content: 'SAVE10' } }] },
-          '状态': { status: { name: 'paid' } },
-          'Z-Pay Trade No': { rich_text: [{ text: { content: 'ZPAY123456' } }] }
+          '备注': { rich_text: [{ text: { content: '优惠码: SAVE10' } }] },
+          '状态': { status: { name: '待发送' } },
+          'Token': { rich_text: [{ text: { content: 'ZPAY123456' } }] }
         })
       })
     )
