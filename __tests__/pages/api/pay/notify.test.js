@@ -69,7 +69,7 @@ describe('POST /api/pay/notify', () => {
 
   test('支付成功写入 Notion 返回 success', async () => {
     verifySign.mockReturnValue(true)
-    queryOrder.mockResolvedValue({ tradeStatus: 'TRADE_SUCCESS', tradeNo: 'ZPAY123', money: '29.90' })
+    queryOrder.mockResolvedValue({ tradeStatus: '1', tradeNo: 'ZPAY123', money: '29.90' })  // Z-Pay status=1
     createOrderPage.mockResolvedValue('new-page-id')
 
     const req = {
@@ -107,7 +107,7 @@ describe('POST /api/pay/notify', () => {
 
   test('Z-Pay 订单状态非成功也返回 success', async () => {
     verifySign.mockReturnValue(true)
-    queryOrder.mockResolvedValue({ tradeStatus: 'WAIT_BUYER_PAY', tradeNo: 'ZPAY123', money: '29.90' })
+    queryOrder.mockResolvedValue({ tradeStatus: '0', tradeNo: 'ZPAY123', money: '29.90' })  // Z-Pay status=0
 
     const req = {
       method: 'POST',
@@ -136,7 +136,7 @@ describe('POST /api/pay/notify', () => {
     // 通知说 0.01 元，但 Z-Pay 真实查询显示 29.90 元 → 拒绝落库
     verifySign.mockReturnValue(true)
     queryOrder.mockResolvedValue({
-      tradeStatus: 'TRADE_SUCCESS',
+      tradeStatus: '1',  // Z-Pay status=1 支付成功
       tradeNo: 'ZPAY123',
       money: '29.90'  // Z-Pay 真实金额
     })
@@ -171,7 +171,7 @@ describe('POST /api/pay/notify', () => {
     // （防止未来重构倒退到 params.money）
     verifySign.mockReturnValue(true)
     queryOrder.mockResolvedValue({
-      tradeStatus: 'TRADE_SUCCESS',
+      tradeStatus: '1',  // Z-Pay status=1 支付成功
       tradeNo: 'ZPAY123',
       money: '29.90'  // 权威金额来自服务端二次查询
     })
@@ -205,7 +205,7 @@ describe('POST /api/pay/notify', () => {
   test('回调处理异常（Z-Pay/JSON/code bug）返回 error 让 Z-Pay 重试', async () => {
     // createOrderPage 抛错（不在设计内但要防御）→ 应返回 error
     verifySign.mockReturnValue(true)
-    queryOrder.mockResolvedValue({ tradeStatus: 'TRADE_SUCCESS', tradeNo: 'ZPAY123', money: '29.90' })
+    queryOrder.mockResolvedValue({ tradeStatus: '1', tradeNo: 'ZPAY123', money: '29.90' })  // Z-Pay status=1
     createOrderPage.mockRejectedValue(new Error('Unexpected code bug'))
 
     const req = {
@@ -233,7 +233,7 @@ describe('POST /api/pay/notify', () => {
   test('catch 块日志脱敏：param 字段不含 PII', async () => {
     // 模拟 createOrderPage 抛错触发 catch 块日志
     verifySign.mockReturnValue(true)
-    queryOrder.mockResolvedValue({ tradeStatus: 'TRADE_SUCCESS', tradeNo: 'ZPAY123', money: '29.90' })
+    queryOrder.mockResolvedValue({ tradeStatus: '1', tradeNo: 'ZPAY123', money: '29.90' })  // Z-Pay status=1
     createOrderPage.mockRejectedValue(new Error('boom'))
 
     // PII 三个典型字段：email / name / discountCode
@@ -289,7 +289,7 @@ describe('POST /api/pay/notify', () => {
 
   test('catch 块日志脱敏：超长 param (>200 字符) 标 [REDACTED:long]', async () => {
     verifySign.mockReturnValue(true)
-    queryOrder.mockResolvedValue({ tradeStatus: 'TRADE_SUCCESS', tradeNo: 'ZPAY123', money: '29.90' })
+    queryOrder.mockResolvedValue({ tradeStatus: '1', tradeNo: 'ZPAY123', money: '29.90' })  // Z-Pay status=1
     createOrderPage.mockRejectedValue(new Error('boom'))
 
     // 构造 >200 字符的 param（含 50 个 PII 重复）
@@ -335,7 +335,7 @@ describe('POST /api/pay/notify', () => {
 
   test('Notion 写入失败（createOrderPage 返回 null）仍返回 success（死信兜底）', async () => {
     verifySign.mockReturnValue(true)
-    queryOrder.mockResolvedValue({ tradeStatus: 'TRADE_SUCCESS', tradeNo: 'ZPAY123', money: '29.90' })
+    queryOrder.mockResolvedValue({ tradeStatus: '1', tradeNo: 'ZPAY123', money: '29.90' })  // Z-Pay status=1
     // 新行为：createOrderPage 不抛错，返回 null（已写死信）
     createOrderPage.mockResolvedValue(null)
 
@@ -400,7 +400,7 @@ describe('POST /api/pay/notify', () => {
 
   test('#31: param 完全缺失（Z-Pay 没传） → 返回 error 不落库', async () => {
     verifySign.mockReturnValue(true)
-    queryOrder.mockResolvedValue({ tradeStatus: 'TRADE_SUCCESS', tradeNo: 'ZPAY123', money: '29.90' })
+    queryOrder.mockResolvedValue({ tradeStatus: '1', tradeNo: 'ZPAY123', money: '29.90' })  // Z-Pay status=1
     const req = mkParamReq(undefined, 'TEST_NO_PARAM')
     const res = mkRes()
 
@@ -414,7 +414,7 @@ describe('POST /api/pay/notify', () => {
 
   test('#31: param 是空字符串 → 返回 error 不落库', async () => {
     verifySign.mockReturnValue(true)
-    queryOrder.mockResolvedValue({ tradeStatus: 'TRADE_SUCCESS', tradeNo: 'ZPAY123', money: '29.90' })
+    queryOrder.mockResolvedValue({ tradeStatus: '1', tradeNo: 'ZPAY123', money: '29.90' })  // Z-Pay status=1
     const req = mkParamReq('', 'TEST_EMPTY_PARAM')
     const res = mkRes()
 
@@ -426,7 +426,7 @@ describe('POST /api/pay/notify', () => {
 
   test('#31: param 不是合法 JSON（如 "not json"） → 返回 error 不落库', async () => {
     verifySign.mockReturnValue(true)
-    queryOrder.mockResolvedValue({ tradeStatus: 'TRADE_SUCCESS', tradeNo: 'ZPAY123', money: '29.90' })
+    queryOrder.mockResolvedValue({ tradeStatus: '1', tradeNo: 'ZPAY123', money: '29.90' })  // Z-Pay status=1
     const req = mkParamReq('not json', 'TEST_BAD_JSON')
     const res = mkRes()
 
@@ -448,7 +448,7 @@ describe('POST /api/pay/notify', () => {
 
   test('#31: param 是 "null" 字符串 → 返回 error 不落库', async () => {
     verifySign.mockReturnValue(true)
-    queryOrder.mockResolvedValue({ tradeStatus: 'TRADE_SUCCESS', tradeNo: 'ZPAY123', money: '29.90' })
+    queryOrder.mockResolvedValue({ tradeStatus: '1', tradeNo: 'ZPAY123', money: '29.90' })  // Z-Pay status=1
     const req = mkParamReq('null', 'TEST_NULL_PARAM')
     const res = mkRes()
 
@@ -460,7 +460,7 @@ describe('POST /api/pay/notify', () => {
 
   test('#31: param 是 JSON 字符串（"hello"）而非对象 → 返回 error 不落库', async () => {
     verifySign.mockReturnValue(true)
-    queryOrder.mockResolvedValue({ tradeStatus: 'TRADE_SUCCESS', tradeNo: 'ZPAY123', money: '29.90' })
+    queryOrder.mockResolvedValue({ tradeStatus: '1', tradeNo: 'ZPAY123', money: '29.90' })  // Z-Pay status=1
     const req = mkParamReq('"hello"', 'TEST_STRING_PARAM')
     const res = mkRes()
 
@@ -472,7 +472,7 @@ describe('POST /api/pay/notify', () => {
 
   test('#31: param 是 JSON 数组（[]）而非对象 → 返回 error 不落库', async () => {
     verifySign.mockReturnValue(true)
-    queryOrder.mockResolvedValue({ tradeStatus: 'TRADE_SUCCESS', tradeNo: 'ZPAY123', money: '29.90' })
+    queryOrder.mockResolvedValue({ tradeStatus: '1', tradeNo: 'ZPAY123', money: '29.90' })  // Z-Pay status=1
     const req = mkParamReq('[]', 'TEST_ARRAY_PARAM')
     const res = mkRes()
 
@@ -484,7 +484,7 @@ describe('POST /api/pay/notify', () => {
 
   test('#31: param 是空对象（{}）缺 email/name → 返回 error 不落库', async () => {
     verifySign.mockReturnValue(true)
-    queryOrder.mockResolvedValue({ tradeStatus: 'TRADE_SUCCESS', tradeNo: 'ZPAY123', money: '29.90' })
+    queryOrder.mockResolvedValue({ tradeStatus: '1', tradeNo: 'ZPAY123', money: '29.90' })  // Z-Pay status=1
     const req = mkParamReq('{}', 'TEST_EMPTY_OBJ')
     const res = mkRes()
 
