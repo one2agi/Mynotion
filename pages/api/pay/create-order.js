@@ -98,7 +98,19 @@ export default async function handler(req, res) {
     }
 
     // 计算实付金额（保留 2 位小数，避免浮点精度问题）
-    const amount = Math.round(Math.max(0, originalAmount - discountAmount) * 100) / 100
+    const rawAmount = originalAmount - discountAmount
+    const amount = Math.round(rawAmount * 100) / 100
+
+    // 拒绝零或负数金额（防止 discount >= original 导致 0 元 / 负数订单）
+    // 之前用 Math.max(0, ...) 静默 clip 到 0，攻击者配优惠码 amount >= 商品原价
+    // 就能 0 元购买。现在显式拒绝。
+    if (amount <= 0) {
+      return res.status(400).json({
+        success: false,
+        error: '优惠码抵扣金额不能大于或等于商品原价',
+        code: 'INVALID_DISCOUNT_AMOUNT'
+      })
+    }
 
     // 生成订单号
     const outTradeNo = generateOutTradeNo()

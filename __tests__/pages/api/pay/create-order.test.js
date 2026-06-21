@@ -336,4 +336,103 @@ describe('POST /api/pay/create-order', () => {
     expect(res.status).toHaveBeenCalledWith(200)
     expect(createNativeOrder).toHaveBeenCalledTimes(1)
   })
+
+  // ---------- #27 浮点精度边界 ----------
+
+  test('优惠码 = 原价 → 拒绝（amount = 0 → 防免费购买）', async () => {
+    lookupDiscountCode.mockResolvedValue({ amount: 19.9, name: 'FULL_OFF' })
+
+    const req = {
+      method: 'POST',
+      headers: VALID_ORIGIN_HEADER,
+      body: {
+        name: '张三',
+        email: 'zhangsan@example.com',
+        discountCode: 'FULL_OFF',
+        productId: 'starter-basic'  // ¥19.9
+      }
+    }
+    const res = mkRes()
+
+    await handler(req, res)
+
+    expect(res.status).toHaveBeenCalledWith(400)
+    const jsonData = res.json.mock.calls[0][0]
+    expect(jsonData.success).toBe(false)
+    expect(jsonData.code).toBe('INVALID_DISCOUNT_AMOUNT')
+    // 关键：createNativeOrder 绝不能被调用（防止 0 元订单被创建）
+    expect(createNativeOrder).not.toHaveBeenCalled()
+  })
+
+  test('优惠码 > 原价 → 拒绝（amount < 0 → 防免费购买）', async () => {
+    lookupDiscountCode.mockResolvedValue({ amount: 99.9, name: 'HUGE' })
+
+    const req = {
+      method: 'POST',
+      headers: VALID_ORIGIN_HEADER,
+      body: {
+        name: '张三',
+        email: 'zhangsan@example.com',
+        discountCode: 'HUGE',
+        productId: 'starter-basic'  // ¥19.9
+      }
+    }
+    const res = mkRes()
+
+    await handler(req, res)
+
+    expect(res.status).toHaveBeenCalledWith(400)
+    const jsonData = res.json.mock.calls[0][0]
+    expect(jsonData.code).toBe('INVALID_DISCOUNT_AMOUNT')
+    expect(createNativeOrder).not.toHaveBeenCalled()
+  })
+
+  test('浮点临界 19.9 - 19.91 → 拒绝（rounds to 0）', async () => {
+    // 防御深度：浮点精度边界，即使 round 完等于 0 也必须拒绝
+    lookupDiscountCode.mockResolvedValue({ amount: 19.91, name: 'NEARLY_FREE' })
+
+    const req = {
+      method: 'POST',
+      headers: VALID_ORIGIN_HEADER,
+      body: {
+        name: '张三',
+        email: 'zhangsan@example.com',
+        discountCode: 'NEARLY_FREE',
+        productId: 'starter-basic'
+      }
+    }
+    const res = mkRes()
+
+    await handler(req, res)
+
+    expect(res.status).toHaveBeenCalledWith(400)
+    expect(res.json.mock.calls[0][0].code).toBe('INVALID_DISCOUNT_AMOUNT')
+    expect(createNativeOrder).not.toHaveBeenCalled()
+  })
+
+  test('浮点 19.9 - 19.89 → 接受（amount = 0.01，最小合法金额）', async () => {
+    // 反向测试：确保 0.01 元订单不被误拒
+    lookupDiscountCode.mockResolvedValue({ amount: 19.89, name: 'ALMOST_FREE' })
+    createNativeOrder.mockResolvedValue({ qrcode: 'weixin://wxpay/xxx' })
+
+    const req = {
+      method: 'POST',
+      headers: VALID_ORIGIN_HEADER,
+      body: {
+        name: '张三',
+        email: 'zhangsan@example.com',
+        discountCode: 'ALMOST_FREE',
+        productId: 'starter-basic'
+      }
+    }
+    const res = mkRes()
+
+    await handler(req, res)
+
+    expect(res.status).toHaveBeenCalledWith(200)
+    // 验证 amount 准确为 0.01（不能误拒最小合法金额）
+    expect(createNativeOrder).toHaveBeenCalledWith(
+      expect.objectContaining({ money: 0.01 })
+    )
+  })
 })
