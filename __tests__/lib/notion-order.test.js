@@ -83,4 +83,56 @@ describe('Notion 订单写入', () => {
     expect(pageId).toBe('existing-page-id')
     expect(mockNotionClient.pages.create).not.toHaveBeenCalled()
   })
+
+  test('retry：databases.query 失败 2 次后成功', async () => {
+    const { createOrderPage } = require('@/lib/notion-order')
+
+    // query 失败 2 次后成功
+    mockNotionClient.databases.query
+      .mockRejectedValueOnce(new Error('rate_limited'))
+      .mockRejectedValueOnce(new Error('service_unavailable'))
+      .mockResolvedValueOnce({ results: [] })
+    mockNotionClient.pages.create.mockResolvedValue({ id: 'after-retry-id' })
+
+    const pageId = await createOrderPage({
+      productName: 'Starter',
+      outTradeNo: 'RETRY_TEST',
+      email: 'a@b.com'
+    }, mockNotionClient)
+
+    expect(pageId).toBe('after-retry-id')
+    expect(mockNotionClient.databases.query).toHaveBeenCalledTimes(3)
+  })
+
+  test('retry 耗尽后写入死信，返回 null（不抛错）', async () => {
+    const { createOrderPage } = require('@/lib/notion-order')
+
+    // query 持续失败 4 次（1 初始 + 3 retry）
+    mockNotionClient.databases.query.mockRejectedValue(new Error('persistent failure'))
+
+    const pageId = await createOrderPage({
+      productName: 'Starter',
+      outTradeNo: 'DEAD_LETTER_TEST',
+      email: 'a@b.com'
+    }, mockNotionClient)
+
+    // 返回 null 而不是抛错（notify.js 永远能拿到结果）
+    expect(pageId).toBeNull()
+    expect(mockNotionClient.databases.query).toHaveBeenCalledTimes(4) // 1 + 3 retries
+  })
+
+  test('withRetry helper：成功后不再重试', async () => {
+    const { withRetry } = require('@/lib/notion-order')
+    const fn = jest.fn().mockResolvedValue('ok')
+    const result = await withRetry(fn)
+    expect(result).toBe('ok')
+    expect(fn).toHaveBeenCalledTimes(1)
+  })
+
+  test('withRetry helper：4 次尝试（1 初始 + 3 重试）后抛错', async () => {
+    const { withRetry } = require('@/lib/notion-order')
+    const fn = jest.fn().mockRejectedValue(new Error('fail'))
+    await expect(withRetry(fn)).rejects.toThrow('fail')
+    expect(fn).toHaveBeenCalledTimes(4)
+  })
 })

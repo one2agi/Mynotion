@@ -125,10 +125,11 @@ describe('POST /api/pay/notify', () => {
     expect(createOrderPage).not.toHaveBeenCalled()
   })
 
-  test('回调处理异常返回 success（避免 Z-Pay 重试）', async () => {
+  test('回调处理异常（Z-Pay/JSON/code bug）返回 error 让 Z-Pay 重试', async () => {
+    // createOrderPage 抛错（不在设计内但要防御）→ 应返回 error
     verifySign.mockReturnValue(true)
     queryOrder.mockResolvedValue({ tradeStatus: 'TRADE_SUCCESS', tradeNo: 'ZPAY123', money: '29.90' })
-    createOrderPage.mockRejectedValue(new Error('Notion write failed'))
+    createOrderPage.mockRejectedValue(new Error('Unexpected code bug'))
 
     const req = {
       method: 'POST',
@@ -148,7 +149,36 @@ describe('POST /api/pay/notify', () => {
 
     await handler(req, res)
 
+    // 新行为：catch 块返回 error 让 Z-Pay 重试
+    expect(res.send).toHaveBeenCalledWith('error')
+  })
+
+  test('Notion 写入失败（createOrderPage 返回 null）仍返回 success（死信兜底）', async () => {
+    verifySign.mockReturnValue(true)
+    queryOrder.mockResolvedValue({ tradeStatus: 'TRADE_SUCCESS', tradeNo: 'ZPAY123', money: '29.90' })
+    // 新行为：createOrderPage 不抛错，返回 null（已写死信）
+    createOrderPage.mockResolvedValue(null)
+
+    const req = {
+      method: 'POST',
+      body: {
+        trade_no: 'ZPAY123',
+        out_trade_no: 'TEST123',
+        name: '基础版',
+        money: '29.90',
+        type: 'wxpay',
+        trade_status: 'TRADE_SUCCESS',
+        param: JSON.stringify({ email: 'test@example.com', name: '张三', discountCode: '' }),
+        sign_type: 'MD5',
+        sign: 'realsign'
+      }
+    }
+    const res = mkRes()
+
+    await handler(req, res)
+
     expect(res.send).toHaveBeenCalledWith('success')
+    expect(createOrderPage).toHaveBeenCalled()
   })
 
   test('非法请求方法返回 405', async () => {

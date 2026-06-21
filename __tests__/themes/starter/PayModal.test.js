@@ -1,5 +1,5 @@
 // __tests__/themes/starter/PayModal.test.js
-import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
 import PayModal from '@/themes/starter/components/PayModal'
 
 // Mock next/navigation
@@ -81,6 +81,62 @@ describe('PayModal 组件', () => {
       const closeButton = screen.getByText('✕')
       fireEvent.click(closeButton)
       expect(mockOnClose).toHaveBeenCalled()
+    })
+  })
+
+  describe('轮询超时保护', () => {
+    beforeEach(() => {
+      jest.useFakeTimers()
+    })
+    afterEach(() => {
+      jest.useRealTimers()
+    })
+
+    test('轮询超过 10 分钟自动停止并切 FAILED', async () => {
+      // mock create-order 成功
+      global.fetch.mockResolvedValueOnce({
+        json: async () => ({
+          success: true,
+          data: {
+            outTradeNo: 'TIMEOUT_TEST',
+            qrcode: 'weixin://wxpay/bizpayurl?pr=xxx',
+            amount: 0.1,
+            originalAmount: 0.1,
+            discountAmount: 0,
+            productName: '测试商品'
+          }
+        })
+      })
+      // mock query-order 持续返回 pending
+      global.fetch.mockResolvedValue({
+        json: async () => ({
+          success: true,
+          data: { status: 'pending', outTradeNo: 'TIMEOUT_TEST' }
+        })
+      })
+
+      render(<PayModal {...defaultProps} />)
+      const nameInput = screen.getByPlaceholderText('请输入姓名')
+      const emailInput = screen.getByPlaceholderText('用于接收发货邮件')
+      fireEvent.change(nameInput, { target: { value: '张三' } })
+      fireEvent.change(emailInput, { target: { value: 'test@example.com' } })
+
+      const form = nameInput.closest('form')
+      fireEvent.submit(form)
+
+      // 等 handleSubmit 的 fetch + setStep 全部完成
+      await act(async () => {
+        await Promise.resolve()
+      })
+
+      // 推进 11 分钟（> 10 分钟超时阈值），
+      // 使用 advanceTimersByTimeAsync 让 async setInterval 回调的微任务能 flush
+      await act(async () => {
+        await jest.advanceTimersByTimeAsync(11 * 60 * 1000)
+      })
+
+      // 此时应处于 FAILED 状态
+      expect(await screen.findByText('支付超时，请重新创建订单')).toBeInTheDocument()
     })
   })
 })

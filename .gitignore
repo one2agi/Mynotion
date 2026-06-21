@@ -70,3 +70,6 @@ PROJECT_INDEX.md
 
 # superpowers skill working dir (task briefs, progress ledger, workflow scripts)
 /.sdd/
+
+# 支付功能死信文件（失败订单兜底，运行时生成）
+/lib/orders-failed.json

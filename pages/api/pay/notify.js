@@ -67,9 +67,10 @@ export default async function handler(req, res) {
       error: error.message,
       stack: error.stack
     })
-    // 注意：回调处理失败也返回 success，避免 Z-Pay 无限重试
-    // 实际可通过日志告警处理
+    // 非 Notion 错误（Z-Pay 查询失败、JSON 解析、code bug）：
+    // 返回 error 让 Z-Pay 重试（Z-Pay 重试有上限，不会无限循环）
+    // Notion 写入失败由 createOrderPage 内部捕获并写死信，此处不会出现
     res.setHeader('Content-Type', 'text/plain; charset=utf-8')
-    return res.status(200).send('success')
+    return res.status(200).send('error')
   }
 }

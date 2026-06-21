@@ -5,6 +5,13 @@ import { useState, useEffect, useRef } from 'react'
 import { siteConfig } from '@/lib/config'
 import QRCode from 'qrcode'
 
+// 轮询最大持续时间：10 分钟（覆盖正常扫码 + 输密码时间）
+const MAX_POLL_DURATION = 10 * 60 * 1000
+// 轮询间隔：3 秒
+const POLL_INTERVAL = 3000
+// 页面隐藏超过此时间，回来时主动查一次（避免后台 throttle 导致状态延迟）
+const HIDDEN_RESYNC_THRESHOLD = 60 * 1000
+
 /**
  * 支付弹窗组件
  * 状态机：CLOSED → FORM → LOADING → QR_CODE → POLLING → SUCCESS | FAILED
@@ -23,6 +30,9 @@ export default function PayModal({ visible, onClose, pricingIndex }) {
   const [qrcodeUrl, setQrcodeUrl] = useState('')
   const canvasRef = useRef(null)
   const pollingTimerRef = useRef(null)
+  const pollingStartTimeRef = useRef(null)
+  const currentOutTradeNoRef = useRef(null)
+  const hiddenSinceRef = useRef(null)
 
   // 根据 pricingIndex 加载商品信息
   useEffect(() => {
@@ -34,9 +44,26 @@ export default function PayModal({ visible, onClose, pricingIndex }) {
     }
   }, [visible, pricingIndex])
 
-  // 清理轮询定时器
+  // 清理轮询定时器 + visibility 监听
   useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        // 页面隐藏，记录隐藏时间
+        hiddenSinceRef.current = Date.now()
+      } else if (hiddenSinceRef.current && currentOutTradeNoRef.current) {
+        // 页面恢复，如果隐藏超过阈值则主动查一次
+        const hiddenDuration = Date.now() - hiddenSinceRef.current
+        hiddenSinceRef.current = null
+        if (hiddenDuration > HIDDEN_RESYNC_THRESHOLD) {
+          // 立即触发一次轮询（不等下个 interval tick）
+          pollOnce(currentOutTradeNoRef.current)
+        }
+      }
+    }
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+
     return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
       if (pollingTimerRef.current) {
         clearInterval(pollingTimerRef.current)
       }
@@ -53,6 +80,40 @@ export default function PayModal({ visible, onClose, pricingIndex }) {
       })
     }
   }, [qrcodeUrl])
+
+  /**
+   * 主动查询一次订单状态（visibilitychange 用）
+   * @param {string} outTradeNo
+   */
+  const pollOnce = async (outTradeNo) => {
+    try {
+      const resp = await fetch(`/api/pay/query-order?outTradeNo=${outTradeNo}`)
+      const json = await resp.json()
+      if (json.data?.status === 'paid') {
+        stopPolling('SUCCESS', null)
+      } else if (json.data?.status === 'closed') {
+        stopPolling('FAILED', '订单已超时关闭，请重新购买')
+      }
+    } catch (err) {
+      // ignore
+    }
+  }
+
+  /**
+   * 停止轮询并切状态
+   * @param {string} nextStep - 'SUCCESS' | 'FAILED'
+   * @param {string|null} errMsg
+   */
+  const stopPolling = (nextStep, errMsg) => {
+    if (pollingTimerRef.current) {
+      clearInterval(pollingTimerRef.current)
+      pollingTimerRef.current = null
+    }
+    pollingStartTimeRef.current = null
+    currentOutTradeNoRef.current = null
+    if (errMsg) setError(errMsg)
+    setStep(nextStep)
+  }
 
   /**
    * 提交表单创建订单
@@ -85,14 +146,6 @@ export default function PayModal({ visible, onClose, pricingIndex }) {
       setQrcodeUrl(json.data.qrcode)
       setStep('QR_CODE')
 
-      // 存储到 sessionStorage
-      sessionStorage.setItem('payOrder', JSON.stringify({
-        outTradeNo: json.data.outTradeNo,
-        pricingIndex,
-        productName: json.data.productName,
-        amount: json.data.amount
-      }))
-
       // 开始轮询
       startPolling(json.data.outTradeNo)
     } catch (err) {
@@ -102,29 +155,31 @@ export default function PayModal({ visible, onClose, pricingIndex }) {
   }
 
   /**
-   * 开始轮询订单状态
+   * 开始轮询订单状态（带超时保护）
    * @param {string} outTradeNo - 订单号
    */
   const startPolling = (outTradeNo) => {
     setStep('POLLING')
+    pollingStartTimeRef.current = Date.now()
+    currentOutTradeNoRef.current = outTradeNo
     pollingTimerRef.current = setInterval(async () => {
+      // 超时检查：避免用户关 tab 离开后无限轮询
+      if (Date.now() - pollingStartTimeRef.current > MAX_POLL_DURATION) {
+        stopPolling('FAILED', '支付超时，请重新创建订单')
+        return
+      }
       try {
         const resp = await fetch(`/api/pay/query-order?outTradeNo=${outTradeNo}`)
         const json = await resp.json()
         if (json.data?.status === 'paid') {
-          clearInterval(pollingTimerRef.current)
-          setStep('SUCCESS')
-          sessionStorage.removeItem('payOrder')
+          stopPolling('SUCCESS', null)
         } else if (json.data?.status === 'closed') {
-          clearInterval(pollingTimerRef.current)
-          setError('订单已超时关闭，请重新购买')
-          setStep('FAILED')
-          sessionStorage.removeItem('payOrder')
+          stopPolling('FAILED', '订单已超时关闭，请重新购买')
         }
       } catch (err) {
         // 轮询失败继续重试
       }
-    }, 3000)
+    }, POLL_INTERVAL)
   }
 
   /**
@@ -133,7 +188,10 @@ export default function PayModal({ visible, onClose, pricingIndex }) {
   const handleClose = () => {
     if (pollingTimerRef.current) {
       clearInterval(pollingTimerRef.current)
+      pollingTimerRef.current = null
     }
+    pollingStartTimeRef.current = null
+    currentOutTradeNoRef.current = null
     setStep('FORM')
     setFormData({ name: '', email: '', discountCode: '' })
     setOrderInfo(null)
