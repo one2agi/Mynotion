@@ -361,9 +361,10 @@ describe('POST /api/pay/notify', () => {
     expect(createOrderPage).toHaveBeenCalled()
   })
 
-  test('非法请求方法返回 405', async () => {
+  test('非法请求方法 (PUT/DELETE) 返回 405', async () => {
+    // GET 和 POST 现在都支持（Z-Pay 实际用 GET），其他方法 405
     const req = {
-      method: 'GET',
+      method: 'PUT',
       body: {}
     }
     const res = mkRes()
@@ -493,5 +494,85 @@ describe('POST /api/pay/notify', () => {
     // 空对象 → 解析成功但 email/name 缺失 → 视为订单数据不完整
     expect(res.send).toHaveBeenCalledWith('error')
     expect(createOrderPage).not.toHaveBeenCalled()
+  })
+})
+
+// === 回归保护：Z-Pay 实际用 GET 调 notify（不是 POST） ===
+// 来源：2026-06-21 EdgeOne 日志显示 Z-Pay callback 是 GET + query string
+// 根因：notify.js 只接受 POST，导致所有 Z-Pay 真实回调被 405 拒绝
+// 修复后：GET notify 也应该被处理（从 req.query 读参数）
+describe('GET /api/pay/notify（Z-Pay 实际调用方式）', () => {
+  beforeEach(() => {
+    jest.clearAllMocks()
+  })
+
+  test('GET 验签失败 → 返回 error', async () => {
+    verifySign.mockReturnValue(false)
+
+    const req = {
+      method: 'GET',
+      query: {
+        pid: '2026050116254529',
+        trade_no: '4200003131202606218754328861',
+        out_trade_no: 'NN1782053617349716LOY',
+        type: 'wxpay',
+        name: '入门版',
+        money: '0.10',
+        trade_status: 'TRADE_SUCCESS',
+        param: '{"email":"W20L20@163.com","name":"吴题","discountCode":""}',
+        sign_type: 'MD5',
+        sign: 'invalidsign'
+      }
+    }
+    const res = mkRes()
+
+    await handler(req, res)
+
+    expect(res.status).toHaveBeenCalledWith(200)
+    expect(res.send).toHaveBeenCalledWith('error')
+  })
+
+  test('GET 支付成功 → 从 req.query 读参数 → 调 createOrderPage 写 Notion', async () => {
+    verifySign.mockReturnValue(true)
+    // 金额必须与 req.query.money 一致（0.10），否则 amount 二次校验失败 → 'error'
+    queryOrder.mockResolvedValue({ tradeStatus: '1', tradeNo: '4200003131202606218754328861', money: '0.10' })
+    createOrderPage.mockResolvedValue('new-page-id')
+
+    const req = {
+      method: 'GET',
+      query: {
+        trade_no: '4200003131202606218754328861',
+        out_trade_no: 'NN1782053617349716LOY',
+        name: '入门版',
+        money: '0.10',
+        type: 'wxpay',
+        trade_status: 'TRADE_SUCCESS',
+        param: '{"email":"W20L20@163.com","name":"吴题","discountCode":""}',
+        sign_type: 'MD5',
+        sign: '5f32f3cb2e930aefa70c73449096e008'
+      }
+    }
+    const res = mkRes()
+
+    await handler(req, res)
+
+    expect(res.status).toHaveBeenCalledWith(200)
+    expect(res.send).toHaveBeenCalledWith('success')
+    expect(createOrderPage).toHaveBeenCalledWith(expect.objectContaining({
+      outTradeNo: 'NN1782053617349716LOY',
+      email: 'W20L20@163.com',
+      name: '吴题',
+      amount: 0.10,
+      status: 'paid'
+    }))
+  })
+
+  test('GET 非白名单 method (PUT/DELETE 等) → 405', async () => {
+    const req = { method: 'PUT', query: {}, body: {} }
+    const res = mkRes()
+
+    await handler(req, res)
+
+    expect(res.status).toHaveBeenCalledWith(405)
   })
 })
