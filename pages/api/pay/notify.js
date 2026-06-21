@@ -25,13 +25,17 @@ import { verifySign, queryOrder as queryZpayOrder, mapTradeStatus } from '@/lib/
 import { createOrderPage } from '@/lib/notion-order'
 
 export default async function handler(req, res) {
-  if (req.method !== 'POST') {
+  // Z-Pay 实际用 GET 调 notify（所有参数在 query string），不是 POST
+  // 兼容 POST 以防其他支付服务或前端测试用
+  // 来源：2026-06-21 EdgeOne 日志显示 Z-Pay callback 是 GET → notify.js 永远 405
+  if (req.method !== 'POST' && req.method !== 'GET') {
     return res.status(405).end()
   }
 
   try {
-    // Pages Router 自动解析 application/x-www-form-urlencoded 到 req.body
-    const params = req.body
+    // GET: 参数在 req.query（Next.js 自动 URL-decode）
+    // POST: Pages Router 自动解析 application/x-www-form-urlencoded 到 req.body
+    const params = req.method === 'GET' ? req.query : req.body
 
     // 验签
     if (!verifySign(params)) {
