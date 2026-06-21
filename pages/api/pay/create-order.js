@@ -5,17 +5,15 @@
 import { createNativeOrder } from '@/lib/zpay'
 import { lookupDiscountCode } from '@/lib/notion-discount'
 import { siteConfig } from '@/lib/config'
+import { Validator } from '@/lib/utils/validation'
 import starterConfig from '@/themes/starter/config'
 
-// 商品配置映射
-// pricingIndex 1 → starter-basic → STARTER_PRICING_1 (入门版)
-// pricingIndex 2 → starter-pro → STARTER_PRICING_2 (基础版)
-// pricingIndex 3 → starter-premium → STARTER_PRICING_3 (高级版)
-// PayModal 通过 pricingIndex 1|2|3 生成 productId 'basic'|'pro'|'premium'
+// 商品配置映射：productId → pricingIndex
+// PayModal 提交时携带 productId；本表集中维护"哪个 productId 走哪个 STARTER_PRICING_N_* 配置"。
 const PRODUCT_MAP = {
-  'starter-basic': { index: 1 },
-  'starter-pro': { index: 2 },
-  'starter-premium': { index: 3 }
+  'starter-basic': 1,
+  'starter-pro': 2,
+  'starter-premium': 3
 }
 
 /**
@@ -50,6 +48,26 @@ export default async function handler(req, res) {
     return res.status(405).json({ success: false, error: 'Method not allowed' })
   }
 
+  // CSRF 防护：Origin/Referer 白名单
+  // 防止第三方网站诱导用户在本服务下真实订单（消耗 Z-Pay 配额 + 触发风控）
+  // 缺失 Origin/Referer 一律拒绝（curl 不会带、跨域 POST 会被浏览器带不同 origin）
+  const allowedOrigin = process.env.NEXT_PUBLIC_SITE_URL
+  if (allowedOrigin) {
+    const headers = req.headers || {}
+    const requestOrigin = headers.origin || headers.referer
+    if (!requestOrigin || new URL(requestOrigin).origin !== allowedOrigin) {
+      console.warn('[create-order] CSRF 拦截：Origin 不匹配', {
+        requestOrigin,
+        allowedOrigin
+      })
+      return res.status(403).json({
+        success: false,
+        error: 'Forbidden',
+        code: 'CSRF_FORBIDDEN'
+      })
+    }
+  }
+
   try {
     const { name, email, discountCode, productId } = req.body
 
@@ -57,7 +75,7 @@ export default async function handler(req, res) {
     if (!name || name.trim().length === 0 || name.length > 50) {
       return res.status(400).json({ success: false, error: '姓名必填，最多50字符', code: 'INVALID_INPUT' })
     }
-    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    if (!Validator.isValidEmail(email)) {
       return res.status(400).json({ success: false, error: '请提供有效邮箱', code: 'INVALID_INPUT' })
     }
     if (!productId || !PRODUCT_MAP[productId]) {
@@ -65,7 +83,7 @@ export default async function handler(req, res) {
     }
 
     // 获取商品配置
-    const productIndex = PRODUCT_MAP[productId].index
+    const productIndex = PRODUCT_MAP[productId]
     const { name: productName, price: originalAmount } = getProductConfig(productIndex)
 
     let discountAmount = 0
