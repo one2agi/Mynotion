@@ -19,38 +19,25 @@ const Dashboard = props => {
   return <DynamicLayout theme={theme} layoutName='LayoutDashboard' {...props} />
 }
 
-export async function getStaticProps({ locale }) {
+// SSR (was getStaticProps + getStaticPaths) — required so the
+// /_next/data/{buildId}/zh-CN/dashboard.json data endpoint is generated at
+// request time. With rewrites for locale stripping (next.config.js), Next.js
+// does not generate data files for rewritten source paths — converting to
+// getServerSideProps skips that lookup and fixes the client-side router's
+// prefetch 404 (which previously forced full page reloads).
+//
+// getStaticPaths is removed entirely (incompatible with getServerSideProps).
+// All dashboard sub-routes (membership, balance, user-profile, order,
+// affiliate, and the dashboard root) are now resolved at request time —
+// Next.js will SSR any previously enumerated path on first hit.
+export async function getServerSideProps({ locale }) {
   const prefix = 'dashboard'
   const props = await resolvePostProps({
     prefix,
-    locale,
+    locale
   })
 
-  return {
-    props,
-    revalidate: process.env.EXPORT
-      ? undefined
-      : siteConfig(
-        'NEXT_REVALIDATE_SECOND',
-        BLOG.NEXT_REVALIDATE_SECOND,
-        props.NOTION_CONFIG
-      )
-  }
-}
-
-export const getStaticPaths = () => {
-  return {
-    paths: [
-      { params: { index: [] } }, // 对应首页路径
-      { params: { index: ['membership'] } },
-      { params: { index: ['balance'] } },
-      { params: { index: ['user-profile'] } },
-      { params: { index: ['user-profile', 'security'] } }, // 嵌套路由，按结构传递
-      { params: { index: ['order'] } },
-      { params: { index: ['affiliate'] } }
-    ],
-    fallback: 'blocking' // 或者 true，阻塞式渲染
-  }
+  return { props }
 }
 
 export default Dashboard
