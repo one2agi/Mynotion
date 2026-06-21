@@ -14,7 +14,7 @@ const MOCK_ORDER = {
   name: '测试用户（mock 直写）',
   amount: 0.1,
   discountCode: '',
-  tradeNo: `ZPAY_MOCK_${Date.now()}`
+  paidAt: new Date().toISOString()
 }
 
 async function main() {
@@ -29,8 +29,9 @@ async function main() {
     console.log('Page ID:', pageId)
     console.log('订单号:', MOCK_ORDER.outTradeNo)
     console.log('\n请到 Notion DB 验证：')
-    console.log('  DB: 6ab4f4cf-c8e2-825e-bde8-016c2d9be1c2')
+    console.log('  DB: 4044f4cfc8e28236a41e818304648b77（模板客户管理）')
     console.log('  按"订单号"过滤 =', MOCK_ORDER.outTradeNo)
+    console.log('\n注意：Token / 源链接 / 备注 / 交付时间 由用户/运营手动填，本脚本不写')
   } catch (error) {
     console.error('\n❌ 写入失败')
     console.error('Error:', error.message)

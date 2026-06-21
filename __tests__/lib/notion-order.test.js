@@ -36,7 +36,7 @@ describe('Notion 订单写入', () => {
       name: '测试用户',
       amount: 29.9,
       discountCode: 'SAVE10',
-      tradeNo: 'ZPAY123456'
+      paidAt: '2026-06-21T10:00:00.000Z'
     }
 
     const pageId = await createOrderPage(orderData, mockNotionClient)
@@ -45,17 +45,23 @@ describe('Notion 订单写入', () => {
       expect.objectContaining({
         parent: { database_id: process.env.NOTION_DATABASE_ID },
         properties: expect.objectContaining({
-          '客户名': { title: [{ text: { content: '测试用户' } }] },
+          '创建时间': { title: [{ text: { content: '2026-06-21T10:00:00.000Z' } }] },
           '订单号': { rich_text: [{ text: { content: 'TEST123456' } }] },
-          '客户邮箱': { email: 'test@example.com' },
-          '商品名': { rich_text: [{ text: { content: 'Starter 基础版' } }] },
-          '金额': { number: 29.9 },
-          '备注': { rich_text: [{ text: { content: '优惠码: SAVE10' } }] },
-          '状态': { status: { name: '待发送' } },
-          'Token': { rich_text: [{ text: { content: 'ZPAY123456' } }] }
+          '电子邮箱': { email: 'test@example.com' },
+          '姓名': { rich_text: [{ text: { content: '测试用户' } }] },
+          '商品名称': { rich_text: [{ text: { content: 'Starter 基础版' } }] },
+          '价格(元)': { number: 29.9 },
+          '优惠码': { rich_text: [{ text: { content: 'SAVE10' } }] },
+          '付款时间': { date: { start: '2026-06-21T10:00:00.000Z' } },
+          '状态': { status: { name: '待发送' } }
         })
       })
     )
+    // 验证：不再写 Token / 备注 / 源链接（用户手动填）
+    const callArgs = mockNotionClient.pages.create.mock.calls[0][0]
+    expect(callArgs.properties).not.toHaveProperty('Token')
+    expect(callArgs.properties).not.toHaveProperty('备注')
+    expect(callArgs.properties).not.toHaveProperty('源链接')
   })
 
   test('幂等性：重复订单号不重复创建', async () => {
