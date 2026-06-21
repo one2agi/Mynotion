@@ -4,6 +4,21 @@
  *
  * 注意：Pages Router 对 application/x-www-form-urlencoded 自动解析 req.body
  * 无需设置 bodyParser: false 或使用 req.formData()
+ *
+ * 依赖契约（lib/notion-order.js createOrderPage）：
+ * --------------------------------------------------
+ * createOrderPage 承诺 MUST NOT throw，失败时返回 null。
+ * 因此本 handler catch 块捕获的**只会是以下错误**：
+ *   1. verifySign 失败：已在 try 内显式处理（line 21-25）
+ *   2. queryZpayOrder 失败：Z-Pay API hang/5xx
+ *   3. JSON.parse 失败：已 inner try/catch 静默（line 39-43）
+ *   4. 任何 code bug：应该修复而不是吞
+ *
+ * catch 行为：返回 'error' 给 Z-Pay，触发重试（Z-Pay 重试有上限）。
+ * ⚠️ 如果 createOrderPage 未来重构开始抛错，此 catch 会让 Z-Pay
+ * 重复通知 + 重复消耗 Notion API 配额，且最终订单永久丢失（Z-Pay
+ * 重试耗尽）。重构 createOrderPage 时必须同步 review 本文件。
+ * --------------------------------------------------
  */
 import { verifySign, queryOrder as queryZpayOrder } from '@/lib/zpay'
 import { createOrderPage } from '@/lib/notion-order'

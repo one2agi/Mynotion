@@ -120,4 +120,37 @@ describe('Notion 订单写入', () => {
     expect(pageId).toBeNull()
     expect(mockNotionClient.databases.query).toHaveBeenCalledTimes(4) // 1 + 3 retries
   })
+
+  test('API 契约：Notion 失败 + 死信文件也写失败时仍返回 null（永不抛错）', async () => {
+    const { createOrderPage } = require('@/lib/notion-order')
+    const fs = require('fs')
+
+    // Notion 持续失败（4 次）
+    mockNotionClient.databases.query.mockRejectedValue(new Error('notion down'))
+
+    // 死信文件 fs.writeFileSync 也失败（Vercel 只读 FS / 磁盘满）
+    const writeSpy = jest.spyOn(fs, 'writeFileSync').mockImplementation(() => {
+      throw new Error('EACCES: permission denied')
+    })
+    const existsSpy = jest.spyOn(fs, 'existsSync').mockReturnValue(true)
+    const readSpy = jest.spyOn(fs, 'readFileSync').mockReturnValue('[]')
+
+    // 永不抛错（即使两层 fallback 都失败）
+    await expect(
+      createOrderPage({
+        productName: 'Starter',
+        outTradeNo: 'CONTRACT_TEST',
+        email: 'a@b.com'
+      }, mockNotionClient)
+    ).resolves.toBeNull()
+
+    // 验证：writeFileSync 确实被尝试（说明确实进入死信路径）
+    expect(writeSpy).toHaveBeenCalled()
+    // 验证：即使 fs 失败也没冒泡到外层
+    expect(mockNotionClient.databases.query).toHaveBeenCalledTimes(4)
+
+    writeSpy.mockRestore()
+    existsSpy.mockRestore()
+    readSpy.mockRestore()
+  })
 })
