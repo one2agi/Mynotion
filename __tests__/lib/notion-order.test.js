@@ -154,3 +154,52 @@ describe('Notion 订单写入', () => {
     readSpy.mockRestore()
   })
 })
+
+describe('getDeadLetterPath 环境适配', () => {
+  let originalEnv
+
+  beforeEach(() => {
+    // 保存原始 env，每次测试后恢复
+    originalEnv = {
+      VERCEL: process.env.VERCEL,
+      EDGEONE: process.env.EDGEONE
+    }
+    // 清空避免前一个测试的污染
+    delete process.env.VERCEL
+    delete process.env.EDGEONE
+  })
+
+  afterEach(() => {
+    // 恢复 env
+    if (originalEnv.VERCEL === undefined) delete process.env.VERCEL
+    else process.env.VERCEL = originalEnv.VERCEL
+    if (originalEnv.EDGEONE === undefined) delete process.env.EDGEONE
+    else process.env.EDGEONE = originalEnv.EDGEONE
+  })
+
+  test('本地 dev: VERCEL/EDGEONE 都没设 → 返回 lib/orders-failed.json', () => {
+    const { getDeadLetterPath } = require('@/lib/notion-order')
+    const p = getDeadLetterPath()
+    expect(p).toContain('lib/orders-failed.json')
+    expect(p).not.toContain('/tmp/')
+  })
+
+  test('Vercel 环境: VERCEL=1 → 返回 /tmp/orders-failed.json', () => {
+    process.env.VERCEL = '1'
+    const { getDeadLetterPath } = require('@/lib/notion-order')
+    expect(getDeadLetterPath()).toBe('/tmp/orders-failed.json')
+  })
+
+  test('EdgeOne 环境: EDGEONE=1 → 返回 /tmp/orders-failed.json', () => {
+    process.env.EDGEONE = '1'
+    const { getDeadLetterPath } = require('@/lib/notion-order')
+    expect(getDeadLetterPath()).toBe('/tmp/orders-failed.json')
+  })
+
+  test('Vercel 优先: 两个都设时仍用 /tmp（顺序无关）', () => {
+    process.env.VERCEL = '1'
+    process.env.EDGEONE = '1'
+    const { getDeadLetterPath } = require('@/lib/notion-order')
+    expect(getDeadLetterPath()).toBe('/tmp/orders-failed.json')
+  })
+})
