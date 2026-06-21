@@ -31,6 +31,10 @@ const { createNativeOrder } = require('@/lib/zpay')
 const { lookupDiscountCode } = require('@/lib/notion-discount')
 const { siteConfig } = require('@/lib/config')
 
+// CSRF 白名单：与 process.env.NEXT_PUBLIC_SITE_URL 一致
+const ALLOWED_ORIGIN = 'https://notionnext.example.com'
+process.env.NEXT_PUBLIC_SITE_URL = ALLOWED_ORIGIN
+
 // Factory for mock response object
 function mkRes() {
   const json = jest.fn()
@@ -39,6 +43,9 @@ function mkRes() {
   status.mockReturnThis()
   return result
 }
+
+// 默认合法的 Origin header（所有测试都要带，除非专门测 CSRF 拦截）
+const VALID_ORIGIN_HEADER = { origin: ALLOWED_ORIGIN }
 
 describe('POST /api/pay/create-order', () => {
   beforeEach(() => {
@@ -50,6 +57,7 @@ describe('POST /api/pay/create-order', () => {
 
     const req = {
       method: 'POST',
+      headers: VALID_ORIGIN_HEADER,
       body: {
         name: '张三',
         email: 'zhangsan@example.com',
@@ -78,6 +86,7 @@ describe('POST /api/pay/create-order', () => {
 
     const req = {
       method: 'POST',
+      headers: VALID_ORIGIN_HEADER,
       body: {
         name: '张三',
         email: 'zhangsan@example.com',
@@ -103,6 +112,7 @@ describe('POST /api/pay/create-order', () => {
 
     const req = {
       method: 'POST',
+      headers: VALID_ORIGIN_HEADER,
       body: {
         name: '张三',
         email: 'zhangsan@example.com',
@@ -123,6 +133,7 @@ describe('POST /api/pay/create-order', () => {
   test('无效商品 ID 返回错误', async () => {
     const req = {
       method: 'POST',
+      headers: VALID_ORIGIN_HEADER,
       body: {
         name: '张三',
         email: 'zhangsan@example.com',
@@ -143,6 +154,7 @@ describe('POST /api/pay/create-order', () => {
   test('缺少必填字段返回错误', async () => {
     const req = {
       method: 'POST',
+      headers: VALID_ORIGIN_HEADER,
       body: {
         name: '',
         email: 'zhangsan@example.com',
@@ -163,6 +175,7 @@ describe('POST /api/pay/create-order', () => {
   test('无效邮箱格式返回错误', async () => {
     const req = {
       method: 'POST',
+      headers: VALID_ORIGIN_HEADER,
       body: {
         name: '张三',
         email: 'invalid-email',
@@ -178,5 +191,149 @@ describe('POST /api/pay/create-order', () => {
     const jsonData = res.json.mock.calls[0][0]
     expect(jsonData.success).toBe(false)
     expect(jsonData.code).toBe('INVALID_INPUT')
+  })
+
+  test('非 POST 请求返回 405', async () => {
+    const req = {
+      method: 'GET',
+      query: {}
+    }
+    const res = mkRes()
+
+    await handler(req, res)
+
+    expect(res.status).toHaveBeenCalledWith(405)
+    const jsonData = res.json.mock.calls[0][0]
+    expect(jsonData.success).toBe(false)
+    expect(jsonData.error).toBe('Method not allowed')
+  })
+
+  test('Z-Pay 内部错误 → catch 行 113-114 返回 500 INTERNAL_ERROR', async () => {
+    // 模拟 createNativeOrder 抛错（Z-Pay 服务端 hang、5xx、签名失败等）
+    createNativeOrder.mockRejectedValue(new Error('Z-Pay 创建订单失败: 余额不足'))
+
+    const req = {
+      method: 'POST',
+      headers: VALID_ORIGIN_HEADER,
+      body: {
+        name: '张三',
+        email: 'zhangsan@example.com',
+        discountCode: '',
+        productId: 'starter-basic'
+      }
+    }
+    const res = mkRes()
+
+    // 抑制 console.error 输出（catch 块会打日志）
+    const errSpy = jest.spyOn(console, 'error').mockImplementation(() => {})
+
+    await handler(req, res)
+
+    expect(res.status).toHaveBeenCalledWith(500)
+    const jsonData = res.json.mock.calls[0][0]
+    expect(jsonData.success).toBe(false)
+    expect(jsonData.code).toBe('INTERNAL_ERROR')
+    // 验证 catch 块确实记录了错误（行 113 的 console.error）
+    expect(errSpy).toHaveBeenCalledWith(
+      '创建订单失败:',
+      expect.any(Error)
+    )
+
+    errSpy.mockRestore()
+  })
+
+  test('优惠码查询抛错 → catch 行 113-114 返回 500', async () => {
+    // 模拟 lookupDiscountCode 抛错（Notion 5xx/超时/重试耗尽）
+    lookupDiscountCode.mockRejectedValue(new Error('Notion query failed after retries'))
+
+    const req = {
+      method: 'POST',
+      headers: VALID_ORIGIN_HEADER,
+      body: {
+        name: '张三',
+        email: 'zhangsan@example.com',
+        discountCode: 'SAVE10',
+        productId: 'starter-basic'
+      }
+    }
+    const res = mkRes()
+
+    const errSpy = jest.spyOn(console, 'error').mockImplementation(() => {})
+
+    await handler(req, res)
+
+    expect(res.status).toHaveBeenCalledWith(500)
+    const jsonData = res.json.mock.calls[0][0]
+    expect(jsonData.success).toBe(false)
+    expect(jsonData.code).toBe('INTERNAL_ERROR')
+
+    errSpy.mockRestore()
+  })
+
+  // CSRF 防护：Origin/Referer 白名单（防御第三方网站诱导下单）
+  test('CSRF：跨域 Origin（第三方网站 POST）→ 403 + 不调 createNativeOrder', async () => {
+    const req = {
+      method: 'POST',
+      headers: { origin: 'https://evil.com' }, // ❌ 攻击者网站
+      body: {
+        name: '张三',
+        email: 'zhangsan@example.com',
+        discountCode: '',
+        productId: 'starter-basic'
+      }
+    }
+    const res = mkRes()
+
+    await handler(req, res)
+
+    expect(res.status).toHaveBeenCalledWith(403)
+    const jsonData = res.json.mock.calls[0][0]
+    expect(jsonData.success).toBe(false)
+    expect(jsonData.code).toBe('CSRF_FORBIDDEN')
+    // 关键：createNativeOrder 绝不能被调用（防止脚本刷 Z-Pay 配额）
+    expect(createNativeOrder).not.toHaveBeenCalled()
+  })
+
+  test('CSRF：缺少 Origin header（curl/服务端脚本直连）→ 403', async () => {
+    const req = {
+      method: 'POST',
+      // ❌ 没有 headers.origin（同源 form submit 才会带 origin）
+      // curl 也不会带
+      body: {
+        name: '张三',
+        email: 'zhangsan@example.com',
+        discountCode: '',
+        productId: 'starter-basic'
+      }
+    }
+    const res = mkRes()
+
+    await handler(req, res)
+
+    expect(res.status).toHaveBeenCalledWith(403)
+    expect(res.json.mock.calls[0][0].code).toBe('CSRF_FORBIDDEN')
+    expect(createNativeOrder).not.toHaveBeenCalled()
+  })
+
+  test('CSRF：同源 Origin 通过校验', async () => {
+    // 同源 POST 应该正常走完流程（这是合法用户）
+    createNativeOrder.mockResolvedValue({ qrcode: 'weixin://wxpay/xxx' })
+
+    const req = {
+      method: 'POST',
+      headers: { origin: ALLOWED_ORIGIN },
+      body: {
+        name: '张三',
+        email: 'zhangsan@example.com',
+        discountCode: '',
+        productId: 'starter-basic'
+      }
+    }
+    const res = mkRes()
+
+    await handler(req, res)
+
+    expect(res.status).toHaveBeenCalledWith(200)
+    expect(createNativeOrder).toHaveBeenCalledTimes(1)
   })
 })

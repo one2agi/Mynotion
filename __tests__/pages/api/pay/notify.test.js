@@ -6,10 +6,16 @@
 import handler from '@/pages/api/pay/notify'
 
 // Mock dependencies
-jest.mock('@/lib/zpay', () => ({
-  verifySign: jest.fn(),
-  queryOrder: jest.fn()
-}))
+// requireActual 保留 mapTradeStatus（notify.js 用它判断 paid），
+// 只把 verifySign / queryOrder 替换为 jest.fn()
+jest.mock('@/lib/zpay', () => {
+  const actual = jest.requireActual('@/lib/zpay')
+  return {
+    ...actual,
+    verifySign: jest.fn(),
+    queryOrder: jest.fn()
+  }
+})
 jest.mock('@/lib/notion-order', () => ({
   createOrderPage: jest.fn()
 }))
@@ -123,6 +129,77 @@ describe('POST /api/pay/notify', () => {
 
     expect(res.send).toHaveBeenCalledWith('success')
     expect(createOrderPage).not.toHaveBeenCalled()
+  })
+
+  test('金额二次校验：queryOrder.money !== params.money → 返回 error 不落库', async () => {
+    // 场景：Z-Pay 通道 bug / 通知被污染 / 配错 tradeNo
+    // 通知说 0.01 元，但 Z-Pay 真实查询显示 29.90 元 → 拒绝落库
+    verifySign.mockReturnValue(true)
+    queryOrder.mockResolvedValue({
+      tradeStatus: 'TRADE_SUCCESS',
+      tradeNo: 'ZPAY123',
+      money: '29.90'  // Z-Pay 真实金额
+    })
+
+    const req = {
+      method: 'POST',
+      body: {
+        trade_no: 'ZPAY123',
+        out_trade_no: 'TEST123',
+        name: '基础版',
+        money: '0.01',  // ❌ 通知金额被篡改 / 通道污染
+        type: 'wxpay',
+        trade_status: 'TRADE_SUCCESS',
+        param: JSON.stringify({ email: 'test@example.com', name: '张三', discountCode: '' }),
+        sign_type: 'MD5',
+        sign: 'realsign'
+      }
+    }
+    const res = mkRes()
+
+    await handler(req, res)
+
+    // 必须返回 error 让 Z-Pay 重试，不能让错误金额落库
+    expect(res.send).toHaveBeenCalledWith('error')
+    // 关键：createOrderPage 绝不能被调用（防止错误金额被持久化）
+    expect(createOrderPage).not.toHaveBeenCalled()
+  })
+
+  test('金额二次校验：落库的 amount 必须来自 queryOrder.money 而非 params.money', async () => {
+    // 强化：即使 params.money 和 queryOrder.money 数值上相等，
+    // 也要显式断言 notify 用的是 queryOrder 的权威值
+    // （防止未来重构倒退到 params.money）
+    verifySign.mockReturnValue(true)
+    queryOrder.mockResolvedValue({
+      tradeStatus: 'TRADE_SUCCESS',
+      tradeNo: 'ZPAY123',
+      money: '29.90'  // 权威金额来自服务端二次查询
+    })
+    createOrderPage.mockResolvedValue('new-page-id')
+
+    const req = {
+      method: 'POST',
+      body: {
+        trade_no: 'ZPAY123',
+        out_trade_no: 'TEST123',
+        name: '基础版',
+        money: '29.90',
+        type: 'wxpay',
+        trade_status: 'TRADE_SUCCESS',
+        param: JSON.stringify({ email: 'test@example.com', name: '张三', discountCode: 'SAVE10' }),
+        sign_type: 'MD5',
+        sign: 'realsign'
+      }
+    }
+    const res = mkRes()
+
+    await handler(req, res)
+
+    expect(res.send).toHaveBeenCalledWith('success')
+    // 断言落库金额 = queryOrder.money（29.90），不是 params.money 字符串直转
+    const callArgs = createOrderPage.mock.calls[0][0]
+    expect(callArgs.amount).toBe(29.90)
+    expect(typeof callArgs.amount).toBe('number')
   })
 
   test('回调处理异常（Z-Pay/JSON/code bug）返回 error 让 Z-Pay 重试', async () => {

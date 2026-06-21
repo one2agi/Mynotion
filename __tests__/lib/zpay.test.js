@@ -122,4 +122,40 @@ describe('Z-Pay fetch 错误处理', () => {
     expect(result.tradeStatus).toBe('TRADE_SUCCESS')
     expect(result.endtime).toBe('2026-06-21 08:05:00')
   })
+
+  test('createNativeOrder 成功返回 qrcode（行 95-99 happy path）', async () => {
+    // 覆盖 response.json() 解析 + result.code === 1 + return { qrcode }
+    global.fetch.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({ code: 1, qrcode: 'weixin://wxpay/bizpayurl?pr=xxx' })
+    })
+
+    const result = await createNativeOrder({
+      outTradeNo: 'TEST123',
+      name: '测试商品',
+      money: 1.0,
+      notifyUrl: 'https://example.com/notify',
+      param: '{}'
+    })
+    expect(result.qrcode).toBe('weixin://wxpay/bizpayurl?pr=xxx')
+  })
+
+  test('createNativeOrder 业务失败（code !== 1）抛错', async () => {
+    global.fetch.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({ code: 0, msg: '余额不足' })
+    })
+
+    await expect(
+      createNativeOrder({
+        outTradeNo: 'TEST123',
+        name: '测试商品',
+        money: 1.0,
+        notifyUrl: 'https://example.com/notify',
+        param: '{}'
+      })
+    ).rejects.toThrow('余额不足')
+  })
 })

@@ -6,9 +6,15 @@
 import handler from '@/pages/api/pay/query-order'
 
 // Mock dependencies
-jest.mock('@/lib/zpay', () => ({
-  queryOrder: jest.fn()
-}))
+// 用 requireActual 保留 mapTradeStatus / paidAtToISO 的真实实现，
+// 只把 queryOrder 替换为 jest.fn()（测试桩需要按用例注入返回值）
+jest.mock('@/lib/zpay', () => {
+  const actual = jest.requireActual('@/lib/zpay')
+  return {
+    ...actual,
+    queryOrder: jest.fn()
+  }
+})
 
 const { queryOrder } = require('@/lib/zpay')
 
