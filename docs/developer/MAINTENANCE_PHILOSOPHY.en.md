@@ -24,10 +24,12 @@ This document is for **core maintainers and frequent contributors**. Read it tog
 Changes here tend to affect all sites or many themes—**PR descriptions and verification notes should be stronger** (whether two-person review is required is up to owners and maintainers):
 
 - `lib/db/` (including `SiteDataApi`, Notion fetch and caching)
-- `pages/` SSG/ISR, i18n, and build-lifecycle logic
-- `next.config.js` and export/build scripts
+- `pages/` SSG/ISR, SSR (4 locale-route pages are exceptions), i18n, and build-lifecycle logic
+- `next.config.js` and export/build scripts (locale rewrites affect JSON data endpoint runtime behavior — see [ARCHITECTURE.en.md](./ARCHITECTURE.en.md#locale-json-data-endpoints))
 - Global config (`blog.config.js`, `lib/config.js`, and similar defaults)
 - Security-sensitive areas: auth, secrets, third-party callbacks, CSP, etc.
+
+`pages/` change example: on 2026-06-21, four pages (`index.js` / `archive/index.js` / `page/[page].js` / `dashboard/[[...index]].js`) were converted from `getStaticProps` to `getServerSideProps` to fix the `/_next/data/{buildId}/zh-CN/*.json` 404. Each diff was small (under 30 lines), but the change spans locale routing, rewrites, and build artifacts — review must verify: (1) `__tests__/pages/locale-routing.test.js` is GREEN; (2) production `curl` returns 200 on the affected JSON endpoints; (3) HTML and JSON endpoint status codes agree.
 
 ## Keeping the project from drifting
 
