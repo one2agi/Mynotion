@@ -24,10 +24,12 @@
 以下改动往往影响全站或多主题——**PR 描述与验证说明应更完整**（是否必须双人评审由仓库所有者与维护者共同约定）：
 
 - `lib/db/`（含 `SiteDataApi`、Notion 拉取与缓存）
-- `pages/` 下的 SSG/ISR、i18n、构建生命周期相关逻辑
-- `next.config.js` 与导出/构建脚本
+- `pages/` 下的 SSG/ISR、SSR（locale 路由下的 4 个页面例外）、i18n、构建生命周期相关逻辑
+- `next.config.js` 与导出/构建脚本（locale rewrites 涉及 JSON 数据端点的运行时行为，见 [ARCHITECTURE.md](./ARCHITECTURE.md#locale-json-数据端点)）
 - 全局配置（`blog.config.js`、`lib/config.js` 及同类默认行为）
 - 安全相关：鉴权、密钥、第三方回调、CSP 等
+
+`pages/` 改动实例：2026-06-21 把 `index.js` / `archive/index.js` / `page/[page].js` / `dashboard/[[...index]].js` 4 个页面从 `getStaticProps` 改为 `getServerSideProps`，修复 `/_next/data/{buildId}/zh-CN/*.json` 的 404。改动很小（每个文件改动在 30 行内），但跨 locale/rewrites/构建产物三层认知，评审时需验证：(1) 测试 `__tests__/pages/locale-routing.test.js` 全绿；(2) 线上 `curl` 实际 JSON 端点返回 200；(3) HTML 与 JSON 端点状态码一致。
 
 ## 避免项目「漂太远」
 
