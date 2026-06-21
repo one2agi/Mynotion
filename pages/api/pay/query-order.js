@@ -10,6 +10,18 @@ const STATUS_MAP = {
   'TRADE_CLOSED': 'closed'
 }
 
+/**
+ * Z-Pay endtime ("YYYY-MM-DD HH:mm:ss") → ISO 8601 字符串
+ * @param {string|null} endtime
+ * @returns {string|null}
+ */
+function endtimeToISO(endtime) {
+  if (!endtime) return null
+  // Z-Pay 格式："2026-06-21 08:06:06" → "2026-06-21T08:06:06.000Z"
+  // 假设是 UTC（Z-Pay 服务器时间）
+  return `${endtime.replace(' ', 'T')}.000Z`
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'GET') {
     return res.status(405).json({ success: false, error: 'Method not allowed' })
@@ -30,7 +42,9 @@ export default async function handler(req, res) {
       data: {
         outTradeNo,
         status,
-        paidAt: status === 'paid' ? new Date().toISOString() : undefined
+        // 使用 Z-Pay 返回的真实支付完成时间（endtime），
+        // 而不是查询时间（之前的 bug）
+        paidAt: status === 'paid' ? endtimeToISO(result.endtime) : null
       }
     })
   } catch (error) {

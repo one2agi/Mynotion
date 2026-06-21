@@ -46,11 +46,12 @@ describe('GET /api/pay/query-order', () => {
     expect(jsonData.data.outTradeNo).toBe('TEST123')
   })
 
-  test('查询已支付订单返回 paid', async () => {
+  test('查询已支付订单返回 paid + 真实 endtime', async () => {
     queryOrder.mockResolvedValue({
       tradeStatus: 'TRADE_SUCCESS',
       tradeNo: 'ZPAY123',
-      money: '39.90'
+      money: '39.90',
+      endtime: '2026-06-21 08:06:06'
     })
 
     const req = { method: 'GET', query: { outTradeNo: 'TEST123' } }
@@ -62,6 +63,8 @@ describe('GET /api/pay/query-order', () => {
     const jsonData = res.json.mock.calls[0][0]
     expect(jsonData.success).toBe(true)
     expect(jsonData.data.status).toBe('paid')
+    // paidAt 应来自 Z-Pay endtime（不是查询时间 new Date()）
+    expect(jsonData.data.paidAt).toBe('2026-06-21T08:06:06.000Z')
   })
 
   test('查询已关闭订单返回 closed', async () => {

@@ -58,7 +58,15 @@ export default async function handler(req, res) {
     res.setHeader('Content-Type', 'text/plain; charset=utf-8')
     return res.status(200).send('success')
   } catch (error) {
-    console.error('回调处理异常:', error)
+    // 增强日志：包含订单上下文，便于运营定位失败原因
+    console.error('[notify] 回调处理异常', {
+      outTradeNo: req?.body?.out_trade_no,
+      tradeNo: req?.body?.trade_no,
+      amount: req?.body?.money,
+      param: req?.body?.param,
+      error: error.message,
+      stack: error.stack
+    })
     // 注意：回调处理失败也返回 success，避免 Z-Pay 无限重试
     // 实际可通过日志告警处理
     res.setHeader('Content-Type', 'text/plain; charset=utf-8')

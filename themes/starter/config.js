@@ -111,7 +111,6 @@ const CONFIG = {
     'https://tangly1024.lemonsqueezy.com/checkout/buy/df924d66-09dc-42a4-a632-a6b0c5cc4f28',
 
   // 支付相关配置
-  STARTER_PAYMENT_ENABLE: true, // 支付功能开关
   STARTER_PAYMENT_NOTIFY_URL: process.env.ZPAY_NOTIFY_URL, // 回调地址
 
   // 首页用户测评区块
