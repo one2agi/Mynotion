@@ -16,7 +16,8 @@ const { queryOrder } = require('@/lib/zpay')
 function mkRes() {
   const json = jest.fn()
   const status = jest.fn(() => ({ json }))
-  const result = { status, json, _data: null }
+  const setHeader = jest.fn()
+  const result = { status, json, setHeader, _data: null }
   status.mockReturnThis()
   return result
 }
@@ -136,5 +137,47 @@ describe('GET /api/pay/query-order', () => {
     expect(res.status).toHaveBeenCalledWith(405)
     const jsonData = res.json.mock.calls[0][0]
     expect(jsonData.success).toBe(false)
+  })
+
+  test('所有响应路径都设置 Cache-Control: no-store 防止 CDN/浏览器缓存', async () => {
+    // 验证 4 条响应路径都设置了禁止缓存的 header：
+    // 1) 200 成功 (paid)
+    // 2) 200 成功 (pending)
+    // 3) 400 参数缺失
+    // 4) 405 方法不允许
+    const cases = [
+      {
+        name: 'paid',
+        req: { method: 'GET', query: { outTradeNo: 'T1' } },
+        mockResult: {
+          tradeStatus: 'TRADE_SUCCESS',
+          tradeNo: 'X',
+          money: '1',
+          endtime: '2026-06-21 08:06:06'
+        }
+      },
+      {
+        name: 'pending',
+        req: { method: 'GET', query: { outTradeNo: 'T2' } },
+        mockResult: { tradeStatus: 'WAIT_BUYER_PAY', tradeNo: 'X', money: '1' }
+      },
+      {
+        name: 'missing param',
+        req: { method: 'GET', query: {} },
+        mockResult: null
+      },
+      {
+        name: 'wrong method',
+        req: { method: 'POST', body: {} },
+        mockResult: null
+      }
+    ]
+
+    for (const c of cases) {
+      if (c.mockResult) queryOrder.mockResolvedValueOnce(c.mockResult)
+      const res = mkRes()
+      await handler(c.req, res)
+      expect(res.setHeader).toHaveBeenCalledWith('Cache-Control', 'no-store')
+    }
   })
 })

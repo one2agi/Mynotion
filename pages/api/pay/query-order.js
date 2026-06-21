@@ -23,6 +23,10 @@ function endtimeToISO(endtime) {
 }
 
 export default async function handler(req, res) {
+  // 状态查询接口禁止任何层缓存：避免 CDN/浏览器把 pending 状态缓存数十秒，
+  // 导致用户付款后前端仍看到"待支付"，必须强制每次回源
+  res.setHeader('Cache-Control', 'no-store')
+
   if (req.method !== 'GET') {
     return res.status(405).json({ success: false, error: 'Method not allowed' })
   }
