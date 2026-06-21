@@ -9,11 +9,13 @@ jest.mock('@notionhq/client', () => ({
   Client: jest.fn().mockReturnValue(mockNotionClient)
 }))
 
+// Mock fetch for dead-letter webhook
+global.fetch = jest.fn()
+
 // Clear module cache to ensure fresh import after mock setup
 beforeAll(async () => {
   jest.resetModules()
-  const module = await import('@/lib/notion-order')
-  // Re-mock after reset if needed
+  await import('@/lib/notion-order') // 触发 import 让后续 require() 拿到 mock 后的版本
 })
 
 describe('Notion 订单写入', () => {
@@ -21,6 +23,11 @@ describe('Notion 订单写入', () => {
     jest.clearAllMocks()
     mockNotionClient.databases.query.mockReset()
     mockNotionClient.pages.create.mockReset()
+    // 配置 webhook env，避免走"env 缺失"分支
+    process.env.DEAD_LETTER_WEBHOOK_URL = 'https://test.example.com/hooks/wake'
+    process.env.DEAD_LETTER_WEBHOOK_TOKEN = 'test-token'
+    // 默认 fetch 返回成功（重试测试可覆盖）
+    global.fetch.mockResolvedValue({ ok: true, status: 200 })
   })
 
   test('创建订单页成功', async () => {
@@ -104,7 +111,7 @@ describe('Notion 订单写入', () => {
     expect(mockNotionClient.databases.query).toHaveBeenCalledTimes(3)
   })
 
-  test('retry 耗尽后写入死信，返回 null（不抛错）', async () => {
+  test('retry 耗尽后推送死信 webhook，返回 null（不抛错）', async () => {
     const { createOrderPage } = require('@/lib/notion-order')
 
     // query 持续失败 4 次（1 初始 + 3 retry）
@@ -119,21 +126,18 @@ describe('Notion 订单写入', () => {
     // 返回 null 而不是抛错（notify.js 永远能拿到结果）
     expect(pageId).toBeNull()
     expect(mockNotionClient.databases.query).toHaveBeenCalledTimes(4) // 1 + 3 retries
+    // 验证：调用了 webhook 推送（fetch）
+    expect(global.fetch).toHaveBeenCalled()
   })
 
-  test('API 契约：Notion 失败 + 死信文件也写失败时仍返回 null（永不抛错）', async () => {
+  test('API 契约：Notion 失败 + 死信 webhook 也失败时仍返回 null（永不抛错）', async () => {
     const { createOrderPage } = require('@/lib/notion-order')
-    const fs = require('fs')
 
     // Notion 持续失败（4 次）
     mockNotionClient.databases.query.mockRejectedValue(new Error('notion down'))
 
-    // 死信文件 fs.writeFileSync 也失败（Vercel 只读 FS / 磁盘满）
-    const writeSpy = jest.spyOn(fs, 'writeFileSync').mockImplementation(() => {
-      throw new Error('EACCES: permission denied')
-    })
-    const existsSpy = jest.spyOn(fs, 'existsSync').mockReturnValue(true)
-    const readSpy = jest.spyOn(fs, 'readFileSync').mockReturnValue('[]')
+    // 死信 webhook 也失败（fetch reject）
+    global.fetch.mockRejectedValue(new Error('webhook down'))
 
     // 永不抛错（即使两层 fallback 都失败）
     await expect(
@@ -144,62 +148,34 @@ describe('Notion 订单写入', () => {
       }, mockNotionClient)
     ).resolves.toBeNull()
 
-    // 验证：writeFileSync 确实被尝试（说明确实进入死信路径）
-    expect(writeSpy).toHaveBeenCalled()
-    // 验证：即使 fs 失败也没冒泡到外层
+    // 验证：fetch 确实被尝试（说明确实进入死信路径）
+    expect(global.fetch).toHaveBeenCalled()
+    // 验证：即使 webhook 失败也没冒泡到外层
     expect(mockNotionClient.databases.query).toHaveBeenCalledTimes(4)
-
-    writeSpy.mockRestore()
-    existsSpy.mockRestore()
-    readSpy.mockRestore()
-  })
-})
-
-describe('getDeadLetterPath 环境适配', () => {
-  let originalEnv
-
-  beforeEach(() => {
-    // 保存原始 env，每次测试后恢复
-    originalEnv = {
-      VERCEL: process.env.VERCEL,
-      EDGEONE: process.env.EDGEONE
-    }
-    // 清空避免前一个测试的污染
-    delete process.env.VERCEL
-    delete process.env.EDGEONE
   })
 
-  afterEach(() => {
-    // 恢复 env
-    if (originalEnv.VERCEL === undefined) delete process.env.VERCEL
-    else process.env.VERCEL = originalEnv.VERCEL
-    if (originalEnv.EDGEONE === undefined) delete process.env.EDGEONE
-    else process.env.EDGEONE = originalEnv.EDGEONE
-  })
+  test('catch 块调用 notifyDeadLetter（fetch 带正确 headers）', async () => {
+    const { createOrderPage } = require('@/lib/notion-order')
 
-  test('本地 dev: VERCEL/EDGEONE 都没设 → 返回 lib/orders-failed.json', () => {
-    const { getDeadLetterPath } = require('@/lib/notion-order')
-    const p = getDeadLetterPath()
-    expect(p).toContain('lib/orders-failed.json')
-    expect(p).not.toContain('/tmp/')
-  })
+    // Notion 持续失败触发死信
+    mockNotionClient.databases.query.mockRejectedValue(new Error('persistent failure'))
 
-  test('Vercel 环境: VERCEL=1 → 返回 /tmp/orders-failed.json', () => {
-    process.env.VERCEL = '1'
-    const { getDeadLetterPath } = require('@/lib/notion-order')
-    expect(getDeadLetterPath()).toBe('/tmp/orders-failed.json')
-  })
+    await createOrderPage({
+      productName: 'Starter',
+      outTradeNo: 'WEBHOOK_CALLED',
+      email: 'a@b.com'
+    }, mockNotionClient)
 
-  test('EdgeOne 环境: EDGEONE=1 → 返回 /tmp/orders-failed.json', () => {
-    process.env.EDGEONE = '1'
-    const { getDeadLetterPath } = require('@/lib/notion-order')
-    expect(getDeadLetterPath()).toBe('/tmp/orders-failed.json')
-  })
-
-  test('Vercel 优先: 两个都设时仍用 /tmp（顺序无关）', () => {
-    process.env.VERCEL = '1'
-    process.env.EDGEONE = '1'
-    const { getDeadLetterPath } = require('@/lib/notion-order')
-    expect(getDeadLetterPath()).toBe('/tmp/orders-failed.json')
+    // 验证 fetch 带了正确的 webhook URL、method、Authorization header
+    expect(global.fetch).toHaveBeenCalledWith(
+      'https://test.example.com/hooks/wake',
+      expect.objectContaining({
+        method: 'POST',
+        headers: expect.objectContaining({
+          'Authorization': 'Bearer test-token',
+          'Content-Type': 'application/json'
+        })
+      })
+    )
   })
 })
