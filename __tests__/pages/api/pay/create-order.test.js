@@ -39,7 +39,7 @@ process.env.NEXT_PUBLIC_SITE_URL = ALLOWED_ORIGIN
 function mkRes() {
   const json = jest.fn()
   const status = jest.fn(() => ({ json }))
-  const result = { status, json, _data: null }
+  const result = { status, json }
   status.mockReturnThis()
   return result
 }

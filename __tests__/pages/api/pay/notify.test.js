@@ -30,7 +30,7 @@ function mkRes() {
   const setHeader = jest.fn()
   const status = jest.fn(() => ({ send, end, setHeader }))
   const type = jest.fn(() => ({ send, end, setHeader }))
-  const result = { status, send, end, type, setHeader, _sent: null }
+  const result = { status, send, end, type, setHeader }
   status.mockReturnThis()
   type.mockReturnThis()
   return result

@@ -23,7 +23,7 @@ function mkRes() {
   const json = jest.fn()
   const status = jest.fn(() => ({ json }))
   const setHeader = jest.fn()
-  const result = { status, json, setHeader, _data: null }
+  const result = { status, json, setHeader }
   status.mockReturnThis()
   return result
 }
