@@ -64,12 +64,43 @@ export default async function handler(req, res) {
     }
     const paidAmount = parseFloat(zpayResult.money)
 
-    // 解析附加参数
-    let extra = { email: '', name: '', discountCode: '' }
+    // 解析附加参数（含 #31 健壮性：拒绝静默吞错）
+    // 契约：param 必须是非空 JSON 对象且含 email/name，否则视为订单数据不完整，
+    // 返回 'error' 让 Z-Pay 重试。绝不允许空邮箱/空姓名落库。
+    let extra
     try {
       extra = JSON.parse(params.param || '{}')
     } catch (e) {
-      // ignore parse error
+      console.error('[notify] param JSON 解析失败', {
+        outTradeNo: params.out_trade_no,
+        paramLength: typeof params.param === 'string' ? params.param.length : 0,
+        parseError: e.message
+        // ⚠️ 不记 params.param 内容（可能含 PII）
+      })
+      res.setHeader('Content-Type', 'text/plain; charset=utf-8')
+      return res.status(200).send('error')
+    }
+
+    // 边界：JSON.parse('null') → null，JSON.parse('"hi"') → string，
+    // JSON.parse('[]') → array。这些都不是合法的"附加参数对象"。
+    if (typeof extra !== 'object' || extra === null || Array.isArray(extra)) {
+      console.error('[notify] param 不是合法对象', {
+        outTradeNo: params.out_trade_no,
+        actualType: extra === null ? 'null' : typeof extra
+      })
+      res.setHeader('Content-Type', 'text/plain; charset=utf-8')
+      return res.status(200).send('error')
+    }
+
+    // 边界：合法 JSON 对象但 email/name 缺失（正常不会发生，
+    // 但防攻击者伪造回调或 create-order 未来重构改了 param 结构）
+    if (!extra.email || !extra.name) {
+      console.error('[notify] param 对象缺 email/name', {
+        outTradeNo: params.out_trade_no,
+        keys: Object.keys(extra)
+      })
+      res.setHeader('Content-Type', 'text/plain; charset=utf-8')
+      return res.status(200).send('error')
     }
 
     // 写入 Notion

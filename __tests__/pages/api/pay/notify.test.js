@@ -372,4 +372,126 @@ describe('POST /api/pay/notify', () => {
 
     expect(res.status).toHaveBeenCalledWith(405)
   })
+
+  // ─────────────────────────────────────────────────────────────────
+  // #31 param 健壮性测试（防止静默吞错导致用户付钱收不到货）
+  // 契约：param 不是合法 JSON 对象、或缺 email/name 时，必须返回
+  // 'error' 让 Z-Pay 重试，且绝不能调用 createOrderPage 落库。
+  // ─────────────────────────────────────────────────────────────────
+
+  function mkParamReq(paramValue, outTradeNo = 'TEST123') {
+    // 注意：Pages Router 把 undefined / null body 字段视为字段缺失
+    // 测试 param 完全缺失用 paramValue=undefined 时不传 param key
+    const body = {
+      trade_no: 'ZPAY123',
+      out_trade_no: outTradeNo,
+      name: '基础版',
+      money: '29.90',
+      type: 'wxpay',
+      trade_status: 'TRADE_SUCCESS',
+      sign_type: 'MD5',
+      sign: 'realsign'
+    }
+    if (paramValue !== undefined) {
+      body.param = paramValue
+    }
+    return { method: 'POST', body }
+  }
+
+  test('#31: param 完全缺失（Z-Pay 没传） → 返回 error 不落库', async () => {
+    verifySign.mockReturnValue(true)
+    queryOrder.mockResolvedValue({ tradeStatus: 'TRADE_SUCCESS', tradeNo: 'ZPAY123', money: '29.90' })
+    const req = mkParamReq(undefined, 'TEST_NO_PARAM')
+    const res = mkRes()
+
+    await handler(req, res)
+
+    // 必须返回 error 让 Z-Pay 重试，不能假装 success
+    expect(res.send).toHaveBeenCalledWith('error')
+    // 绝不能调用 createOrderPage（防止空邮箱落库）
+    expect(createOrderPage).not.toHaveBeenCalled()
+  })
+
+  test('#31: param 是空字符串 → 返回 error 不落库', async () => {
+    verifySign.mockReturnValue(true)
+    queryOrder.mockResolvedValue({ tradeStatus: 'TRADE_SUCCESS', tradeNo: 'ZPAY123', money: '29.90' })
+    const req = mkParamReq('', 'TEST_EMPTY_PARAM')
+    const res = mkRes()
+
+    await handler(req, res)
+
+    expect(res.send).toHaveBeenCalledWith('error')
+    expect(createOrderPage).not.toHaveBeenCalled()
+  })
+
+  test('#31: param 不是合法 JSON（如 "not json"） → 返回 error 不落库', async () => {
+    verifySign.mockReturnValue(true)
+    queryOrder.mockResolvedValue({ tradeStatus: 'TRADE_SUCCESS', tradeNo: 'ZPAY123', money: '29.90' })
+    const req = mkParamReq('not json', 'TEST_BAD_JSON')
+    const res = mkRes()
+
+    const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      await handler(req, res)
+
+      expect(res.send).toHaveBeenCalledWith('error')
+      expect(createOrderPage).not.toHaveBeenCalled()
+      // 必须有日志记录失败原因（脱敏后）
+      const logCall = errorSpy.mock.calls.find(args =>
+        typeof args[0] === 'string' && args[0].includes('[notify]')
+      )
+      expect(logCall).toBeDefined()
+    } finally {
+      errorSpy.mockRestore()
+    }
+  })
+
+  test('#31: param 是 "null" 字符串 → 返回 error 不落库', async () => {
+    verifySign.mockReturnValue(true)
+    queryOrder.mockResolvedValue({ tradeStatus: 'TRADE_SUCCESS', tradeNo: 'ZPAY123', money: '29.90' })
+    const req = mkParamReq('null', 'TEST_NULL_PARAM')
+    const res = mkRes()
+
+    await handler(req, res)
+
+    expect(res.send).toHaveBeenCalledWith('error')
+    expect(createOrderPage).not.toHaveBeenCalled()
+  })
+
+  test('#31: param 是 JSON 字符串（"hello"）而非对象 → 返回 error 不落库', async () => {
+    verifySign.mockReturnValue(true)
+    queryOrder.mockResolvedValue({ tradeStatus: 'TRADE_SUCCESS', tradeNo: 'ZPAY123', money: '29.90' })
+    const req = mkParamReq('"hello"', 'TEST_STRING_PARAM')
+    const res = mkRes()
+
+    await handler(req, res)
+
+    expect(res.send).toHaveBeenCalledWith('error')
+    expect(createOrderPage).not.toHaveBeenCalled()
+  })
+
+  test('#31: param 是 JSON 数组（[]）而非对象 → 返回 error 不落库', async () => {
+    verifySign.mockReturnValue(true)
+    queryOrder.mockResolvedValue({ tradeStatus: 'TRADE_SUCCESS', tradeNo: 'ZPAY123', money: '29.90' })
+    const req = mkParamReq('[]', 'TEST_ARRAY_PARAM')
+    const res = mkRes()
+
+    await handler(req, res)
+
+    expect(res.send).toHaveBeenCalledWith('error')
+    expect(createOrderPage).not.toHaveBeenCalled()
+  })
+
+  test('#31: param 是空对象（{}）缺 email/name → 返回 error 不落库', async () => {
+    verifySign.mockReturnValue(true)
+    queryOrder.mockResolvedValue({ tradeStatus: 'TRADE_SUCCESS', tradeNo: 'ZPAY123', money: '29.90' })
+    const req = mkParamReq('{}', 'TEST_EMPTY_OBJ')
+    const res = mkRes()
+
+    await handler(req, res)
+
+    // 空对象 → 解析成功但 email/name 缺失 → 视为订单数据不完整
+    expect(res.send).toHaveBeenCalledWith('error')
+    expect(createOrderPage).not.toHaveBeenCalled()
+  })
 })
