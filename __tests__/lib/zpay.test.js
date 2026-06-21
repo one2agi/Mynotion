@@ -103,11 +103,12 @@ describe('Z-Pay fetch 错误处理', () => {
   })
 
   test('queryOrder 正常返回', async () => {
+    // Z-Pay 真实响应：查询 API 用 status (Int 0/1) 不是 trade_status (String)
     global.fetch.mockResolvedValueOnce({
       ok: true,
       status: 200,
       json: async () => ({
-        trade_status: 'TRADE_SUCCESS',
+        status: 1,                              // ← 真实字段
         trade_no: 'ZPAY123',
         money: '1.00',
         name: '测试商品',
@@ -119,8 +120,79 @@ describe('Z-Pay fetch 错误处理', () => {
     })
 
     const result = await queryOrder('TEST123')
-    expect(result.tradeStatus).toBe('TRADE_SUCCESS')
+    expect(result.tradeStatus).toBe('1')
     expect(result.endtime).toBe('2026-06-21 08:05:00')
+  })
+
+  // === 回归保护：必须用 Z-Pay 真实响应格式（status 数字 0/1，不是 trade_status 字符串）===
+  // 来源：2026-06-21 生产事故 — notify.js 永远不写 Notion
+  // 根因：queryOrder 读 result.trade_status（字符串）但 Z-Pay 返回 result.status（Int 0/1）
+  // 参考：https://z-pay.cn/doc.html "查询单个订单" → status 字段类型 Int
+  describe('Z-Pay 真实响应格式（回归保护）', () => {
+    test('未支付订单 status=0 → tradeStatus="0"（不是 undefined）', async () => {
+      // 这就是 2026-06-21 真实 Z-Pay 响应的格式
+      global.fetch.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          code: 1,
+          msg: '查询订单号成功！',
+          status: 0,                          // ← 真实字段，Int
+          name: '入门版',
+          money: '0.10',
+          out_trade_no: 'NN1782048893073ZV4P69',
+          trade_no: null,
+          type: 'wxpay2',
+          param: '{"email":"e2e-test@example.com","name":"E2E测试用户","discountCode":""}',
+          addtime: '2026-06-21 21:34:54',
+          endtime: '2026-06-21 21:34:54',
+          pid: '2026050116254529',
+          buyer: null
+          // 注意：没有 trade_status 字段
+        })
+      })
+
+      const result = await queryOrder('NN1782048893073ZV4P69')
+
+      // 关键断言：必须是 '0'，不能是 undefined（生产 bug 根因）
+      expect(result.tradeStatus).toBe('0')
+      expect(result.tradeStatus).not.toBeUndefined()
+    })
+
+    test('已支付订单 status=1 → tradeStatus="1"（被 mapTradeStatus 翻译为 "paid"）', async () => {
+      global.fetch.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          code: 1,
+          status: 1,                          // ← 支付成功
+          money: '0.10',
+          trade_no: 'ZPAY_REAL_12345',
+          endtime: '2026-06-21 21:40:00'
+        })
+      })
+
+      const result = await queryOrder('TEST_PAID')
+
+      expect(result.tradeStatus).toBe('1')
+      expect(result.tradeStatus).not.toBeUndefined()
+    })
+
+    test('已关闭订单 status=2 → tradeStatus="2"', async () => {
+      global.fetch.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          code: 1,
+          status: 2,                          // ← 关闭（Z-Pay 文档未明说但保留兼容）
+          money: '0.10'
+        })
+      })
+
+      const result = await queryOrder('TEST_CLOSED')
+
+      expect(result.tradeStatus).toBe('2')
+    })
   })
 
   test('createNativeOrder 成功返回 qrcode（行 95-99 happy path）', async () => {

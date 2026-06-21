@@ -35,7 +35,7 @@ describe('GET /api/pay/query-order', () => {
 
   test('查询待支付订单返回 pending', async () => {
     queryOrder.mockResolvedValue({
-      tradeStatus: 'WAIT_BUYER_PAY',
+      tradeStatus: '0',  // Z-Pay status=0 未支付
       tradeNo: 'ZPAY123',
       money: '39.90'
     })
@@ -55,7 +55,7 @@ describe('GET /api/pay/query-order', () => {
 
   test('查询已支付订单返回 paid + 真实 endtime', async () => {
     queryOrder.mockResolvedValue({
-      tradeStatus: 'TRADE_SUCCESS',
+      tradeStatus: '1',  // Z-Pay status=1 支付成功
       tradeNo: 'ZPAY123',
       money: '39.90',
       endtime: '2026-06-21 08:06:06'
@@ -76,7 +76,7 @@ describe('GET /api/pay/query-order', () => {
 
   test('查询已关闭订单返回 closed', async () => {
     queryOrder.mockResolvedValue({
-      tradeStatus: 'TRADE_CLOSED',
+      tradeStatus: '2',  // Z-Pay status=2 关闭
       tradeNo: '',
       money: '0'
     })
@@ -105,7 +105,7 @@ describe('GET /api/pay/query-order', () => {
 
   test('ZPay 接口返回未知状态返回 unknown', async () => {
     queryOrder.mockResolvedValue({
-      tradeStatus: 'UNKNOWN_STATUS',
+      tradeStatus: '99',  // 不在 STATUS_MAP → 'unknown'
       tradeNo: 'ZPAY123',
       money: '39.90'
     })
@@ -156,7 +156,7 @@ describe('GET /api/pay/query-order', () => {
         name: 'paid',
         req: { method: 'GET', query: { outTradeNo: 'T1' } },
         mockResult: {
-          tradeStatus: 'TRADE_SUCCESS',
+          tradeStatus: '1',  // Z-Pay status=1
           tradeNo: 'X',
           money: '1',
           endtime: '2026-06-21 08:06:06'
@@ -165,7 +165,7 @@ describe('GET /api/pay/query-order', () => {
       {
         name: 'pending',
         req: { method: 'GET', query: { outTradeNo: 'T2' } },
-        mockResult: { tradeStatus: 'WAIT_BUYER_PAY', tradeNo: 'X', money: '1' }
+        mockResult: { tradeStatus: '0', tradeNo: 'X', money: '1' }  // Z-Pay status=0
       },
       {
         name: 'missing param',
