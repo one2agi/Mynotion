@@ -15,23 +15,24 @@ const Page = props => {
   return <DynamicLayout theme={theme} layoutName='LayoutPostList' {...props} />
 }
 
-export async function getStaticPaths({ locale }) {
-  const from = 'page-paths'
-  const { postCount, NOTION_CONFIG } = await fetchGlobalAllData({ from, locale })
-  const totalPages = Math.ceil(
-    postCount / siteConfig('POSTS_PER_PAGE', null, NOTION_CONFIG)
-  )
-  return {
-    // remove first page, we 're not gonna handle that.
-    paths: Array.from({ length: totalPages - 1 }, (_, i) => ({
-      params: { page: '' + (i + 2) }
-    })),
-    fallback: true
+// SSR (was getStaticProps + getStaticPaths) — required so the
+// /_next/data/{buildId}/zh-CN/page/{N}.json data endpoint is generated at
+// request time. With rewrites for locale stripping (next.config.js), Next.js
+// does not generate data files for rewritten source paths — converting to
+// getServerSideProps skips that lookup and fixes the client-side router's
+// prefetch 404 (which previously forced full page reloads).
+//
+// getStaticPaths is removed entirely (incompatible with getServerSideProps).
+// Invalid page numbers (non-numeric, <= 0, or beyond available pages) return
+// { notFound: true } so Next.js serves the 404 page instead of an empty list.
+export async function getServerSideProps({ params, locale }) {
+  const pageNum = parseInt(params.page, 10)
+  if (Number.isNaN(pageNum) || pageNum < 2) {
+    // page=1 is served by the home page; only page >= 2 is valid here
+    return { notFound: true }
   }
-}
 
-export async function getStaticProps({ params: { page }, locale }) {
-  const from = `page-${page}`
+  const from = `page-${params.page}`
   const props = await fetchGlobalAllData({ from, locale })
   const { allPages } = props
   const POST_PREVIEW_LINES = siteConfig(
@@ -44,12 +45,19 @@ export async function getStaticProps({ params: { page }, locale }) {
     page => page.type === 'Post' && page.status === 'Published'
   )
   const POSTS_PER_PAGE = siteConfig('POSTS_PER_PAGE', 12, props?.NOTION_CONFIG)
+
+  // Beyond available data → notFound
+  const totalPages = Math.ceil(allPosts.length / POSTS_PER_PAGE)
+  if (pageNum > totalPages) {
+    return { notFound: true }
+  }
+
   // 处理分页
   props.posts = allPosts.slice(
-    POSTS_PER_PAGE * (page - 1),
-    POSTS_PER_PAGE * page
+    POSTS_PER_PAGE * (pageNum - 1),
+    POSTS_PER_PAGE * pageNum
   )
-  props.page = page
+  props.page = pageNum
 
   // 处理预览
   if (siteConfig('POST_LIST_PREVIEW', false, props?.NOTION_CONFIG)) {
@@ -67,16 +75,7 @@ export async function getStaticProps({ params: { page }, locale }) {
   }
 
   delete props.allPages
-  return {
-    props,
-    revalidate: process.env.EXPORT
-      ? undefined
-      : siteConfig(
-          'NEXT_REVALIDATE_SECOND',
-          BLOG.NEXT_REVALIDATE_SECOND,
-          props.NOTION_CONFIG
-        )
-  }
+  return { props }
 }
 
 export default Page
