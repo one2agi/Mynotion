@@ -9,10 +9,11 @@
  * --------------------------------------------------
  * createOrderPage 承诺 MUST NOT throw，失败时返回 null。
  * 因此本 handler catch 块捕获的**只会是以下错误**：
- *   1. verifySign 失败：已在 try 内显式处理（line 21-25）
- *   2. queryZpayOrder 失败：Z-Pay API hang/5xx
- *   3. JSON.parse 失败：已 inner try/catch 静默（line 39-43）
- *   4. 任何 code bug：应该修复而不是吞
+ *   1. verifySign 失败：已在 try 内显式处理（return 'error'）
+ *   2. 金额二次校验失败：已在 try 内显式处理（return 'error'）
+ *   3. queryZpayOrder 失败：Z-Pay API hang/5xx
+ *   4. JSON.parse 失败：已 inner try/catch 静默
+ *   5. 任何 code bug：应该修复而不是吞
  *
  * catch 行为：返回 'error' 给 Z-Pay，触发重试（Z-Pay 重试有上限）。
  * ⚠️ 如果 createOrderPage 未来重构开始抛错，此 catch 会让 Z-Pay
@@ -20,7 +21,7 @@
  * 重试耗尽）。重构 createOrderPage 时必须同步 review 本文件。
  * --------------------------------------------------
  */
-import { verifySign, queryOrder as queryZpayOrder } from '@/lib/zpay'
+import { verifySign, queryOrder as queryZpayOrder, mapTradeStatus } from '@/lib/zpay'
 import { createOrderPage } from '@/lib/notion-order'
 
 export default async function handler(req, res) {
@@ -43,11 +44,25 @@ export default async function handler(req, res) {
 
     // 查询 Z-Pay 确认订单状态（防伪造）
     const zpayResult = await queryZpayOrder(outTradeNo)
-    if (zpayResult.tradeStatus !== 'TRADE_SUCCESS') {
+    if (mapTradeStatus(zpayResult.tradeStatus) !== 'paid') {
       // 非成功订单也返回 success，避免 Z-Pay 重复通知
       res.setHeader('Content-Type', 'text/plain; charset=utf-8')
       return res.status(200).send('success')
     }
+
+    // 金额二次校验：以服务端二次查询的 money 为权威值
+    // 通知 params.money 可能被通道污染 / 系统 bug / 极端配错
+    // 不一致则返回 error 让 Z-Pay 重试，防止错误金额落库
+    if (parseFloat(zpayResult.money) !== parseFloat(params.money)) {
+      console.error('[notify] 金额不一致', {
+        outTradeNo,
+        zpayMoney: zpayResult.money,
+        notifyMoney: params.money
+      })
+      res.setHeader('Content-Type', 'text/plain; charset=utf-8')
+      return res.status(200).send('error')
+    }
+    const paidAmount = parseFloat(zpayResult.money)
 
     // 解析附加参数
     let extra = { email: '', name: '', discountCode: '' }
@@ -65,7 +80,7 @@ export default async function handler(req, res) {
       email: extra.email || '',
       name: extra.name || '',
       discountCode: extra.discountCode || '',
-      amount: parseFloat(params.money),
+      amount: paidAmount, // 来自服务端二次查询的权威金额（zpayResult.money）
       status: 'paid',
       paidAt: new Date().toISOString()
     })
