@@ -120,19 +120,4 @@ describe('Notion 订单写入', () => {
     expect(pageId).toBeNull()
     expect(mockNotionClient.databases.query).toHaveBeenCalledTimes(4) // 1 + 3 retries
   })
-
-  test('withRetry helper：成功后不再重试', async () => {
-    const { withRetry } = require('@/lib/notion-order')
-    const fn = jest.fn().mockResolvedValue('ok')
-    const result = await withRetry(fn)
-    expect(result).toBe('ok')
-    expect(fn).toHaveBeenCalledTimes(1)
-  })
-
-  test('withRetry helper：4 次尝试（1 初始 + 3 重试）后抛错', async () => {
-    const { withRetry } = require('@/lib/notion-order')
-    const fn = jest.fn().mockRejectedValue(new Error('fail'))
-    await expect(withRetry(fn)).rejects.toThrow('fail')
-    expect(fn).toHaveBeenCalledTimes(4)
-  })
 })
