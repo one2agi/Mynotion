@@ -4,7 +4,7 @@
 
 ## Top-level directories (common)
 
-- `pages/`: Next.js route entry (`getStaticProps/getStaticPaths`)
+- `pages/`: Next.js route entry (`getStaticProps/getStaticPaths`). The 4 top-level pages under locale routes (`index.js` / `archive/index.js` / `page/[page].js` / `dashboard/[[...index]].js`) use `getServerSideProps` instead — see [ARCHITECTURE.en.md](./ARCHITECTURE.en.md#locale-json-data-endpoints)
 - `themes/`: Theme implementations (UI + theme config)
 - `components/`: Cross-theme reusable components
 - `lib/`: Core logic (data, cache, utilities, config read)
