@@ -9,14 +9,14 @@ import PayModal from './PayModal'
  */
 export const Pricing = () => {
   const [payModalVisible, setPayModalVisible] = useState(false)
-  const [selectedPricing, setSelectedPricing] = useState(1)
+  const [selectedProductId, setSelectedProductId] = useState('starter-basic')
 
   /**
    * 打开支付弹窗
-   * @param {number} index - 定价套餐索引
+   * @param {string} productId - 商品 ID（'starter-basic' | 'starter-pro' | 'starter-premium'）
    */
-  const openPayModal = (index) => {
-    setSelectedPricing(index)
+  const openPayModal = (productId) => {
+    setSelectedProductId(productId)
     setPayModalVisible(true)
   }
   return (
@@ -80,7 +80,7 @@ export const Pricing = () => {
                   </div>
                 </div>
                 <button
-                  onClick={() => openPayModal(1)}
+                  onClick={() => openPayModal('starter-basic')}
                   className='inline-block rounded-md bg-primary px-7 py-3 text-center text-base font-medium text-white transition hover:bg-blue-dark'>
                   {siteConfig('STARTER_PRICING_1_BUTTON_TEXT')}
                 </button>
@@ -132,7 +132,7 @@ export const Pricing = () => {
                   </div>
                 </div>
                 <button
-                  onClick={() => openPayModal(2)}
+                  onClick={() => openPayModal('starter-pro')}
                   className='inline-block rounded-md bg-primary px-7 py-3 text-center text-base font-medium text-white transition hover:bg-blue-dark'>
                   {siteConfig('STARTER_PRICING_2_BUTTON_TEXT')}
                 </button>
@@ -176,7 +176,7 @@ export const Pricing = () => {
                   </div>
                 </div>
                 <button
-                  onClick={() => openPayModal(3)}
+                  onClick={() => openPayModal('starter-premium')}
                   className='inline-block rounded-md bg-primary px-7 py-3 text-center text-base font-medium text-white transition hover:bg-blue-dark'>
                   {siteConfig('STARTER_PRICING_3_BUTTON_TEXT')}
                 </button>
@@ -189,7 +189,7 @@ export const Pricing = () => {
       <PayModal
         visible={payModalVisible}
         onClose={() => setPayModalVisible(false)}
-        pricingIndex={selectedPricing}
+        productId={selectedProductId}
       />
     </>
   )

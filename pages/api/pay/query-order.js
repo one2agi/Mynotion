@@ -2,25 +2,7 @@
  * GET /api/pay/query-order
  * 查询订单支付状态
  */
-import { queryOrder as queryZpayOrder } from '@/lib/zpay'
-
-const STATUS_MAP = {
-  'WAIT_BUYER_PAY': 'pending',
-  'TRADE_SUCCESS': 'paid',
-  'TRADE_CLOSED': 'closed'
-}
-
-/**
- * Z-Pay endtime ("YYYY-MM-DD HH:mm:ss") → ISO 8601 字符串
- * @param {string|null} endtime
- * @returns {string|null}
- */
-function endtimeToISO(endtime) {
-  if (!endtime) return null
-  // Z-Pay 格式："2026-06-21 08:06:06" → "2026-06-21T08:06:06.000Z"
-  // 假设是 UTC（Z-Pay 服务器时间）
-  return `${endtime.replace(' ', 'T')}.000Z`
-}
+import { queryOrder as queryZpayOrder, mapTradeStatus, paidAtToISO } from '@/lib/zpay'
 
 export default async function handler(req, res) {
   // 状态查询接口禁止任何层缓存：避免 CDN/浏览器把 pending 状态缓存数十秒，
@@ -39,7 +21,7 @@ export default async function handler(req, res) {
 
   try {
     const result = await queryZpayOrder(outTradeNo)
-    const status = STATUS_MAP[result.tradeStatus] || 'unknown'
+    const status = mapTradeStatus(result.tradeStatus)
 
     return res.status(200).json({
       success: true,
@@ -47,8 +29,8 @@ export default async function handler(req, res) {
         outTradeNo,
         status,
         // 使用 Z-Pay 返回的真实支付完成时间（endtime），
-        // 而不是查询时间（之前的 bug）
-        paidAt: status === 'paid' ? endtimeToISO(result.endtime) : null
+        // 而不是查询时间（之前的 bug）。ISO 转换由 lib/zpay.js 集中处理。
+        paidAt: status === 'paid' ? paidAtToISO(result.endtime) : null
       }
     })
   } catch (error) {
