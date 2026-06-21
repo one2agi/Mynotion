@@ -4,7 +4,7 @@
 
 ## 顶层目录（常用）
 
-- `pages/`：Next.js 路由入口（SSG/ISR 的 `getStaticProps/getStaticPaths`）
+- `pages/`：Next.js 路由入口（SSG/ISR 的 `getStaticProps/getStaticPaths`）。locale 路由下的 4 个顶层页面（`index.js` / `archive/index.js` / `page/[page].js` / `dashboard/[[...index]].js`）改用 `getServerSideProps`，原因见 [ARCHITECTURE.md](./ARCHITECTURE.md#locale-json-数据端点)
 - `themes/`：各主题实现（UI 与主题配置）
 - `components/`：跨主题复用组件
 - `lib/`：核心逻辑（数据、缓存、工具、配置读取）
