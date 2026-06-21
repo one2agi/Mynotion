@@ -136,7 +136,7 @@ describe('Notion 订单写入', () => {
     // Notion 持续失败（4 次）
     mockNotionClient.databases.query.mockRejectedValue(new Error('notion down'))
 
-    // 死信 webhook 也失败（fetch reject）
+    // 死信 webhook 也失败（fetch reject）— 3 次都失败才算"完全失败"
     global.fetch.mockRejectedValue(new Error('webhook down'))
 
     // 永不抛错（即使两层 fallback 都失败）
@@ -148,8 +148,8 @@ describe('Notion 订单写入', () => {
       }, mockNotionClient)
     ).resolves.toBeNull()
 
-    // 验证：fetch 确实被尝试（说明确实进入死信路径）
-    expect(global.fetch).toHaveBeenCalled()
+    // 验证：fetch 确实被尝试了 3 次（重试耗尽）
+    expect(global.fetch).toHaveBeenCalledTimes(3)
     // 验证：即使 webhook 失败也没冒泡到外层
     expect(mockNotionClient.databases.query).toHaveBeenCalledTimes(4)
   })

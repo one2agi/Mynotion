@@ -64,14 +64,19 @@ describe('Dead Letter Webhook 推送器', () => {
     expect(JSON.parse(body.text)).toEqual(entry)
   })
 
-  test('重试：5xx → 共 3 次（1 初始 + 2 retry）', async () => {
+  test('重试：5xx → 共 3 次（1 初始 + 2 retry），backoff ≥ 200+400ms', async () => {
     global.fetch
       .mockResolvedValueOnce({ ok: false, status: 500 })
       .mockResolvedValueOnce({ ok: false, status: 502 })
       .mockResolvedValueOnce({ ok: true, status: 200 })
 
+    const t0 = Date.now()
     await notifyDeadLetter({ outTradeNo: 'X1' })
+    const elapsed = Date.now() - t0
+
     expect(global.fetch).toHaveBeenCalledTimes(3)
+    // 至少等 200+400=600ms（防止有人误删 await sleep，把 3 次 fetch 并行）
+    expect(elapsed).toBeGreaterThanOrEqual(550)
   })
 
   test('不重试：401（鉴权失败）→ 只调 1 次', async () => {
@@ -160,5 +165,24 @@ describe('Dead Letter Webhook 推送器', () => {
     const opts = global.fetch.mock.calls[0][1]
     expect(opts.signal).toBeDefined()
     expect(opts.signal).toBeInstanceOf(AbortSignal)
+  })
+
+  test('循环引用 entry：JSON.stringify 抛错 → 降级发送（不 reject）', async () => {
+    global.fetch.mockResolvedValueOnce({ ok: true, status: 200 })
+    // 构造循环引用：entry.orderData.self = entry
+    const entry = { outTradeNo: 'CIRCULAR', orderData: {}, error: 'x', stack: 's' }
+    entry.orderData.self = entry
+
+    // 必须不 reject（保持 MUST NEVER reject 契约）
+    await expect(notifyDeadLetter(entry)).resolves.toBeUndefined()
+    // 降级路径仍调了一次 fetch
+    expect(global.fetch).toHaveBeenCalledTimes(1)
+    // 降级 body 应只含安全字段
+    const body = JSON.parse(global.fetch.mock.calls[0][1].body)
+    const text = JSON.parse(body.text)
+    expect(text.outTradeNo).toBe('CIRCULAR')
+    expect(text.error).toBe('x')
+    expect(text.serializationError).toBeDefined()
+    expect(text).not.toHaveProperty('orderData') // 完整 entry 没发出去
   })
 })
