@@ -6,12 +6,7 @@ import {
   getPostBlocks
 } from '@/lib/db/SiteDataApi'
 import { formatNotionBlock } from '@/lib/db/notion/getPostBlocks'
-import { generateRobotsTxt } from '@/lib/utils/robots.txt'
-import { generateRss, shouldGenerateRssForLocale } from '@/lib/utils/rss'
-import { generateSitemapXml } from '@/lib/utils/sitemap.xml'
 import { DynamicLayout } from '@/themes/theme'
-import { generateRedirectJson } from '@/lib/utils/redirect'
-import { checkDataFromAlgolia } from '@/lib/plugins/algolia'
 import pLimit from 'p-limit'
 import { adapterNotionBlockMap } from '@/lib/utils/notion.util'
 
@@ -26,11 +21,26 @@ const Index = props => {
 }
 
 /**
- * SSG 获取数据
- * @returns
+ * SSR data fetching (was getStaticProps).
+ *
+ * Why SSR instead of static:
+ *   next.config.js uses rewrites to strip the locale prefix from URLs
+ *   (e.g., /zh-CN/ → /). Next.js only generates /_next/data/{buildId}/*.json
+ *   files for actual page file paths at build time — not for the rewritten
+ *   source paths. As a result, /_next/data/{buildId}/zh-CN.json returned 404
+ *   and the client-side router fell back to a full page reload on every
+ *   internal navigation.
+ *
+ *   getServerSideProps SSRs at request time, so the JSON data endpoint is
+ *   generated dynamically (no pre-built file lookup needed). The 404
+ *   disappears and SPA navigation works correctly.
+ *
+ * Build-time side effects previously inside this module (robots.txt,
+ * rss/*, sitemap.xml, redirect.json, algolia probe) have been extracted to
+ * scripts/generate-static-assets.mjs and wired as a `prebuild` npm hook —
+ * they still run before `next build`, just no longer inside the page module.
  */
-export async function getStaticProps(req) {
-  const { locale } = req
+export async function getServerSideProps({ locale }) {
   const from = 'index'
   const props = await fetchGlobalAllData({ from, locale })
   if (process.env.NODE_ENV === 'development') {
@@ -39,7 +49,7 @@ export async function getStaticProps(req) {
     const finalTheme = siteConfig('THEME', BLOG.THEME, props?.NOTION_CONFIG)
     const source = notionTheme ? 'notion:config' : 'blog/env:config'
     console.log(
-      '[ThemeResolver][server-static-props]',
+      '[ThemeResolver][server-side-props]',
       JSON.stringify({
         route: '/',
         configTheme,
@@ -98,27 +108,6 @@ export async function getStaticProps(req) {
       )
     )
   }
-  const isBuildLifecycle = ['build', 'export'].includes(
-    process.env.npm_lifecycle_event
-  )
-  if (isBuildLifecycle) {
-    // 生成robotTxt
-    generateRobotsTxt(props)
-    // 生成Feed订阅
-    if (shouldGenerateRssForLocale({ locale })) {
-      await generateRss(props)
-    }
-    // 生成
-    generateSitemapXml(props)
-    // 检查数据是否需要从algolia删除
-    await checkDataFromAlgolia(props)
-    if (siteConfig('UUID_REDIRECT', false, props?.NOTION_CONFIG)) {
-      // 生成重定向 JSON
-      generateRedirectJson(props)
-    }
-  }
-
-  // 生成全文索引 - 仅在 yarn build 时执行 && process.env.npm_lifecycle_event === 'build'
 
   if (!POST_LIST_PREVIEW) {
     props.posts = cleanPostSummaries(props.posts)
@@ -126,16 +115,7 @@ export async function getStaticProps(req) {
   props.latestPosts = cleanPostSummaries(props.latestPosts)
   delete props.allPages
 
-  return {
-    props,
-    revalidate: process.env.EXPORT
-      ? undefined
-      : siteConfig(
-          'NEXT_REVALIDATE_SECOND',
-          BLOG.NEXT_REVALIDATE_SECOND,
-          props.NOTION_CONFIG
-        )
-  }
+  return { props }
 }
 
 export default Index
