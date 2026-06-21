@@ -89,11 +89,20 @@ export default async function handler(req, res) {
     return res.status(200).send('success')
   } catch (error) {
     // 增强日志：包含订单上下文，便于运营定位失败原因
+    // ⚠️ param 来自客户端，含 PII (email/name/discountCode)。
+    // 落到 EdgeOne 函数日志长期保留 = 永久 PII 存储。必须脱敏。
+    // paramLength 单独记录，让运营能发现异常长 param 但看不到内容。
+    const paramStr = req?.body?.param
+    const paramLength = typeof paramStr === 'string' ? paramStr.length : 0
+    const paramLog = typeof paramStr === 'string' && paramStr.length > 200
+      ? '[REDACTED:long]'
+      : '[REDACTED]'
     console.error('[notify] 回调处理异常', {
       outTradeNo: req?.body?.out_trade_no,
       tradeNo: req?.body?.trade_no,
       amount: req?.body?.money,
-      param: req?.body?.param,
+      param: paramLog,
+      paramLength,
       error: error.message,
       stack: error.stack
     })

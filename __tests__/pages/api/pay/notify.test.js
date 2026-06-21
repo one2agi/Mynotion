@@ -230,6 +230,109 @@ describe('POST /api/pay/notify', () => {
     expect(res.send).toHaveBeenCalledWith('error')
   })
 
+  test('catch 块日志脱敏：param 字段不含 PII', async () => {
+    // 模拟 createOrderPage 抛错触发 catch 块日志
+    verifySign.mockReturnValue(true)
+    queryOrder.mockResolvedValue({ tradeStatus: 'TRADE_SUCCESS', tradeNo: 'ZPAY123', money: '29.90' })
+    createOrderPage.mockRejectedValue(new Error('boom'))
+
+    // PII 三个典型字段：email / name / discountCode
+    const PII_EMAIL = 'attacker@example.com'
+    const PII_NAME = '真实姓名'
+    const PII_CODE = 'INTERNAL-CODE-12345'
+    const paramValue = JSON.stringify({ email: PII_EMAIL, name: PII_NAME, discountCode: PII_CODE })
+
+    const req = {
+      method: 'POST',
+      body: {
+        trade_no: 'ZPAY123',
+        out_trade_no: 'TEST123',
+        name: '基础版',
+        money: '29.90',
+        type: 'wxpay',
+        trade_status: 'TRADE_SUCCESS',
+        param: paramValue,
+        sign_type: 'MD5',
+        sign: 'realsign'
+      }
+    }
+    const res = mkRes()
+
+    const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      await handler(req, res)
+
+      // 找到含 '[notify] 回调处理异常' 的日志
+      const errCall = errorSpy.mock.calls.find(args =>
+        typeof args[0] === 'string' && args[0].includes('[notify] 回调处理异常')
+      )
+      expect(errCall).toBeDefined()
+      const logged = errCall[1]
+
+      // param 字段必须脱敏（不能含原始 PII）
+      expect(logged.param).toBe('[REDACTED]')
+      // paramLength 保留供运营参考
+      expect(logged.paramLength).toBe(paramValue.length)
+      // PII 字符串不能以任何形式出现在整个日志对象中
+      const serialized = JSON.stringify(logged)
+      expect(serialized).not.toContain(PII_EMAIL)
+      expect(serialized).not.toContain(PII_NAME)
+      expect(serialized).not.toContain(PII_CODE)
+      // 系统字段保留
+      expect(logged.outTradeNo).toBe('TEST123')
+      expect(logged.tradeNo).toBe('ZPAY123')
+      expect(logged.amount).toBe('29.90')
+    } finally {
+      errorSpy.mockRestore()
+    }
+  })
+
+  test('catch 块日志脱敏：超长 param (>200 字符) 标 [REDACTED:long]', async () => {
+    verifySign.mockReturnValue(true)
+    queryOrder.mockResolvedValue({ tradeStatus: 'TRADE_SUCCESS', tradeNo: 'ZPAY123', money: '29.90' })
+    createOrderPage.mockRejectedValue(new Error('boom'))
+
+    // 构造 >200 字符的 param（含 50 个 PII 重复）
+    const padding = 'A'.repeat(250)
+    const paramValue = JSON.stringify({ email: padding + '@x.com', name: 'x', discountCode: 'x' })
+
+    const req = {
+      method: 'POST',
+      body: {
+        trade_no: 'ZPAY123',
+        out_trade_no: 'LONG_PARAM_TEST',
+        name: '基础版',
+        money: '29.90',
+        type: 'wxpay',
+        trade_status: 'TRADE_SUCCESS',
+        param: paramValue,
+        sign_type: 'MD5',
+        sign: 'realsign'
+      }
+    }
+    const res = mkRes()
+
+    const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      await handler(req, res)
+
+      const errCall = errorSpy.mock.calls.find(args =>
+        typeof args[0] === 'string' && args[0].includes('[notify] 回调处理异常')
+      )
+      expect(errCall).toBeDefined()
+      const logged = errCall[1]
+
+      // 超长 param 用 [REDACTED:long] 标记
+      expect(logged.param).toBe('[REDACTED:long]')
+      // paramLength 仍记录真实长度（供运营发现异常）
+      expect(logged.paramLength).toBeGreaterThan(200)
+      // padding 内容不能漏出
+      expect(JSON.stringify(logged)).not.toContain(padding)
+    } finally {
+      errorSpy.mockRestore()
+    }
+  })
+
   test('Notion 写入失败（createOrderPage 返回 null）仍返回 success（死信兜底）', async () => {
     verifySign.mockReturnValue(true)
     queryOrder.mockResolvedValue({ tradeStatus: 'TRADE_SUCCESS', tradeNo: 'ZPAY123', money: '29.90' })
