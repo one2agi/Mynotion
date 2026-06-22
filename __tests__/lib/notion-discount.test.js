@@ -27,7 +27,7 @@ describe('优惠码查询', () => {
         properties: {
           '优惠码': { rich_text: [{ plain_text: 'SAVE10' }] },
           '优惠金额': { number: 10 },
-          '状态': { status: { name: 'active' } }
+          '选择': { status: { name: 'active' } }
         }
       }]
     })
@@ -62,7 +62,7 @@ describe('优惠码查询', () => {
           properties: {
             '优惠码': { rich_text: [{ plain_text: 'SAVE10' }] },
             '优惠金额': { number: 10 },
-            '状态': { status: { name: 'active' } }
+            '选择': { status: { name: 'active' } }
           }
         }]
       })
