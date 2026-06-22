@@ -71,6 +71,53 @@ describe('Notion 订单写入', () => {
     expect(callArgs.properties).not.toHaveProperty('源链接')
   })
 
+  test('创建订单页时传入 productLink，写入发送产品链接字段', async () => {
+    const { createOrderPage } = require('@/lib/notion-order')
+
+    mockNotionClient.pages.create.mockResolvedValue({ id: 'new-page-id-456' })
+    mockNotionClient.databases.query.mockResolvedValue({ results: [] })
+
+    const productLink = 'https://faiz-world.notion.site/OS-8124f4cfc8e282e1b10381cfeadbdb86?duplicate=true&token=abcd1234'
+
+    const pageId = await createOrderPage({
+      productName: 'Starter Pro',
+      outTradeNo: 'WITH_LINK_TEST',
+      email: 'link@test.com',
+      name: '链接测试',
+      amount: 99,
+      paidAt: '2026-06-22T10:00:00.000Z',
+      productLink
+    }, mockNotionClient)
+
+    expect(pageId).toBe('new-page-id-456')
+    expect(mockNotionClient.pages.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        properties: expect.objectContaining({
+          '发送产品链接': { url: productLink }
+        })
+      })
+    )
+  })
+
+  test('productLink 为空字符串时，不写入发送产品链接字段', async () => {
+    const { createOrderPage } = require('@/lib/notion-order')
+
+    mockNotionClient.pages.create.mockResolvedValue({ id: 'new-page-id-789' })
+    mockNotionClient.databases.query.mockResolvedValue({ results: [] })
+
+    await createOrderPage({
+      productName: 'Starter Basic',
+      outTradeNo: 'NO_LINK_TEST',
+      email: 'nolink@test.com',
+      name: '无链接测试',
+      amount: 29.9,
+      productLink: ''
+    }, mockNotionClient)
+
+    const callArgs = mockNotionClient.pages.create.mock.calls[0][0]
+    expect(callArgs.properties).not.toHaveProperty('发送产品链接')
+  })
+
   test('幂等性：重复订单号不重复创建', async () => {
     const { createOrderPage } = require('@/lib/notion-order')
 

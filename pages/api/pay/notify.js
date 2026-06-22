@@ -23,6 +23,7 @@
  */
 import { verifySign, queryOrder as queryZpayOrder, mapTradeStatus } from '@/lib/zpay'
 import { createOrderPage } from '@/lib/notion-order'
+import { lookupUnusedToken, markTokenAsUsed } from '@/lib/notion-token'
 
 export default async function handler(req, res) {
   // Z-Pay 实际用 GET 调 notify（所有参数在 query string），不是 POST
@@ -107,8 +108,13 @@ export default async function handler(req, res) {
       return res.status(200).send('error')
     }
 
+    // 从 Token 数据库取出一个未使用的 token
+    const tokenInfo = await lookupUnusedToken()
+    const deliveryLinkBase = process.env.STARTER_DELIVERY_LINK_BASE || 'https://faiz-world.notion.site/OS-8124f4cfc8e282e1b10381cfeadbdb86?duplicate=true&token='
+    const productLink = tokenInfo ? deliveryLinkBase + tokenInfo.token : ''
+
     // 写入 Notion
-    await createOrderPage({
+    const pageId = await createOrderPage({
       productName: params.name,
       outTradeNo,
       tradeNo: params.trade_no,
@@ -117,8 +123,14 @@ export default async function handler(req, res) {
       discountCode: extra.discountCode || '',
       amount: paidAmount, // 来自服务端二次查询的权威金额（zpayResult.money）
       status: 'paid',
-      paidAt: new Date().toISOString()
+      paidAt: new Date().toISOString(),
+      productLink
     })
+
+    // 订单写入成功后，将 Token 标为已使用（失败不影响业务，只多消耗一个 token）
+    if (pageId && tokenInfo) {
+      await markTokenAsUsed(tokenInfo.pageId)
+    }
 
     res.setHeader('Content-Type', 'text/plain; charset=utf-8')
     return res.status(200).send('success')
