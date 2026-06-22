@@ -20,7 +20,7 @@ describe('Dead Letter Webhook 推送器', () => {
       DEAD_LETTER_WEBHOOK_TOKEN: process.env.DEAD_LETTER_WEBHOOK_TOKEN
     }
     // 默认配置：env 都设上，让测试走正常的 webhook 推送路径
-    process.env.DEAD_LETTER_WEBHOOK_URL = 'https://faiz.one2agi.com/hooks/wake'
+    process.env.DEAD_LETTER_WEBHOOK_URL = 'https://faiz.one2agi.com/hooks/agent'
     process.env.DEAD_LETTER_WEBHOOK_TOKEN = 'test-token-abc'
     consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {})
   })
@@ -54,14 +54,15 @@ describe('Dead Letter Webhook 推送器', () => {
 
     expect(global.fetch).toHaveBeenCalledTimes(1)
     const [url, opts] = global.fetch.mock.calls[0]
-    expect(url).toBe('https://faiz.one2agi.com/hooks/wake')
+    expect(url).toBe('https://faiz.one2agi.com/hooks/agent')
     expect(opts.method).toBe('POST')
     expect(opts.headers['Authorization']).toBe('Bearer test-token-abc')
     expect(opts.headers['Content-Type']).toBe('application/json')
     const body = JSON.parse(opts.body)
-    expect(body.mode).toBe('now')
-    // text 字段是 entry 的 JSON 序列化
-    expect(JSON.parse(body.text)).toEqual(entry)
+    expect(body.message).toContain('TEST_WEBHOOK_001')
+    expect(body.name).toBe('notion-payment-dead-letter')
+    expect(body.accountId).toBe('xingchen')
+    expect(body.target).toBe('qqbot:c2c:c6366d4f6511a4538de7abdf67c8483b')
   })
 
   test('重试：5xx → 共 3 次（1 初始 + 2 retry），backoff ≥ 200+400ms', async () => {
@@ -179,10 +180,9 @@ describe('Dead Letter Webhook 推送器', () => {
     expect(global.fetch).toHaveBeenCalledTimes(1)
     // 降级 body 应只含安全字段
     const body = JSON.parse(global.fetch.mock.calls[0][1].body)
-    const text = JSON.parse(body.text)
-    expect(text.outTradeNo).toBe('CIRCULAR')
-    expect(text.error).toBe('x')
-    expect(text.serializationError).toBeDefined()
-    expect(text).not.toHaveProperty('orderData') // 完整 entry 没发出去
+    expect(body.message).toContain('CIRCULAR')
+    expect(body.name).toBe('notion-payment-dead-letter')
+    expect(body.accountId).toBe('xingchen')
+    expect(body.target).toBe('qqbot:c2c:c6366d4f6511a4538de7abdf67c8483b')
   })
 })
