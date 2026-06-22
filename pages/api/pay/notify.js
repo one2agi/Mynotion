@@ -112,6 +112,9 @@ export default async function handler(req, res) {
     const tokenInfo = await lookupUnusedToken()
     const deliveryLinkBase = process.env.STARTER_DELIVERY_LINK_BASE || 'https://faiz-world.notion.site/OS-8124f4cfc8e282e1b10381cfeadbdb86?duplicate=true&token='
     const productLink = tokenInfo ? deliveryLinkBase + tokenInfo.token : ''
+    if (!tokenInfo) {
+      console.warn('[notify] Token 已耗尽，请及时补充', { outTradeNo })
+    }
 
     // 写入 Notion
     const pageId = await createOrderPage({
