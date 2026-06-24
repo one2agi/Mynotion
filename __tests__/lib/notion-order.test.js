@@ -2,7 +2,7 @@
 
 const mockNotionClient = {
   databases: { query: jest.fn(), create: jest.fn() },
-  pages: { create: jest.fn() }
+  pages: { create: jest.fn(), update: jest.fn() }
 }
 
 jest.mock('@notionhq/client', () => ({
@@ -135,6 +135,72 @@ describe('Notion 订单写入', () => {
     const pageId = await createOrderPage(orderData, mockNotionClient)
     // 应该返回已存在的 pageId，不调用 create
     expect(pageId).toBe('existing-page-id')
+    expect(mockNotionClient.pages.create).not.toHaveBeenCalled()
+  })
+
+  // === 重试场景：上次 lookupUnusedToken 失败的订单，Z-Pay 重试时拿到 token ===
+  // createOrderPage 命中幂等时必须补写 productLink，否则订单永远没链接
+  // 来源：2026-06-24 NN1782277180228PZI1KW 调试发现
+  test('幂等命中 + 这次带 productLink → pages.update 补写发送产品链接', async () => {
+    const { createOrderPage } = require('@/lib/notion-order')
+
+    mockNotionClient.databases.query.mockResolvedValue({
+      results: [{
+        id: 'existing-page-id',
+        properties: {
+          '发送产品链接': { url: null }  // 已存在但没链接
+        }
+      }]
+    })
+
+    const productLink = 'https://faiz-world.notion.site/OS-8124f4cfc8e282e1b10381cfeadbdb86?duplicate=true&token=abcd1234'
+
+    const pageId = await createOrderPage({
+      productName: 'Starter Pro',
+      outTradeNo: 'IDEMPOTENT_RETRY',
+      email: 'a@b.com',
+      name: '张三',
+      amount: 29.9,
+      paidAt: '2026-06-24T13:05:00.000Z',
+      productLink  // ← 这次带了
+    }, mockNotionClient)
+
+    expect(pageId).toBe('existing-page-id')
+    // 关键：必须调 pages.update 把 productLink 补上
+    expect(mockNotionClient.pages.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        page_id: 'existing-page-id',
+        properties: expect.objectContaining({
+          '发送产品链接': { url: productLink }
+        })
+      })
+    )
+    // 不能调 pages.create（订单已存在）
+    expect(mockNotionClient.pages.create).not.toHaveBeenCalled()
+  })
+
+  test('幂等命中 + 这次 productLink 为空 → 不调 pages.update（保持现有行为）', async () => {
+    const { createOrderPage } = require('@/lib/notion-order')
+
+    mockNotionClient.databases.query.mockResolvedValue({
+      results: [{
+        id: 'existing-page-id',
+        properties: { '发送产品链接': { url: null } }
+      }]
+    })
+
+    const pageId = await createOrderPage({
+      productName: 'Starter Pro',
+      outTradeNo: 'IDEMPOTENT_NO_LINK',
+      email: 'a@b.com',
+      name: '张三',
+      amount: 29.9,
+      productLink: ''  // ← 这次没带
+    }, mockNotionClient)
+
+    expect(pageId).toBe('existing-page-id')
+    // 没带 productLink 时，不调 update（避免空值覆盖）
+    expect(mockNotionClient.pages.update).not.toHaveBeenCalled()
     expect(mockNotionClient.pages.create).not.toHaveBeenCalled()
   })
 

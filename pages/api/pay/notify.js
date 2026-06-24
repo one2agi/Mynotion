@@ -24,6 +24,47 @@
 import { verifySign, queryOrder as queryZpayOrder, mapTradeStatus } from '@/lib/zpay'
 import { createOrderPage } from '@/lib/notion-order'
 import { lookupUnusedToken, markTokenAsUsed } from '@/lib/notion-token'
+import { notifyDeadLetter } from '@/lib/dead-letter'
+import { Client } from '@notionhq/client'
+
+/**
+ * Token 查询失败时累计重试次数的阈值
+ * 达到此值时推死信 webhook 给运营（避免 Z-Pay 永久重试时订单永远卡在"无链接"状态）
+ * 来源：2026-06-24 NN1782277180228PZI1KW 缺链接事故
+ */
+const TOKEN_RETRY_THRESHOLD = 5
+
+/**
+ * 原子地"读 + 增"订单的"重试次数"属性，返回新次数
+ * 用法：const newCount = await incrementRetryCount(pageId)
+ *
+ * 设计说明：
+ * - 用 pageId 直接 update，避免 race condition
+ * - 用 withRetry 的兄弟 helper 包装（直接用 withRetry 即可）
+ * - 失败时返回 0，不阻塞主流程（重试计数只是辅助信号，丢失不影响业务）
+ *
+ * @param {string} pageId - 订单的 Notion page ID
+ * @param {string} outTradeNo - 商户订单号（用于日志）
+ * @returns {Promise<number>} 新的重试次数
+ */
+async function incrementRetryCount(pageId, outTradeNo) {
+  if (!pageId) return 0
+  const notion = new Client({ auth: process.env.NOTION_TOKEN })
+  try {
+    const order = await notion.pages.retrieve({ page_id: pageId })
+    const currentCount = order.properties?.['重试次数']?.number || 0
+    const newCount = currentCount + 1
+    await notion.pages.update({
+      page_id: pageId,
+      properties: { '重试次数': { number: newCount } }
+    })
+    return newCount
+  } catch (e) {
+    // 计数失败不能阻塞主流程
+    console.error('[notify] 重试计数失败', { outTradeNo, error: e.message })
+    return 0
+  }
+}
 
 export default async function handler(req, res) {
   // Z-Pay 实际用 GET 调 notify（所有参数在 query string），不是 POST
@@ -130,6 +171,31 @@ export default async function handler(req, res) {
     // 订单写入成功后，将 Token 标为已使用（失败不影响业务，只多消耗一个 token）
     if (pageId && tokenInfo) {
       await markTokenAsUsed(tokenInfo.pageId)
+    }
+
+    // === 严格模式（2026-06-24）：任何 token 失败都视为可重试错误 ===
+    // 来源：NN1782277180228PZI1KW 缺链接事故
+    // 行为：返 'error' 让 Z-Pay 重试；累计 5 次失败后推死信 webhook
+    if (!tokenInfo) {
+      const retryCount = await incrementRetryCount(pageId, outTradeNo)
+      console.warn('[notify] Token 查询失败', { outTradeNo, retryCount })
+      if (retryCount >= TOKEN_RETRY_THRESHOLD) {
+        // 推死信 webhook（用 lib/dead-letter 的相同模板，含 QQ ID）
+        await notifyDeadLetter({
+          timestamp: new Date().toISOString(),
+          outTradeNo,
+          orderData: {
+            email: extra.email || '',
+            name: extra.name || '',
+            productName: params.name,
+            amount: paidAmount
+          },
+          error: `Token 查询失败 ${retryCount} 次，请检查 Notion Token DB`,
+          stack: ''
+        })
+      }
+      res.setHeader('Content-Type', 'text/plain; charset=utf-8')
+      return res.status(200).send('error')
     }
 
     res.setHeader('Content-Type', 'text/plain; charset=utf-8')

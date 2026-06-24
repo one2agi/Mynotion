@@ -19,9 +19,18 @@ jest.mock('@/lib/zpay', () => {
 jest.mock('@/lib/notion-order', () => ({
   createOrderPage: jest.fn()
 }))
+jest.mock('@/lib/notion-token', () => ({
+  lookupUnusedToken: jest.fn(),
+  markTokenAsUsed: jest.fn()
+}))
+jest.mock('@/lib/dead-letter', () => ({
+  notifyDeadLetter: jest.fn()
+}))
 
 const { verifySign, queryOrder } = require('@/lib/zpay')
 const { createOrderPage } = require('@/lib/notion-order')
+const { lookupUnusedToken, markTokenAsUsed } = require('@/lib/notion-token')
+const { notifyDeadLetter } = require('@/lib/dead-letter')
 
 // Factory for mock response object
 function mkRes() {
@@ -70,6 +79,8 @@ describe('POST /api/pay/notify', () => {
   test('支付成功写入 Notion 返回 success', async () => {
     verifySign.mockReturnValue(true)
     queryOrder.mockResolvedValue({ tradeStatus: '1', tradeNo: 'ZPAY123', money: '29.90' })  // Z-Pay status=1
+    lookupUnusedToken.mockResolvedValue({ token: 'mock-token-abc', pageId: 'mock-token-page' })
+    markTokenAsUsed.mockResolvedValue(true)
     createOrderPage.mockResolvedValue('new-page-id')
 
     const req = {
@@ -101,8 +112,10 @@ describe('POST /api/pay/notify', () => {
       email: 'test@example.com',
       name: '张三',
       discountCode: 'SAVE10',
-      status: 'paid'
+      status: 'paid',
+      productLink: expect.stringContaining('mock-token-abc')
     }))
+    expect(markTokenAsUsed).toHaveBeenCalledWith('mock-token-page')
   })
 
   test('Z-Pay 订单状态非成功也返回 success', async () => {
@@ -175,6 +188,8 @@ describe('POST /api/pay/notify', () => {
       tradeNo: 'ZPAY123',
       money: '29.90'  // 权威金额来自服务端二次查询
     })
+    lookupUnusedToken.mockResolvedValue({ token: 'mock-token', pageId: 'mock-token-page' })
+    markTokenAsUsed.mockResolvedValue(true)
     createOrderPage.mockResolvedValue('new-page-id')
 
     const req = {
@@ -333,10 +348,14 @@ describe('POST /api/pay/notify', () => {
     }
   })
 
-  test('Notion 写入失败（createOrderPage 返回 null）仍返回 success（死信兜底）', async () => {
+  // === 行为变更（2026-06-24）：任何失败路径都返回 'error' 让 Z-Pay 重试 ===
+  // 旧行为：createOrderPage 返回 null → 死信已 push → 返回 'success'（运营兜底）
+  // 新行为：返回 'error' 让 Z-Pay 重试。如果 Notion 真的长期挂，Z-Pay 重试耗尽后运营收死信
+  test('Notion 写入失败（createOrderPage 返回 null）+ token 缺失 → 返回 error（让 Z-Pay 重试）', async () => {
     verifySign.mockReturnValue(true)
     queryOrder.mockResolvedValue({ tradeStatus: '1', tradeNo: 'ZPAY123', money: '29.90' })  // Z-Pay status=1
-    // 新行为：createOrderPage 不抛错，返回 null（已写死信）
+    lookupUnusedToken.mockResolvedValue(null)  // token 查不到
+    // createOrderPage 不抛错，返回 null（已写死信）
     createOrderPage.mockResolvedValue(null)
 
     const req = {
@@ -357,8 +376,34 @@ describe('POST /api/pay/notify', () => {
 
     await handler(req, res)
 
-    expect(res.send).toHaveBeenCalledWith('success')
+    // 严格模式：返回 'error' 让 Z-Pay 重试
+    expect(res.send).toHaveBeenCalledWith('error')
     expect(createOrderPage).toHaveBeenCalled()
+  })
+
+  // === 2026-06-24 新行为：lookupUnusedToken 失败 → 视为可重试错误 ===
+  // 旧行为：写入无链接的订单，返 'success'（订单进入"幽灵"状态）
+  // 新行为：返 'error' 让 Z-Pay 重试，5 次失败后推死信 webhook
+  // 来源：NN1782277180228PZI1KW 缺链接事故
+  test('lookupUnusedToken 返回 null → notify 返回 error（让 Z-Pay 重试）', async () => {
+    verifySign.mockReturnValue(true)
+    queryOrder.mockResolvedValue({ tradeStatus: '1', tradeNo: 'ZPAY123', money: '29.90' })  // Z-Pay status=1
+    lookupUnusedToken.mockResolvedValue(null)  // ← token 查不到
+    createOrderPage.mockResolvedValue('new-page-id')
+
+    const req = mkParamReq(JSON.stringify({ email: 'a@b.com', name: '张三', discountCode: '' }))
+    const res = mkRes()
+
+    await handler(req, res)
+
+    // 关键：必须返回 'error'（不是 'success'），让 Z-Pay 重试
+    expect(res.send).toHaveBeenCalledWith('error')
+    // 仍然调 createOrderPage 写订单（写"无链接"订单，留个 record）
+    expect(createOrderPage).toHaveBeenCalledWith(expect.objectContaining({
+      productLink: ''  // productLink 是空字符串
+    }))
+    // markTokenAsUsed 不被调（因为 tokenInfo 是 null）
+    expect(markTokenAsUsed).not.toHaveBeenCalled()
   })
 
   test('非法请求方法 (PUT/DELETE) 返回 405', async () => {
@@ -536,6 +581,8 @@ describe('GET /api/pay/notify（Z-Pay 实际调用方式）', () => {
     verifySign.mockReturnValue(true)
     // 金额必须与 req.query.money 一致（0.10），否则 amount 二次校验失败 → 'error'
     queryOrder.mockResolvedValue({ tradeStatus: '1', tradeNo: '4200003131202606218754328861', money: '0.10' })
+    lookupUnusedToken.mockResolvedValue({ token: 'mock-token', pageId: 'mock-token-page' })
+    markTokenAsUsed.mockResolvedValue(true)
     createOrderPage.mockResolvedValue('new-page-id')
 
     const req = {
