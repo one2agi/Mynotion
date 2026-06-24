@@ -17,7 +17,8 @@ jest.mock('@/lib/zpay', () => {
   }
 })
 jest.mock('@/lib/notion-order', () => ({
-  createOrderPage: jest.fn()
+  createOrderPage: jest.fn(),
+  incrementRetryCount: jest.fn()
 }))
 jest.mock('@/lib/notion-token', () => ({
   lookupUnusedToken: jest.fn(),
@@ -28,7 +29,7 @@ jest.mock('@/lib/dead-letter', () => ({
 }))
 
 const { verifySign, queryOrder } = require('@/lib/zpay')
-const { createOrderPage } = require('@/lib/notion-order')
+const { createOrderPage, incrementRetryCount } = require('@/lib/notion-order')
 const { lookupUnusedToken, markTokenAsUsed } = require('@/lib/notion-token')
 const { notifyDeadLetter } = require('@/lib/dead-letter')
 
@@ -390,6 +391,7 @@ describe('POST /api/pay/notify', () => {
     queryOrder.mockResolvedValue({ tradeStatus: '1', tradeNo: 'ZPAY123', money: '29.90' })  // Z-Pay status=1
     lookupUnusedToken.mockResolvedValue(null)  // ← token 查不到
     createOrderPage.mockResolvedValue('new-page-id')
+    incrementRetryCount.mockResolvedValue({ newCount: 1, webhookPushed: false })  // 模拟第 1 次
 
     const req = mkParamReq(JSON.stringify({ email: 'a@b.com', name: '张三', discountCode: '' }))
     const res = mkRes()
@@ -404,6 +406,45 @@ describe('POST /api/pay/notify', () => {
     }))
     // markTokenAsUsed 不被调（因为 tokenInfo 是 null）
     expect(markTokenAsUsed).not.toHaveBeenCalled()
+  })
+
+  // === 2026-06-25：5 次阈值后返 'success'（"放弃治疗"模式）===
+  // 设计：1-4 次返 'error' 让 Z-Pay 重试，第 5 次推 webhook + 返 'success' 告诉 Z-Pay 停
+  // 原因：避免"鬼打墙"循环（Z-Pay 一直重试但我们一直返 'error'）
+  test('lookupUnusedToken 失败 + count=5（达阈值）→ 推 webhook + 返 success（停止重试）', async () => {
+    verifySign.mockReturnValue(true)
+    queryOrder.mockResolvedValue({ tradeStatus: '1', tradeNo: 'ZPAY123', money: '29.90' })
+    lookupUnusedToken.mockResolvedValue(null)
+    createOrderPage.mockResolvedValue('new-page-id')
+    incrementRetryCount.mockResolvedValue({ newCount: 5, webhookPushed: false })  // 第 5 次
+
+    const req = mkParamReq(JSON.stringify({ email: 'a@b.com', name: '张三' }))
+    const res = mkRes()
+
+    await handler(req, res)
+
+    // 关键：返 'success'，让 Z-Pay 停止重试（承认失败）
+    expect(res.send).toHaveBeenCalledWith('success')
+    // 仍推 webhook（让运营知道）
+    expect(notifyDeadLetter).toHaveBeenCalledTimes(1)
+  })
+
+  test('lookupUnusedToken 失败 + count=4（未达阈值）→ 推 webhook + 返 error（继续重试）', async () => {
+    verifySign.mockReturnValue(true)
+    queryOrder.mockResolvedValue({ tradeStatus: '1', tradeNo: 'ZPAY123', money: '29.90' })
+    lookupUnusedToken.mockResolvedValue(null)
+    createOrderPage.mockResolvedValue('new-page-id')
+    incrementRetryCount.mockResolvedValue({ newCount: 4, webhookPushed: false })  // 第 4 次
+
+    const req = mkParamReq(JSON.stringify({ email: 'a@b.com', name: '张三' }))
+    const res = mkRes()
+
+    await handler(req, res)
+
+    // 不到 5 次：不推 webhook
+    expect(notifyDeadLetter).not.toHaveBeenCalled()
+    // 不到 5 次：返 'error' 继续重试
+    expect(res.send).toHaveBeenCalledWith('error')
   })
 
   test('非法请求方法 (PUT/DELETE) 返回 405', async () => {

@@ -192,8 +192,14 @@ export default async function handler(req, res) {
         // 来源：2026-06-24 production log 显示 count=5、6 都触发了 webhook
         await markWebhookPushed(pageId, outTradeNo)
       }
+      // === "放弃治疗" 模式（2026-06-25）===
+      // 达到阈值后返 'success' 让 Z-Pay 停止重试（避免无限循环）
+      // 1-4 次：返 'error' 让 Z-Pay 重试
+      // 第 5 次：推 webhook + 返 'success'（承认"放弃"）
+      // 原因：Z-Pay 只重试 3-5 次，如果一直返 'error' 会"鬼打墙"
+      const giveUp = newCount >= TOKEN_RETRY_THRESHOLD
       res.setHeader('Content-Type', 'text/plain; charset=utf-8')
-      return res.status(200).send('error')
+      return res.status(200).send(giveUp ? 'success' : 'error')
     }
 
     res.setHeader('Content-Type', 'text/plain; charset=utf-8')
