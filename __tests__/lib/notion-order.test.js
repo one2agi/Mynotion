@@ -2,7 +2,7 @@
 
 const mockNotionClient = {
   databases: { query: jest.fn(), create: jest.fn() },
-  pages: { create: jest.fn(), update: jest.fn() }
+  pages: { create: jest.fn(), update: jest.fn(), retrieve: jest.fn() }
 }
 
 jest.mock('@notionhq/client', () => ({
@@ -202,6 +202,82 @@ describe('Notion 订单写入', () => {
     // 没带 productLink 时，不调 update（避免空值覆盖）
     expect(mockNotionClient.pages.update).not.toHaveBeenCalled()
     expect(mockNotionClient.pages.create).not.toHaveBeenCalled()
+  })
+
+  // === 2026-06-24：incrementRetryCount 防 webhook 重复推送 ===
+  // 来源：production log 显示 Z-Pay 重试 6 次，count=5、6 都推了 webhook（重复）
+  // 解决：5 次推过之后在订单上标记 webhook_pushed=true，下次不再推
+  describe('incrementRetryCount', () => {
+    beforeEach(() => {
+      // 不在 createOrderPage 的 beforeEach 重置（每个 describe 独立）
+    })
+
+    test('返回 { newCount, webhookPushed }', async () => {
+      const { incrementRetryCount } = require('@/lib/notion-order')
+
+      mockNotionClient.pages.retrieve.mockResolvedValue({
+        properties: {
+          '重试次数': { number: 4 },
+          'webhook_pushed': { checkbox: false }
+        }
+      })
+      mockNotionClient.pages.update.mockResolvedValue({ id: 'page-1' })
+
+      const result = await incrementRetryCount('page-1', 'TEST123', mockNotionClient)
+
+      expect(result).toEqual({ newCount: 5, webhookPushed: false })
+      expect(mockNotionClient.pages.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          page_id: 'page-1',
+          properties: expect.objectContaining({
+            '重试次数': { number: 5 }
+          })
+        })
+      )
+    })
+
+    test('webhook_pushed 已经是 true → 返回 webhookPushed: true（不重复推）', async () => {
+      const { incrementRetryCount } = require('@/lib/notion-order')
+
+      mockNotionClient.pages.retrieve.mockResolvedValue({
+        properties: {
+          '重试次数': { number: 5 },
+          'webhook_pushed': { checkbox: true }  // ← 已经推过
+        }
+      })
+      mockNotionClient.pages.update.mockResolvedValue({ id: 'page-1' })
+
+      const result = await incrementRetryCount('page-1', 'TEST123', mockNotionClient)
+
+      // 仍然增加 count（用于观察），但返回 webhookPushed: true 让调用方知道不要再推
+      expect(result).toEqual({ newCount: 6, webhookPushed: true })
+    })
+
+    test('webhook_pushed 属性不存在（首次失败）→ 返回 webhookPushed: false（视为未推）', async () => {
+      const { incrementRetryCount } = require('@/lib/notion-order')
+
+      mockNotionClient.pages.retrieve.mockResolvedValue({
+        properties: {
+          '重试次数': { number: 2 }
+          // webhook_pushed 字段不存在
+        }
+      })
+      mockNotionClient.pages.update.mockResolvedValue({ id: 'page-1' })
+
+      const result = await incrementRetryCount('page-1', 'TEST123', mockNotionClient)
+
+      expect(result).toEqual({ newCount: 3, webhookPushed: false })
+    })
+
+    test('pageId 为空 → 返回 { newCount: 0, webhookPushed: false }，不调 Notion', async () => {
+      const { incrementRetryCount } = require('@/lib/notion-order')
+
+      const result = await incrementRetryCount(null, 'TEST123', mockNotionClient)
+
+      expect(result).toEqual({ newCount: 0, webhookPushed: false })
+      expect(mockNotionClient.pages.retrieve).not.toHaveBeenCalled()
+      expect(mockNotionClient.pages.update).not.toHaveBeenCalled()
+    })
   })
 
   test('retry：databases.query 失败 2 次后成功', async () => {

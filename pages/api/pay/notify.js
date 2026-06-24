@@ -22,7 +22,7 @@
  * --------------------------------------------------
  */
 import { verifySign, queryOrder as queryZpayOrder, mapTradeStatus } from '@/lib/zpay'
-import { createOrderPage } from '@/lib/notion-order'
+import { createOrderPage, incrementRetryCount } from '@/lib/notion-order'
 import { lookupUnusedToken, markTokenAsUsed } from '@/lib/notion-token'
 import { notifyDeadLetter } from '@/lib/dead-letter'
 import { Client } from '@notionhq/client'
@@ -35,34 +35,22 @@ import { Client } from '@notionhq/client'
 const TOKEN_RETRY_THRESHOLD = 5
 
 /**
- * 原子地"读 + 增"订单的"重试次数"属性，返回新次数
- * 用法：const newCount = await incrementRetryCount(pageId)
- *
- * 设计说明：
- * - 用 pageId 直接 update，避免 race condition
- * - 用 withRetry 的兄弟 helper 包装（直接用 withRetry 即可）
- * - 失败时返回 0，不阻塞主流程（重试计数只是辅助信号，丢失不影响业务）
+ * 在订单上标记"webhook 已推送"，防止 Z-Pay 后续重试时重复推送
+ * 设计：如果 mark 失败，下次重试还会推一次（webhook 端应该幂等 / 去重）
  *
  * @param {string} pageId - 订单的 Notion page ID
  * @param {string} outTradeNo - 商户订单号（用于日志）
- * @returns {Promise<number>} 新的重试次数
  */
-async function incrementRetryCount(pageId, outTradeNo) {
-  if (!pageId) return 0
+async function markWebhookPushed(pageId, outTradeNo) {
+  if (!pageId) return
   const notion = new Client({ auth: process.env.NOTION_TOKEN })
   try {
-    const order = await notion.pages.retrieve({ page_id: pageId })
-    const currentCount = order.properties?.['重试次数']?.number || 0
-    const newCount = currentCount + 1
     await notion.pages.update({
       page_id: pageId,
-      properties: { '重试次数': { number: newCount } }
+      properties: { 'webhook_pushed': { checkbox: true } }
     })
-    return newCount
   } catch (e) {
-    // 计数失败不能阻塞主流程
-    console.error('[notify] 重试计数失败', { outTradeNo, error: e.message })
-    return 0
+    console.error('[notify] 标记 webhook_pushed 失败', { outTradeNo, error: e.message })
   }
 }
 
@@ -175,11 +163,11 @@ export default async function handler(req, res) {
 
     // === 严格模式（2026-06-24）：任何 token 失败都视为可重试错误 ===
     // 来源：NN1782277180228PZI1KW 缺链接事故
-    // 行为：返 'error' 让 Z-Pay 重试；累计 5 次失败后推死信 webhook
+    // 行为：返 'error' 让 Z-Pay 重试；累计 5 次失败后推死信 webhook（仅推一次，防重复）
     if (!tokenInfo) {
-      const retryCount = await incrementRetryCount(pageId, outTradeNo)
-      console.warn('[notify] Token 查询失败', { outTradeNo, retryCount })
-      if (retryCount >= TOKEN_RETRY_THRESHOLD) {
+      const { newCount, webhookPushed } = await incrementRetryCount(pageId, outTradeNo)
+      console.warn('[notify] Token 查询失败', { outTradeNo, newCount, webhookPushed })
+      if (newCount >= TOKEN_RETRY_THRESHOLD && !webhookPushed) {
         // 推死信 webhook（用 lib/dead-letter 的相同模板，含 QQ ID）
         await notifyDeadLetter({
           timestamp: new Date().toISOString(),
@@ -190,9 +178,12 @@ export default async function handler(req, res) {
             productName: params.name,
             amount: paidAmount
           },
-          error: `Token 查询失败 ${retryCount} 次，请检查 Notion Token DB`,
+          error: `Token 查询失败 ${newCount} 次，请检查 Notion Token DB`,
           stack: ''
         })
+        // 标记 webhook_pushed=true，防止 Z-Pay 后续重试时重复推送
+        // 来源：2026-06-24 production log 显示 count=5、6 都触发了 webhook
+        await markWebhookPushed(pageId, outTradeNo)
       }
       res.setHeader('Content-Type', 'text/plain; charset=utf-8')
       return res.status(200).send('error')
