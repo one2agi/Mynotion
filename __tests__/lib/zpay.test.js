@@ -104,11 +104,13 @@ describe('Z-Pay fetch 错误处理', () => {
 
   test('queryOrder 正常返回', async () => {
     // Z-Pay 真实响应：查询 API 用 status (Int 0/1) 不是 trade_status (String)
+    // code: 1 表示接口调用成功（与 create API 一致）
     global.fetch.mockResolvedValueOnce({
       ok: true,
       status: 200,
       json: async () => ({
-        status: 1,                              // ← 真实字段
+        code: 1,                               // ← Z-Pay 所有成功响应都有 code:1
+        status: 1,                             // ← 真实字段
         trade_no: 'ZPAY123',
         money: '1.00',
         name: '测试商品',
@@ -229,5 +231,19 @@ describe('Z-Pay fetch 错误处理', () => {
         param: '{}'
       })
     ).rejects.toThrow('余额不足')
+  })
+
+  // === TDD: queryOrder 应与 createNativeOrder 保持一致 ===
+  // Z-Pay 错误响应示例：{ code: 0, msg: '订单不存在' }
+  // 修复前：queryOrder 会静默返回 undefined 字段（bug）
+  // 修复后：应抛错，与 createNativeOrder 行为一致
+  test('queryOrder 业务失败（code !== 1）抛错', async () => {
+    global.fetch.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({ code: 0, msg: '订单不存在' })
+    })
+
+    await expect(queryOrder('NON_EXIST')).rejects.toThrow('订单不存在')
   })
 })
