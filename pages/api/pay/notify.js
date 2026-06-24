@@ -142,6 +142,9 @@ export default async function handler(req, res) {
     const deliveryLinkBase = process.env.STARTER_DELIVERY_LINK_BASE || 'https://faiz-world.notion.site/OS-8124f4cfc8e282e1b10381cfeadbdb86?duplicate=true&token='
     const productLink = tokenInfo ? deliveryLinkBase + tokenInfo.token : ''
 
+    // 订单创建时间（同时传给 createOrderPage 和 retry webhook，运营在 QQ 通知里能直接看到下单时间）
+    const paidAtISO = new Date().toISOString()
+
     // 写入 Notion
     const pageId = await createOrderPage({
       productName: params.name,
@@ -152,7 +155,7 @@ export default async function handler(req, res) {
       discountCode: extra.discountCode || '',
       amount: paidAmount, // 来自服务端二次查询的权威金额（zpayResult.money）
       status: 'paid',
-      paidAt: new Date().toISOString(),
+      paidAt: paidAtISO,
       productLink
     })
 
@@ -176,7 +179,8 @@ export default async function handler(req, res) {
             email: extra.email || '',
             name: extra.name || '',
             productName: params.name,
-            amount: paidAmount
+            amount: paidAmount,
+            paidAt: paidAtISO  // 运营需要知道订单下单时间（2026-06-24 需求）
           },
           error: `Token 查询失败 ${newCount} 次，请检查 Notion Token DB`,
           stack: ''

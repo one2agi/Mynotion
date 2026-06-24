@@ -65,6 +65,52 @@ describe('Dead Letter Webhook 推送器', () => {
     expect(body.target).toBe('qqbot:c2c:c6366d4f6511a4538de7abdf67c8483b')
   })
 
+  // === 2026-06-24：webhook 消息加订单时间（运营需要） ===
+  // 原因：运营收到 webhook 时想知道"这单是几点下的"，方便查日志/对账
+  test('orderData.paidAt 存在 → message 包含格式化后的北京时间', async () => {
+    global.fetch.mockResolvedValueOnce({ ok: true, status: 200 })
+
+    const entry = {
+      timestamp: '2026-06-24T13:00:00.000+08:00',
+      outTradeNo: 'TIME_TEST',
+      orderData: {
+        productName: 'Starter',
+        amount: 29.9,
+        email: 'a@b.com',
+        paidAt: '2026-06-24T13:00:00.000+08:00'  // 北京时间
+      },
+      error: 'Token 查询失败 5 次',
+      stack: ''
+    }
+    await notifyDeadLetter(entry)
+
+    const body = JSON.parse(global.fetch.mock.calls[0][1].body)
+    // 期望：消息里包含 "订单时间: 2026-06-24 13:00:00 (北京时间)"
+    expect(body.message).toContain('订单时间: 2026-06-24 13:00:00')
+    expect(body.message).toContain('北京时间')
+  })
+
+  test('orderData.paidAt 缺失 → message 优雅显示 N/A（不阻断）', async () => {
+    global.fetch.mockResolvedValueOnce({ ok: true, status: 200 })
+
+    const entry = {
+      timestamp: '2026-06-24T13:00:00.000+08:00',
+      outTradeNo: 'NO_TIME_TEST',
+      orderData: {
+        productName: 'Starter',
+        amount: 29.9,
+        email: 'a@b.com'
+        // 没有 paidAt
+      },
+      error: 'Notion 5xx',
+      stack: ''
+    }
+    await notifyDeadLetter(entry)
+
+    const body = JSON.parse(global.fetch.mock.calls[0][1].body)
+    expect(body.message).toContain('订单时间: N/A')
+  })
+
   test('重试：5xx → 共 3 次（1 初始 + 2 retry），backoff ≥ 200+400ms', async () => {
     global.fetch
       .mockResolvedValueOnce({ ok: false, status: 500 })
