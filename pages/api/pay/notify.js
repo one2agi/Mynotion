@@ -143,7 +143,10 @@ export default async function handler(req, res) {
     const productLink = tokenInfo ? deliveryLinkBase + tokenInfo.token : ''
 
     // 订单创建时间（同时传给 createOrderPage 和 retry webhook，运营在 QQ 通知里能直接看到下单时间）
-    const paidAtISO = new Date().toISOString()
+    // 格式：Beijing 时间 'YYYY-MM-DD HH:mm:ss'（无时区）— 2026-06-24 用户需求
+    // 之前：new Date().toISOString() 输出 ISO 8601 UTC，肉眼看不出 Beijing 时间
+    const now = new Date()
+    const paidAtISO = new Date(now.getTime() + 8 * 3600 * 1000).toISOString().slice(0, 19).replace('T', ' ')
 
     // 写入 Notion
     const pageId = await createOrderPage({

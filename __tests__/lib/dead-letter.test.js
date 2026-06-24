@@ -111,6 +111,44 @@ describe('Dead Letter Webhook 推送器', () => {
     expect(body.message).toContain('订单时间: N/A')
   })
 
+  // === 2026-06-24：支持 Notion 新格式 'YYYY-MM-DD HH:mm:ss'（无时区） ===
+  // 来源：用户希望 Notion 的 创建时间 字段值是 Beijing 时间的可读格式
+  // 之前：ISO 8601 UTC（如 '2026-06-24T11:10:18.289Z'）
+  // 现在：Beijing 时间的可读格式（如 '2026-06-24 19:10:18'）
+  // formatBeijingTime 需要识别无时区的字符串并直接当作北京时间使用
+  // ⚠️ 不能依赖运行环境时区：测试环境 GMT+0800 时会"巧合"通过，但 UTC 环境会失败
+  //   必须用 jest.spyOn(Date, 'now') 强制时区无关的测试
+  test('orderData.paidAt 是 "YYYY-MM-DD HH:mm:ss" 无时区格式 → 当作北京时间直接用（时区无关）', async () => {
+    global.fetch.mockResolvedValueOnce({ ok: true, status: 200 })
+
+    // 模拟 UTC 环境（不依赖本机时区）
+    const originalTZ = process.env.TZ
+    process.env.TZ = 'UTC'
+
+    try {
+      const entry = {
+        timestamp: '2026-06-24T11:10:18.289Z',
+        outTradeNo: 'NO_TZ_TEST',
+        orderData: {
+          productName: 'Starter',
+          amount: 29.9,
+          email: 'a@b.com',
+          paidAt: '2026-06-24 19:10:18'  // Beijing 时间无时区
+        },
+        error: 'Token 查询失败 5 次',
+        stack: ''
+      }
+      await notifyDeadLetter(entry)
+
+      const body = JSON.parse(global.fetch.mock.calls[0][1].body)
+      // 必须直接显示 "2026-06-24 19:10:18"，不能解析后转 Beijing（UTC 环境下 +8h 会变成次日 03:10）
+      expect(body.message).toContain('订单时间: 2026-06-24 19:10:18')
+      expect(body.message).toContain('北京时间')
+    } finally {
+      process.env.TZ = originalTZ
+    }
+  })
+
   test('重试：5xx → 共 3 次（1 初始 + 2 retry），backoff ≥ 200+400ms', async () => {
     global.fetch
       .mockResolvedValueOnce({ ok: false, status: 500 })
