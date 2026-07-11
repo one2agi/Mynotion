@@ -1,9 +1,10 @@
 import { normalizePageId } from './extract'
 import type { PageSnapshot, PublicGraph } from './types'
 
-const GRAPH_POINTER_KEY = 'state/graph-pointer.json'
 const STATE_KEY = 'state/refresh.json'
 const REFRESH_CLAIM_WINDOW_MS = 10 * 60 * 1000
+const PUBLICATION_PREFIX = 'state/graph-publications/'
+const WINDOW_KEY_WIDTH = 16
 
 type JsonReadOptions = {
   consistency?: 'eventual' | 'strong'
@@ -14,8 +15,14 @@ type JsonWriteOptions = {
   onlyIfNew?: boolean
 }
 
+type ListOptions = {
+  consistency?: 'eventual' | 'strong'
+  prefix?: string
+}
+
 export interface GraphBlobStore {
   get(key: string, options: JsonReadOptions): Promise<unknown | null>
+  list(options?: ListOptions): Promise<{ blobs: Array<{ key: string }> }>
   setJSON(
     key: string,
     value: unknown,
@@ -29,8 +36,9 @@ export interface RefreshClaim {
   windowStart: number
 }
 
-export interface GraphPointer {
-  generationId: string
+export interface GraphPublication {
+  graphKey: string
+  windowStart: number
 }
 
 const strongJsonRead = {
@@ -49,26 +57,63 @@ function pageSnapshotKey(id: string): string {
   return `pages/${normalizedId}.json`
 }
 
-function graphVersionKey(generationId: string): string {
+function validateGenerationId(generationId: string): void {
   if (!/^[A-Za-z0-9][A-Za-z0-9_-]*$/.test(generationId)) {
     throw new TypeError(
       'Graph generation id must contain only letters, numbers, _ or -'
     )
   }
+}
 
+function graphVersionKey(generationId: string): string {
+  validateGenerationId(generationId)
   return `graph/versions/${generationId}.json`
+}
+
+function formatWindowStart(windowStart: number): string {
+  if (!Number.isSafeInteger(windowStart) || windowStart < 0) {
+    throw new TypeError(
+      'Refresh window start must be a non-negative safe integer'
+    )
+  }
+
+  return String(windowStart).padStart(WINDOW_KEY_WIDTH, '0')
+}
+
+function publicationMarkerKey(
+  windowStart: number,
+  generationId: string
+): string {
+  validateGenerationId(generationId)
+  return `${PUBLICATION_PREFIX}${formatWindowStart(windowStart)}-${generationId}.json`
 }
 
 function refreshClaimKey(windowStart: number): string {
   return `state/refresh-claims/${windowStart}.json`
 }
 
-function isGraphPointer(value: unknown): value is GraphPointer {
+function isPublicationMarkerKey(key: string): boolean {
+  return new RegExp(
+    `^${PUBLICATION_PREFIX}\\d{${WINDOW_KEY_WIDTH}}-[A-Za-z0-9][A-Za-z0-9_-]*\\.json$`
+  ).test(key)
+}
+
+function isGraphVersionKey(key: unknown): key is string {
   return (
-    typeof value === 'object' &&
-    value !== null &&
-    'generationId' in value &&
-    typeof (value as { generationId?: unknown }).generationId === 'string'
+    typeof key === 'string' &&
+    /^graph\/versions\/[A-Za-z0-9][A-Za-z0-9_-]*\.json$/.test(key)
+  )
+}
+
+function isGraphPublication(value: unknown): value is GraphPublication {
+  if (!value || typeof value !== 'object') return false
+
+  const publication = value as Record<string, unknown>
+  return (
+    isGraphVersionKey(publication.graphKey) &&
+    typeof publication.windowStart === 'number' &&
+    Number.isSafeInteger(publication.windowStart) &&
+    publication.windowStart >= 0
   )
 }
 
@@ -85,22 +130,47 @@ export function createGraphStore(
   blobStore: GraphBlobStore,
   clock: () => number
 ) {
+  const listPublicationMarkers = async (): Promise<string[]> => {
+    const { blobs } = await blobStore.list({
+      consistency: 'strong',
+      prefix: PUBLICATION_PREFIX
+    })
+
+    return blobs
+      .map(blob => blob.key)
+      .filter(isPublicationMarkerKey)
+      .sort((a, b) => (a < b ? 1 : a > b ? -1 : 0))
+  }
+
   return {
     async getGraph(): Promise<PublicGraph | null> {
-      const pointer = await blobStore.get(GRAPH_POINTER_KEY, strongJsonRead)
-      if (!isGraphPointer(pointer)) return null
+      for (let attempt = 0; attempt < 2; attempt++) {
+        const markerKey = (await listPublicationMarkers())[0]
+        if (!markerKey) return null
 
-      return (await blobStore.get(
-        graphVersionKey(pointer.generationId),
-        strongJsonRead
-      )) as PublicGraph | null
+        const publication = await blobStore.get(markerKey, strongJsonRead)
+        if (!isGraphPublication(publication)) continue
+
+        const graph = await blobStore.get(publication.graphKey, strongJsonRead)
+        if (graph !== null) return graph as PublicGraph
+      }
+
+      return null
     },
 
-    async putGraph(graph: PublicGraph, generationId: string): Promise<void> {
-      await blobStore.setJSON(graphVersionKey(generationId), graph, {
-        onlyIfNew: true
-      })
-      await blobStore.setJSON(GRAPH_POINTER_KEY, { generationId })
+    async putGraph(
+      graph: PublicGraph,
+      generationId: string,
+      windowStart: number
+    ): Promise<void> {
+      const graphKey = graphVersionKey(generationId)
+
+      await blobStore.setJSON(graphKey, graph, { onlyIfNew: true })
+      await blobStore.setJSON(
+        publicationMarkerKey(windowStart, generationId),
+        { graphKey, windowStart },
+        { onlyIfNew: true }
+      )
     },
 
     async getState<T>(): Promise<T | null> {
@@ -139,6 +209,24 @@ export function createGraphStore(
       } catch (error) {
         if (isPreconditionFailed(error)) return null
         throw error
+      }
+    },
+
+    async cleanupPublications(retain = 2): Promise<void> {
+      if (!Number.isSafeInteger(retain) || retain < 1) {
+        throw new TypeError(
+          'Publication retention must be a positive safe integer'
+        )
+      }
+
+      const staleMarkerKeys = (await listPublicationMarkers()).slice(retain)
+
+      for (const markerKey of staleMarkerKeys) {
+        const publication = await blobStore.get(markerKey, strongJsonRead)
+        if (!isGraphPublication(publication)) continue
+
+        await blobStore.delete(markerKey)
+        await blobStore.delete(publication.graphKey)
       }
     }
   }
