@@ -17,21 +17,29 @@ declare const expect: (value: unknown) => {
   not: { toBe(expected: unknown): void }
 }
 
+const pageIds = {
+  a: '00000000000000000000000000000001',
+  b: '00000000000000000000000000000002',
+  c: '00000000000000000000000000000003',
+  d: '00000000000000000000000000000004',
+  isolated: '00000000000000000000000000000005'
+}
+
 const pages: PublishedPage[] = [
-  { id: 'a', title: 'A', slug: '/a', icon: 'A-icon' },
-  { id: 'b', title: 'B', slug: '/b' },
-  { id: 'c', title: 'C', slug: '/c' },
-  { id: 'd', title: 'D', slug: '/d' }
+  { id: pageIds.a, title: 'A', slug: '/a', icon: 'A-icon' },
+  { id: pageIds.b, title: 'B', slug: '/b' },
+  { id: pageIds.c, title: 'C', slug: '/c' },
+  { id: pageIds.d, title: 'D', slug: '/d' }
 ]
 
 test('exposes graph contracts shared by the builder and its consumers', () => {
-  const snapshot: PageSnapshot = { links: ['b'] }
+  const snapshot: PageSnapshot = { links: [pageIds.b] }
   const snapshots: PageSnapshotMap = {
-    a: snapshot,
-    b: { links: ['a'] }
+    [pageIds.a]: snapshot,
+    [pageIds.b]: { links: [pageIds.a] }
   }
   const nodes: GraphNode[] = pages.slice(0, 2)
-  const edges: GraphEdge[] = [{ source: 'a', target: 'b' }]
+  const edges: GraphEdge[] = [{ source: pageIds.a, target: pageIds.b }]
   const expected: PublicGraph = { nodes, edges }
 
   expect(buildPublicGraph(nodes, snapshots)).toEqual(expected)
@@ -41,67 +49,99 @@ test('builds published nodes and deduplicated undirected edges', () => {
   const result = buildPublicGraph(
     [
       ...pages.slice(0, 2),
-      { id: 'isolated', title: 'Isolated', slug: '/isolated' }
+      { id: pageIds.isolated, title: 'Isolated', slug: '/isolated' }
     ],
     {
-      a: { links: ['b', 'b', 'a', 'draft', 'deleted'] },
-      b: { links: ['a', 'b', 'b'] },
-      isolated: { links: [] }
+      [pageIds.a]: { links: [pageIds.b, pageIds.b, pageIds.a, 'draft', 'deleted'] },
+      [pageIds.b]: { links: [pageIds.a, pageIds.b, pageIds.b] },
+      [pageIds.isolated]: { links: [] }
     }
   )
 
   expect(Object.keys(result)).toEqual(['nodes', 'edges'])
   expect(result).toEqual({
     nodes: [
-      { id: 'a', title: 'A', slug: '/a', icon: 'A-icon' },
-      { id: 'b', title: 'B', slug: '/b' },
-      { id: 'isolated', title: 'Isolated', slug: '/isolated' }
+      { id: pageIds.a, title: 'A', slug: '/a', icon: 'A-icon' },
+      { id: pageIds.b, title: 'B', slug: '/b' },
+      { id: pageIds.isolated, title: 'Isolated', slug: '/isolated' }
     ],
-    edges: [{ source: 'a', target: 'b' }]
+    edges: [{ source: pageIds.a, target: pageIds.b }]
   })
+})
+
+test('canonicalizes hyphenated page IDs before resolving normalized links', () => {
+  const canonicalSource = '0000000000000000000000000000000a'
+  const canonicalTarget = '0000000000000000000000000000000b'
+  const publishedPages: PublishedPage[] = [
+    {
+      id: '00000000-0000-0000-0000-00000000000a',
+      title: 'Source',
+      slug: '/source'
+    },
+    {
+      id: '00000000-0000-0000-0000-00000000000b',
+      title: 'Target',
+      slug: '/target'
+    }
+  ]
+  const snapshots: PageSnapshotMap = {
+    [canonicalSource]: { links: [canonicalTarget] }
+  }
+  const pagesBefore = JSON.stringify(publishedPages)
+  const snapshotsBefore = JSON.stringify(snapshots)
+
+  expect(buildPublicGraph(publishedPages, snapshots)).toEqual({
+    nodes: [
+      { id: canonicalSource, title: 'Source', slug: '/source' },
+      { id: canonicalTarget, title: 'Target', slug: '/target' }
+    ],
+    edges: [{ source: canonicalSource, target: canonicalTarget }]
+  })
+  expect(JSON.stringify(publishedPages)).toEqual(pagesBefore)
+  expect(JSON.stringify(snapshots)).toEqual(snapshotsBefore)
 })
 
 test('selects a depth-one local neighborhood without mutating the graph', () => {
   const graph = buildPublicGraph(pages, {
-    a: { links: ['b'] },
-    b: { links: ['c'] },
-    c: { links: ['d'] },
-    d: { links: [] }
+    [pageIds.a]: { links: [pageIds.b] },
+    [pageIds.b]: { links: [pageIds.c] },
+    [pageIds.c]: { links: [pageIds.d] },
+    [pageIds.d]: { links: [] }
   })
   const before = JSON.stringify(graph)
 
-  const result = selectGraphNeighborhood(graph, 'a', 1)
+  const result = selectGraphNeighborhood(graph, pageIds.a, 1)
 
   expect(result).toEqual({
     nodes: pages.slice(0, 2),
-    edges: [{ source: 'a', target: 'b' }]
+    edges: [{ source: pageIds.a, target: pageIds.b }]
   })
   expect(JSON.stringify(graph)).toEqual(before)
 })
 
 test('selects all nodes through the requested breadth-first depth', () => {
   const graph = buildPublicGraph(pages, {
-    a: { links: ['b'] },
-    b: { links: ['c'] },
-    c: { links: ['d'] },
-    d: { links: [] }
+    [pageIds.a]: { links: [pageIds.b] },
+    [pageIds.b]: { links: [pageIds.c] },
+    [pageIds.c]: { links: [pageIds.d] },
+    [pageIds.d]: { links: [] }
   })
 
-  expect(selectGraphNeighborhood(graph, 'a', 2)).toEqual({
+  expect(selectGraphNeighborhood(graph, pageIds.a, 2)).toEqual({
     nodes: pages.slice(0, 3),
     edges: [
-      { source: 'a', target: 'b' },
-      { source: 'b', target: 'c' }
+      { source: pageIds.a, target: pageIds.b },
+      { source: pageIds.b, target: pageIds.c }
     ]
   })
 })
 
 test('returns a complete copy when the current node is missing', () => {
   const graph = buildPublicGraph(pages, {
-    a: { links: ['b'] },
-    b: { links: ['c'] },
-    c: { links: ['d'] },
-    d: { links: [] }
+    [pageIds.a]: { links: [pageIds.b] },
+    [pageIds.b]: { links: [pageIds.c] },
+    [pageIds.c]: { links: [pageIds.d] },
+    [pageIds.d]: { links: [] }
   })
 
   const result = selectGraphNeighborhood(graph, 'missing', 1)

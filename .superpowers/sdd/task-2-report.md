@@ -26,3 +26,18 @@ DONE
 ## Commit
 
 - Included in the Task 2 completion commit on `codex/notion-knowledge-graph`.
+
+## Review Fix: Canonical Page IDs
+
+### TDD Evidence
+
+1. RED: Added the hyphenated UUID regression and build-input immutability assertions. Running `pnpm test -- __tests__/lib/knowledge-graph/extract.test.ts __tests__/lib/knowledge-graph/build.test.ts --runInBand` failed in `canonicalizes hyphenated page IDs before resolving normalized links`: public nodes retained hyphens and `edges` was empty.
+2. GREEN: `buildPublicGraph` now applies Task 1's `normalizePageId` to published page IDs and snapshot link targets at the build boundary. The same focused command passed: 2 suites, 12 tests.
+3. Reversible RED proof after GREEN: locally replaced only the two `normalizePageId` calls with raw values, ran the same focused Jest command, and observed the same single canonical-ID failure (1 failed, 11 passed). Restored both calls immediately; no temporary code remains.
+4. Restored GREEN: the exact focused Jest command passed again with 2 suites and 12 tests. `pnpm type-check` also passed.
+
+### Review Fix Scope
+
+- Public graph node IDs and edge endpoints use normalized lowercase, hyphen-free Notion IDs.
+- Valid links survive when `PublishedPage.id` values are hyphenated while snapshot keys and links are normalized.
+- The regression test verifies neither the published-page array nor the snapshot map is mutated.

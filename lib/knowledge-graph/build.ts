@@ -1,9 +1,11 @@
 import type {
   GraphEdge,
+  GraphNode,
   PageSnapshotMap,
   PublicGraph,
   PublishedPage
 } from './types'
+import { normalizePageId } from './extract'
 
 const edgeKey = (a: string, b: string): string => [a, b].sort().join(':')
 
@@ -11,27 +13,41 @@ export function buildPublicGraph(
   pages: PublishedPage[],
   snapshots: PageSnapshotMap
 ): PublicGraph {
-  const nodes = pages.map(({ id, title, slug, icon }) => ({
-    id,
-    title,
-    slug,
-    ...(icon ? { icon } : {})
-  }))
+  const nodes: GraphNode[] = pages.flatMap(({ id, title, slug, icon }) => {
+    const normalizedId = normalizePageId(id)
+    if (!normalizedId) return []
+
+    return [
+      {
+        id: normalizedId,
+        title,
+        slug,
+        ...(icon ? { icon } : {})
+      }
+    ]
+  })
   const published = new Set(nodes.map(node => node.id))
   const edges = new Map<string, GraphEdge>()
 
   for (const node of nodes) {
     for (const target of snapshots[node.id]?.links ?? []) {
-      if (target === node.id || !published.has(target)) continue
+      const normalizedTarget = normalizePageId(target)
+      if (
+        !normalizedTarget ||
+        normalizedTarget === node.id ||
+        !published.has(normalizedTarget)
+      ) {
+        continue
+      }
 
-      const sortedIds = [node.id, target].sort()
+      const sortedIds = [node.id, normalizedTarget].sort()
       const source = sortedIds[0]
-      const normalizedTarget = sortedIds[1]
-      if (source === undefined || normalizedTarget === undefined) continue
+      const targetId = sortedIds[1]
+      if (source === undefined || targetId === undefined) continue
 
-      edges.set(edgeKey(source, normalizedTarget), {
+      edges.set(edgeKey(source, targetId), {
         source,
-        target: normalizedTarget
+        target: targetId
       })
     }
   }
