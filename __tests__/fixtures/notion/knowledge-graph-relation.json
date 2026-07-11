@@ -1,0 +1,27 @@
+{
+  "page": {
+    "properties": {
+      "related": [
+        [
+          "Sanitized relation",
+          [
+            [
+              "p",
+              "00000000-0000-0000-0000-000000000001",
+              "00000000-0000-0000-0000-000000000002"
+            ]
+          ]
+        ]
+      ]
+    }
+  },
+  "schema": {
+    "related": {
+      "name": "Related",
+      "type": "relation"
+    }
+  },
+  "expectedTargetIds": [
+    "00000000000000000000000000000001"
+  ]
+}
