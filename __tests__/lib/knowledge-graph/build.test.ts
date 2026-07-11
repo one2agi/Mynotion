@@ -1,6 +1,4 @@
-import {
-  buildPublicGraph
-} from '@/lib/knowledge-graph/build'
+import { buildPublicGraph } from '@/lib/knowledge-graph/build'
 import { selectGraphNeighborhood } from '@/components/KnowledgeGraph/graphView'
 import type {
   GraphEdge,
@@ -52,7 +50,9 @@ test('builds published nodes and deduplicated undirected edges', () => {
       { id: pageIds.isolated, title: 'Isolated', slug: '/isolated' }
     ],
     {
-      [pageIds.a]: { links: [pageIds.b, pageIds.b, pageIds.a, 'draft', 'deleted'] },
+      [pageIds.a]: {
+        links: [pageIds.b, pageIds.b, pageIds.a, 'draft', 'deleted']
+      },
       [pageIds.b]: { links: [pageIds.a, pageIds.b, pageIds.b] },
       [pageIds.isolated]: { links: [] }
     }
@@ -99,6 +99,52 @@ test('canonicalizes hyphenated page IDs before resolving normalized links', () =
   })
   expect(JSON.stringify(publishedPages)).toEqual(pagesBefore)
   expect(JSON.stringify(snapshots)).toEqual(snapshotsBefore)
+})
+
+test('preserves resolved href and deterministically merges canonical node IDs', () => {
+  const canonicalId = '0000000000000000000000000000000a'
+
+  expect(
+    buildPublicGraph(
+      [
+        {
+          id: '00000000-0000-0000-0000-00000000000a',
+          title: 'First configured locale',
+          slug: 'first',
+          href: '/en/article/first.html'
+        },
+        {
+          id: canonicalId,
+          title: 'Duplicate locale',
+          slug: 'duplicate',
+          href: '/zh/article/duplicate.html'
+        },
+        {
+          id: '00000000-0000-0000-0000-00000000000b',
+          title: 'Second',
+          slug: 'second',
+          href: '/zh/article/second.html'
+        }
+      ],
+      {}
+    )
+  ).toEqual({
+    nodes: [
+      {
+        id: canonicalId,
+        title: 'First configured locale',
+        slug: 'first',
+        href: '/en/article/first.html'
+      },
+      {
+        id: '0000000000000000000000000000000b',
+        title: 'Second',
+        slug: 'second',
+        href: '/zh/article/second.html'
+      }
+    ],
+    edges: []
+  })
 })
 
 test('resolves canonical links from hyphenated snapshot keys without mutation', () => {

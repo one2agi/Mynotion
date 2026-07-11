@@ -24,6 +24,7 @@ export interface PublishedPage {
   id: string
   title: string
   slug: string
+  href?: string
   icon?: string
 }
 
@@ -37,6 +38,7 @@ export interface GraphNode {
   id: string
   title: string
   slug: string
+  href?: string
   icon?: string
 }
 

@@ -10,6 +10,7 @@ jest.mock('@/lib/db/notion/getPostBlocks', () => ({
 
 import {
   createKnowledgeGraphHandler,
+  fetchConfiguredSiteData,
   resolveKnowledgeGraphServerConfig
 } from '@/cloud-functions/api/knowledge-graph'
 import type { PublicGraph } from '@/lib/knowledge-graph/types'
@@ -28,6 +29,7 @@ const graph: PublicGraph = {
   ],
   edges: []
 }
+const configuredPageId = graph.nodes[0]!.id
 
 function setup(
   options: {
@@ -109,6 +111,76 @@ test('validates server-only knowledge graph settings with private defaults', asy
     refreshMinutes: 10,
     storeName: 'notionnext-knowledge-graph'
   })
+})
+
+test('fetches every configured language database in configuration order', async () => {
+  const fetchSiteData = jest.fn(
+    async ({
+      pageId,
+      locale
+    }: {
+      pageId: string
+      locale: string | undefined
+    }) => ({ allPages: [{ id: pageId, locale }] })
+  )
+
+  const result = await fetchConfiguredSiteData({
+    notionPageId: `en:${configuredPageId},zh:${configuredPageId.slice(0, -1)}2`,
+    fetchSiteData
+  })
+
+  expect(fetchSiteData.mock.calls).toEqual([
+    [
+      {
+        pageId: configuredPageId,
+        from: 'knowledge-graph',
+        locale: 'en'
+      }
+    ],
+    [
+      {
+        pageId: `${configuredPageId.slice(0, -1)}2`,
+        from: 'knowledge-graph',
+        locale: 'zh'
+      }
+    ]
+  ])
+  expect(result).toEqual([
+    { allPages: [{ id: configuredPageId, locale: 'en' }] },
+    {
+      allPages: [{ id: `${configuredPageId.slice(0, -1)}2`, locale: 'zh' }]
+    }
+  ])
+})
+
+test('keeps the single-database fetch contract unchanged', async () => {
+  const fetchSiteData = jest.fn(async () => ({ allPages: [] }))
+
+  await fetchConfiguredSiteData({
+    notionPageId: configuredPageId,
+    fetchSiteData
+  })
+
+  expect(fetchSiteData).toHaveBeenCalledWith({
+    pageId: configuredPageId,
+    from: 'knowledge-graph',
+    locale: undefined
+  })
+})
+
+test('reports a configured locale failure instead of returning partial site data', async () => {
+  const fetchSiteData = jest
+    .fn()
+    .mockResolvedValueOnce({ allPages: [{ id: configuredPageId }] })
+    .mockRejectedValueOnce(new Error('zh locale fetch failed'))
+
+  await expect(
+    fetchConfiguredSiteData({
+      notionPageId: `en:${configuredPageId},zh:${configuredPageId.slice(0, -1)}2`,
+      fetchSiteData
+    })
+  ).rejects.toThrow('zh locale fetch failed')
+  expect(fetchSiteData).toHaveBeenCalledTimes(2)
 })
 
 test('returns a fresh graph without starting refresh work', async () => {

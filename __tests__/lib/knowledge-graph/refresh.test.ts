@@ -260,3 +260,62 @@ test('publishes immutable graph and marker before successful state and cleanup',
     pageIds: [A]
   })
 })
+
+test('merges two locale data sets and publishes their resolved href values', async () => {
+  const context = setup({ pages: [] })
+  context.deps.fetchGlobalAllData = jest.fn(async () => [
+    {
+      allPages: [page(A, 10, { href: '/en/article/page-1.html' })],
+      schema: { relation: { type: 'relation' } }
+    },
+    {
+      allPages: [page(B, 20, { href: '/zh/article/page-2.html' })],
+      schema: { relation: { type: 'relation' } }
+    }
+  ])
+
+  const result = await refreshKnowledgeGraph(context.deps)
+
+  expect(result).toEqual({
+    status: 'refreshed',
+    graph: {
+      nodes: [
+        {
+          id: A,
+          title: 'Page 1',
+          slug: 'page-1',
+          href: '/en/article/page-1.html'
+        },
+        {
+          id: B,
+          title: 'Page 2',
+          slug: 'page-2',
+          href: '/zh/article/page-2.html'
+        }
+      ],
+      edges: [{ source: A, target: B }]
+    }
+  })
+})
+
+test('does not publish or update state when one configured locale fetch fails', async () => {
+  const context = setup()
+  context.deps.fetchGlobalAllData = jest.fn(async () => {
+    throw new Error('zh locale fetch failed')
+  })
+
+  await expect(refreshKnowledgeGraph(context.deps)).rejects.toThrow(
+    'zh locale fetch failed'
+  )
+  expect(context.store.getState).not.toHaveBeenCalled()
+  expect(context.store.getPageSnapshot).not.toHaveBeenCalled()
+  expect(context.store.putPageSnapshot).not.toHaveBeenCalled()
+  expect(context.store.deletePageSnapshot).not.toHaveBeenCalled()
+  expect(context.store.putGraph).not.toHaveBeenCalled()
+  expect(context.store.putState).not.toHaveBeenCalled()
+  expect(context.store.cleanupPublications).not.toHaveBeenCalled()
+  expect(await context.store.getGraph()).toEqual({
+    nodes: [{ id: A, title: 'Old', slug: 'old' }],
+    edges: []
+  })
+})

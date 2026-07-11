@@ -1,7 +1,9 @@
 import { getStore } from '@edgeone/pages-blob'
 import { randomUUID } from 'node:crypto'
+import BLOG from '@/blog.config'
 import { fetchGlobalAllData } from '@/lib/db/SiteDataApi'
 import { fetchNotionPageBlocks } from '@/lib/db/notion/getPostBlocks'
+import { extractLangId, extractLangPrefix } from '@/lib/utils/pageId'
 import {
   refreshKnowledgeGraph,
   type RefreshResult,
@@ -46,6 +48,12 @@ type HandlerDependencies = {
   logError(error: unknown): void
 }
 
+type SiteDataFetcher<T> = (options: {
+  pageId: string
+  from: string
+  locale: string | undefined
+}) => Promise<T>
+
 const json = (body: unknown, status = 200, headers = RESPONSE_HEADERS) =>
   new Response(JSON.stringify(body), {
     status,
@@ -86,7 +94,10 @@ export const onRequestGet = async (context: FunctionContext) => {
       refreshKnowledgeGraph({
         store,
         fetchGlobalAllData: () =>
-          fetchGlobalAllData({ from: 'knowledge-graph', locale: undefined }),
+          fetchConfiguredSiteData({
+            notionPageId: BLOG.NOTION_PAGE_ID,
+            fetchSiteData: fetchGlobalAllData
+          }),
         fetchNotionPageBlocks,
         clock,
         createId: randomUUID,
@@ -96,6 +107,29 @@ export const onRequestGet = async (context: FunctionContext) => {
   })
 
   return handler(context)
+}
+
+export async function fetchConfiguredSiteData<T>({
+  notionPageId,
+  fetchSiteData
+}: {
+  notionPageId: string
+  fetchSiteData: SiteDataFetcher<T>
+}): Promise<T[]> {
+  const siteData: T[] = []
+
+  for (const configuredId of notionPageId.split(',')) {
+    const locale = extractLangPrefix(configuredId) || undefined
+    siteData.push(
+      await fetchSiteData({
+        pageId: extractLangId(configuredId),
+        from: 'knowledge-graph',
+        locale
+      })
+    )
+  }
+
+  return siteData
 }
 
 export function resolveKnowledgeGraphServerConfig(env: FunctionEnv) {

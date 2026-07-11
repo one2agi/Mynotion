@@ -40,6 +40,7 @@ interface GlobalPage {
   id?: unknown
   title?: unknown
   slug?: unknown
+  href?: unknown
   icon?: unknown
   pageIcon?: unknown
   type?: unknown
@@ -59,7 +60,7 @@ type PageRecordMap = NotionRecordMap & {
 
 export interface RefreshDependencies {
   store: RefreshStore
-  fetchGlobalAllData(): Promise<GlobalData>
+  fetchGlobalAllData(): Promise<GlobalData | GlobalData[]>
   fetchNotionPageBlocks(
     id: string,
     from?: string,
@@ -76,6 +77,7 @@ export type RefreshResult =
 type RefreshPage = PublishedPage & {
   lastEditedDate: number
   pageValue?: NotionPageValue
+  schema?: NotionSchema
 }
 
 export async function refreshKnowledgeGraph(
@@ -109,7 +111,7 @@ export async function refreshKnowledgeGraph(
         links: extractPageLinks({
           pageValue:
             page.pageValue || pageValueFromRecordMap(recordMap, page.id),
-          schema: globalData.schema || schemaFromRecordMap(recordMap),
+          schema: page.schema || schemaFromRecordMap(recordMap),
           recordMap
         }),
         lastEditedDate: page.lastEditedDate
@@ -144,42 +146,51 @@ export async function refreshKnowledgeGraph(
   return { status: 'refreshed', graph }
 }
 
-function publishedArticles(data: GlobalData): RefreshPage[] {
-  if (!Array.isArray(data.allPages)) {
-    throw new TypeError('Global Notion page list is unavailable')
-  }
+function publishedArticles(data: GlobalData | GlobalData[]): RefreshPage[] {
+  const pagesById = new Map<string, RefreshPage>()
 
-  return data.allPages.flatMap(value => {
-    const page = value as GlobalPage
-    if (
-      page?.status !== 'Published' ||
-      page?.type !== 'Post' ||
-      typeof page.slug !== 'string' ||
-      !page.slug
-    ) {
-      return []
+  for (const siteData of Array.isArray(data) ? data : [data]) {
+    if (!Array.isArray(siteData.allPages)) {
+      throw new TypeError('Global Notion page list is unavailable')
     }
 
-    const id = normalizePageId(page.id)
-    const lastEditedDate = numericDate(page.lastEditedDate)
-    if (!id || lastEditedDate === null) {
-      throw new TypeError('Published Notion article metadata is invalid')
-    }
+    for (const value of siteData.allPages) {
+      const page = value as GlobalPage
+      if (
+        page?.status !== 'Published' ||
+        page?.type !== 'Post' ||
+        typeof page.slug !== 'string' ||
+        !page.slug
+      ) {
+        continue
+      }
 
-    const icon = page.pageIcon || page.icon
-    return [
-      {
+      const id = normalizePageId(page.id)
+      const lastEditedDate = numericDate(page.lastEditedDate)
+      if (!id || lastEditedDate === null) {
+        throw new TypeError('Published Notion article metadata is invalid')
+      }
+      if (pagesById.has(id)) continue
+
+      const icon = page.pageIcon || page.icon
+      pagesById.set(id, {
         id,
         title: typeof page.title === 'string' ? page.title : '',
         slug: page.slug,
+        ...(typeof page.href === 'string' && page.href
+          ? { href: page.href }
+          : {}),
         ...(typeof icon === 'string' && icon ? { icon } : {}),
         lastEditedDate,
         ...(isRecord(page.properties)
           ? { pageValue: { properties: page.properties } }
-          : {})
-      }
-    ]
-  })
+          : {}),
+        ...(siteData.schema ? { schema: siteData.schema } : {})
+      })
+    }
+  }
+
+  return Array.from(pagesById.values())
 }
 
 function numericDate(value: unknown): number | null {
