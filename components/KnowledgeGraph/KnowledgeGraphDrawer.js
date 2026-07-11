@@ -43,7 +43,10 @@ const KnowledgeGraphDrawer = ({ isDarkMode, isOpen, onClose, post }) => {
 
     const loadGraph = async () => {
       try {
-        const response = await fetch('/api/knowledge-graph')
+        const response = await fetch(
+          '/api/knowledge-graph',
+          pollCount > 0 ? { cache: 'no-store' } : undefined
+        )
         if (cancelled) return
 
         if (response.status === 202) {

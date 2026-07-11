@@ -2,9 +2,7 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { useRouter } from 'next/router'
 import KnowledgeGraphCanvas, {
-  clampCanvasLabelPosition,
-  getCanvasDimensions,
-  getCanvasLabel
+  getCanvasDimensions
 } from '@/components/KnowledgeGraph/KnowledgeGraphCanvas'
 import KnowledgeGraphDrawer from '@/components/KnowledgeGraph/KnowledgeGraphDrawer'
 import KnowledgeGraphLauncher from '@/components/KnowledgeGraph/KnowledgeGraphLauncher'
@@ -43,6 +41,7 @@ jest.mock('react-force-graph-2d', () => {
           aria-label='选择图谱节点'
           data-background-color={props.backgroundColor}
           data-height={props.height}
+          data-node-label={props.nodeLabel}
           data-node-count={props.graphData.nodes.length}
           data-width={props.width}
           onClick={() => props.onNodeClick?.(props.graphData.nodes[1])}
@@ -282,6 +281,42 @@ test('polls a bounded number of times while initialization remains open', async 
   jest.useRealTimers()
 })
 
+test('moves from initializing to ready with a cache-bypassing follow-up request', async () => {
+  jest.useFakeTimers()
+  fetch
+    .mockResolvedValueOnce({
+      ok: true,
+      status: 202,
+      json: async () => ({ status: 'initializing' })
+    })
+    .mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => graph
+    })
+  render(<KnowledgeGraphDrawer isOpen={true} onClose={jest.fn()} />)
+
+  await act(async () => {
+    await Promise.resolve()
+  })
+  expect(await screen.findByText('知识图谱正在初始化')).toBeInTheDocument()
+
+  await act(async () => {
+    jest.advanceTimersByTime(2_000)
+    await Promise.resolve()
+    await Promise.resolve()
+  })
+
+  expect(fetch).toHaveBeenNthCalledWith(2, '/api/knowledge-graph', {
+    cache: 'no-store'
+  })
+  expect(
+    await screen.findByRole('button', { name: '选择图谱节点' })
+  ).toBeInTheDocument()
+
+  jest.useRealTimers()
+})
+
 test('cancels initializing polling when the drawer unmounts', async () => {
   jest.useFakeTimers()
   mockGraphResponse({ status: 'initializing' }, 202)
@@ -377,28 +412,13 @@ test('keeps measured canvas dimensions within short viewports', () => {
   })
 })
 
-test('only labels the current or hovered node with bounded placement', () => {
-  expect(
-    getCanvasLabel(
-      {
-        id: 'current',
-        title: 'A title that is longer than the canvas label limit'
-      },
-      'current',
-      null
-    )
-  ).toBe('A title that is longer...')
-  expect(
-    getCanvasLabel({ id: 'other', title: 'Other' }, 'current', 'other')
-  ).toBe('Other')
-  expect(
-    clampCanvasLabelPosition({
-      canvasHeight: 100,
-      canvasWidth: 100,
-      height: 12,
-      width: 50,
-      x: 90,
-      y: -90
-    })
-  ).toEqual({ x: 0, y: -38 })
+test('keeps the complete title in the Canvas hover tooltip', () => {
+  render(
+    <KnowledgeGraphCanvas active={true} currentId='current' graph={graph} />
+  )
+
+  expect(screen.getByRole('button', { name: '选择图谱节点' })).toHaveAttribute(
+    'data-node-label',
+    'title'
+  )
 })

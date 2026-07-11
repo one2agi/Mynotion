@@ -17,6 +17,10 @@ const RESPONSE_HEADERS = {
   'content-type': 'application/json; charset=utf-8',
   'x-content-type-options': 'nosniff'
 }
+const INITIALIZING_HEADERS = {
+  ...RESPONSE_HEADERS,
+  'cache-control': 'no-store'
+}
 
 type FunctionEnv = {
   KNOWLEDGE_GRAPH_REFRESH_MINUTES?: string
@@ -42,10 +46,10 @@ type HandlerDependencies = {
   logError(error: unknown): void
 }
 
-const json = (body: unknown, status = 200) =>
+const json = (body: unknown, status = 200, headers = RESPONSE_HEADERS) =>
   new Response(JSON.stringify(body), {
     status,
-    headers: RESPONSE_HEADERS
+    headers
   })
 
 export function createKnowledgeGraphHandler(deps: HandlerDependencies) {
@@ -54,7 +58,7 @@ export function createKnowledgeGraphHandler(deps: HandlerDependencies) {
       const graph = await deps.store.getGraph()
       if (!graph) {
         scheduleRefresh(context, deps)
-        return json({ status: 'initializing' }, 202)
+        return json({ status: 'initializing' }, 202, INITIALIZING_HEADERS)
       }
 
       const state = await deps.store.getState<RefreshState>()

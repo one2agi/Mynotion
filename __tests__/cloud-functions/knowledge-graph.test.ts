@@ -68,13 +68,21 @@ function setup(
   return { context, handler, refresh, store, waitUntilTasks }
 }
 
-function expectPublicHeaders(response: Response) {
+function expectGraphHeaders(response: Response) {
   expect(response.headers.get('content-type')).toBe(
     'application/json; charset=utf-8'
   )
   expect(response.headers.get('cache-control')).toBe(
     'public, max-age=60, stale-while-revalidate=600'
   )
+  expect(response.headers.get('x-content-type-options')).toBe('nosniff')
+}
+
+function expectInitializingHeaders(response: Response) {
+  expect(response.headers.get('content-type')).toBe(
+    'application/json; charset=utf-8'
+  )
+  expect(response.headers.get('cache-control')).toBe('no-store')
   expect(response.headers.get('x-content-type-options')).toBe('nosniff')
 }
 
@@ -87,7 +95,7 @@ test('returns a fresh graph without starting refresh work', async () => {
   expect(await response.json()).toEqual(graph)
   expect(context.refresh).not.toHaveBeenCalled()
   expect(context.waitUntilTasks).toHaveLength(0)
-  expectPublicHeaders(response)
+  expectGraphHeaders(response)
 })
 
 test('returns a stale graph immediately and registers one background refresh', async () => {
@@ -136,7 +144,7 @@ test('returns initializing and starts generation when no publication exists', as
   expect(await response.json()).toEqual({ status: 'initializing' })
   expect(context.store.getState).not.toHaveBeenCalled()
   expect(context.waitUntilTasks).toHaveLength(1)
-  expectPublicHeaders(response)
+  expectInitializingHeaders(response)
   await context.waitUntilTasks[0]
 })
 
@@ -153,7 +161,7 @@ test('returns an empty 503 response when Blob reading fails', async () => {
   expect(body).not.toContain('private-token-value')
   expect(context.refresh).not.toHaveBeenCalled()
   expect(context.waitUntilTasks).toHaveLength(0)
-  expectPublicHeaders(response)
+  expectGraphHeaders(response)
 })
 
 test('never appends private refresh state to a public graph payload', async () => {
