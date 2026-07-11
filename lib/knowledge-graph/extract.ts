@@ -4,13 +4,9 @@ import type {
   NotionRecordMap,
   NotionSchema
 } from './types'
+import { normalizePageId } from './normalizePageId'
 
-export const normalizePageId = (value: unknown): string | null => {
-  if (typeof value !== 'string') return null
-
-  const id = value.replace(/-/g, '').toLowerCase()
-  return /^[0-9a-f]{32}$/.test(id) ? id : null
-}
+export { normalizePageId }
 
 export function extractMentionPageIds(recordMap: NotionRecordMap): Set<string> {
   const ids = new Set<string>()
@@ -46,7 +42,9 @@ export function extractPageLinks({
   recordMap
 }: ExtractPageLinksInput): string[] {
   const ids = extractMentionPageIds(recordMap || {})
-  extractRelationPageIds(pageValue || {}, schema || {}).forEach(id => ids.add(id))
+  extractRelationPageIds(pageValue || {}, schema || {}).forEach(id =>
+    ids.add(id)
+  )
 
   return Array.from(ids).sort()
 }

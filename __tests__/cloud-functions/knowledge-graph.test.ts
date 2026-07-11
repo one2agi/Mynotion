@@ -98,6 +98,21 @@ test('validates server-only knowledge graph settings with private defaults', asy
   })
   expect(
     resolveKnowledgeGraphServerConfig({
+      KNOWLEDGE_GRAPH_REFRESH_MINUTES: 'invalid'
+    })
+  ).toMatchObject({ refreshMinutes: 10 })
+  expect(
+    resolveKnowledgeGraphServerConfig({
+      KNOWLEDGE_GRAPH_REFRESH_MINUTES: '0'
+    })
+  ).toMatchObject({ refreshMinutes: 10 })
+  expect(
+    resolveKnowledgeGraphServerConfig({
+      KNOWLEDGE_GRAPH_REFRESH_MINUTES: '2'
+    })
+  ).toMatchObject({ refreshMinutes: 10 })
+  expect(
+    resolveKnowledgeGraphServerConfig({
       KNOWLEDGE_GRAPH_REFRESH_MINUTES: '15',
       KNOWLEDGE_GRAPH_STORE: ' private-store '
     })

@@ -552,8 +552,8 @@ test('provides native keyboard navigation synchronized with the displayed graph'
   expect(router.push).toHaveBeenCalledWith('/resolved/related.html')
 })
 
-test('normalizes a hyphenated current article ID for local selection and highlighting', async () => {
-  const canonicalCurrent = '00000000000000000000000000000001'
+test('normalizes an uppercase hyphenated current article ID for local selection and highlighting', async () => {
+  const canonicalCurrent = 'abcdefabcdefabcdefabcdefabcdef01'
   const canonicalRelated = '00000000000000000000000000000002'
   mockGraphResponse({
     nodes: [
@@ -584,7 +584,7 @@ test('normalizes a hyphenated current article ID for local selection and highlig
       isOpen={true}
       onClose={jest.fn()}
       post={{
-        id: '00000000-0000-0000-0000-000000000001',
+        id: 'ABCDEFAB-CDEF-ABCD-EFAB-CDEFABCDEF01',
         slug: '/current'
       }}
     />

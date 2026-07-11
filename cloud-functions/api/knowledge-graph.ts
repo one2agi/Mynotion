@@ -166,7 +166,7 @@ function isStale(
 
 function refreshMinutes(value: string | undefined): number {
   const minutes = Number(value)
-  return Number.isFinite(minutes) && minutes > 0
+  return Number.isFinite(minutes) && minutes >= DEFAULT_REFRESH_MINUTES
     ? minutes
     : DEFAULT_REFRESH_MINUTES
 }
