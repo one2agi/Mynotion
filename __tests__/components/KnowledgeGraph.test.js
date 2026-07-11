@@ -70,11 +70,6 @@ jest.mock('react-force-graph-2d', () => {
       props.nodeCanvasObject?.(props.graphData.nodes[0], context)
     }
 
-    const firstNodeLabel =
-      typeof props.nodeLabel === 'function'
-        ? props.nodeLabel(props.graphData.nodes[0])
-        : props.nodeLabel
-
     return (
       <>
         <button
@@ -82,17 +77,15 @@ jest.mock('react-force-graph-2d', () => {
           data-background-color={props.backgroundColor}
           data-first-node-fill={firstNodeFill}
           data-height={props.height}
+          data-has-node-label={String(
+            Object.prototype.hasOwnProperty.call(props, 'nodeLabel')
+          )}
           data-link-count={props.graphData.links.length}
-          data-node-label-html={firstNodeLabel?.innerHTML || ''}
-          data-node-label-text={firstNodeLabel?.textContent || ''}
-          data-node-label-type={
-            firstNodeLabel instanceof HTMLElement
-              ? 'element'
-              : typeof firstNodeLabel
-          }
           data-node-count={props.graphData.nodes.length}
           data-width={props.width}
           onClick={() => props.onNodeClick?.(props.graphData.nodes[1])}
+          onMouseEnter={() => props.onNodeHover?.(props.graphData.nodes[0])}
+          onMouseLeave={() => props.onNodeHover?.(null)}
           tabIndex='-1'
           type='button'
         />
@@ -670,7 +663,7 @@ test('keeps measured canvas dimensions within short viewports', () => {
   })
 })
 
-test('returns hostile titles as DOM text for the Canvas hover tooltip', () => {
+test('renders hostile node titles as literal React tooltip text', () => {
   const hostileTitle = '<img src=x onerror="window.__xss = true">'
   render(
     <KnowledgeGraphCanvas
@@ -687,10 +680,44 @@ test('returns hostile titles as DOM text for the Canvas hover tooltip', () => {
   )
 
   const canvas = screen.getByRole('button', { name: '选择图谱节点' })
-  expect(canvas).toHaveAttribute('data-node-label-type', 'element')
-  expect(canvas).toHaveAttribute('data-node-label-text', hostileTitle)
-  expect(canvas.getAttribute('data-node-label-html')).toBe(
-    '&lt;img src=x onerror="window.__xss = true"&gt;'
-  )
+  jest.spyOn(canvas.parentElement, 'getBoundingClientRect').mockReturnValue({
+    height: 180,
+    left: 0,
+    top: 0,
+    width: 320
+  })
+  fireEvent.mouseMove(canvas, { clientX: 24, clientY: 16 })
+  fireEvent.mouseEnter(canvas)
+
+  const tooltip = screen.getByTestId('knowledge-graph-tooltip')
+  expect(tooltip).toHaveTextContent(hostileTitle)
+  expect(tooltip).toHaveStyle({ left: '24px', top: '16px' })
+  expect(tooltip.querySelector('img')).toBeNull()
   expect(window.__xss).toBeUndefined()
+})
+
+test('does not pass nodeLabel to the Canvas renderer', () => {
+  render(
+    <KnowledgeGraphCanvas active={true} currentId='current' graph={graph} />
+  )
+
+  expect(document.querySelector('[data-node-count]')).toHaveAttribute(
+    'data-has-node-label',
+    'false'
+  )
+})
+
+test('hides the Canvas tooltip after the renderer signals hover exit', () => {
+  render(
+    <KnowledgeGraphCanvas active={true} currentId='current' graph={graph} />
+  )
+
+  const canvas = document.querySelector('[data-node-count]')
+  fireEvent.mouseEnter(canvas)
+  expect(screen.getByTestId('knowledge-graph-tooltip')).toBeInTheDocument()
+
+  fireEvent.mouseLeave(canvas)
+  expect(
+    screen.queryByTestId('knowledge-graph-tooltip')
+  ).not.toBeInTheDocument()
 })

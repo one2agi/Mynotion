@@ -12,12 +12,6 @@ export const getCanvasDimensions = ({ height, width }) => ({
   width: Math.max(0, Math.floor(width || 0))
 })
 
-const createNodeLabel = node => {
-  const label = document.createElement('span')
-  label.textContent = node?.title || ''
-  return label
-}
-
 const KnowledgeGraphCanvas = ({
   active,
   currentId,
@@ -28,6 +22,13 @@ const KnowledgeGraphCanvas = ({
   const containerRef = useRef(null)
   const graphRef = useRef(null)
   const [dimensions, setDimensions] = useState({ height: 0, width: 0 })
+  const [hoveredNode, setHoveredNode] = useState(null)
+  const [tooltipPosition, setTooltipPosition] = useState({
+    left: 8,
+    top: 8,
+    translateX: '0%',
+    translateY: '0%'
+  })
   const darkMode = useKnowledgeGraphDarkMode(isDarkMode)
   const rendererGraph = useMemo(() => cloneGraphForRenderer(graph), [graph])
 
@@ -55,9 +56,37 @@ const KnowledgeGraphCanvas = ({
   }, [])
 
   const backgroundColor = darkMode ? '#030712' : '#ffffff'
+  const handleNodeHover = node => setHoveredNode(node || null)
+  const handlePointerMove = event => {
+    const bounds = containerRef.current?.getBoundingClientRect()
+    if (!bounds) return
+
+    const x = event.clientX - bounds.left
+    const y = event.clientY - bounds.top
+    const horizontalPadding = 8
+    const verticalPadding = 8
+
+    setTooltipPosition({
+      left: Math.min(
+        Math.max(x, horizontalPadding),
+        Math.max(horizontalPadding, bounds.width - horizontalPadding)
+      ),
+      top: Math.min(
+        Math.max(y, verticalPadding),
+        Math.max(verticalPadding, bounds.height - verticalPadding)
+      ),
+      translateX: x > bounds.width / 2 ? '-100%' : '0%',
+      translateY: y > bounds.height / 2 ? '-100%' : '0%'
+    })
+  }
 
   return (
-    <div className='h-full min-h-0 w-full overflow-hidden' ref={containerRef}>
+    <div
+      className='relative h-full min-h-0 w-full overflow-hidden'
+      onPointerLeave={() => setHoveredNode(null)}
+      onMouseMove={handlePointerMove}
+      ref={containerRef}
+    >
       <ForceGraph2D
         backgroundColor={backgroundColor}
         cooldownTicks={120}
@@ -73,11 +102,24 @@ const KnowledgeGraphCanvas = ({
           context.fillStyle = node.id === currentId ? '#0284c7' : '#64748b'
           context.fill()
         }}
-        nodeLabel={createNodeLabel}
         onNodeClick={onNodeClick}
+        onNodeHover={handleNodeHover}
         ref={graphRef}
         width={dimensions.width}
       />
+      {hoveredNode?.title ? (
+        <div
+          className='pointer-events-none absolute z-10 max-w-[calc(100%-1rem)] break-all rounded bg-gray-900 px-2 py-1 text-xs text-white shadow-lg dark:bg-gray-100 dark:text-gray-900'
+          data-testid='knowledge-graph-tooltip'
+          style={{
+            left: tooltipPosition.left,
+            top: tooltipPosition.top,
+            transform: `translate(${tooltipPosition.translateX}, ${tooltipPosition.translateY})`
+          }}
+        >
+          {hoveredNode.title}
+        </div>
+      ) : null}
     </div>
   )
 }
