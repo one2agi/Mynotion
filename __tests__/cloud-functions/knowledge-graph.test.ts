@@ -8,7 +8,10 @@ jest.mock('@/lib/db/notion/getPostBlocks', () => ({
   fetchNotionPageBlocks: jest.fn()
 }))
 
-import { createKnowledgeGraphHandler } from '@/cloud-functions/api/knowledge-graph'
+import {
+  createKnowledgeGraphHandler,
+  resolveKnowledgeGraphServerConfig
+} from '@/cloud-functions/api/knowledge-graph'
 import type { PublicGraph } from '@/lib/knowledge-graph/types'
 
 declare const jest: any
@@ -85,6 +88,28 @@ function expectInitializingHeaders(response: Response) {
   expect(response.headers.get('cache-control')).toBe('no-store')
   expect(response.headers.get('x-content-type-options')).toBe('nosniff')
 }
+
+test('validates server-only knowledge graph settings with private defaults', async () => {
+  expect(resolveKnowledgeGraphServerConfig({})).toEqual({
+    refreshMinutes: 10,
+    storeName: 'notionnext-knowledge-graph'
+  })
+  expect(
+    resolveKnowledgeGraphServerConfig({
+      KNOWLEDGE_GRAPH_REFRESH_MINUTES: '15',
+      KNOWLEDGE_GRAPH_STORE: ' private-store '
+    })
+  ).toEqual({ refreshMinutes: 15, storeName: 'private-store' })
+  expect(
+    resolveKnowledgeGraphServerConfig({
+      KNOWLEDGE_GRAPH_REFRESH_MINUTES: '0',
+      KNOWLEDGE_GRAPH_STORE: '   '
+    })
+  ).toEqual({
+    refreshMinutes: 10,
+    storeName: 'notionnext-knowledge-graph'
+  })
+})
 
 test('returns a fresh graph without starting refresh work', async () => {
   const context = setup()

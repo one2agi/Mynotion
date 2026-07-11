@@ -1,3 +1,9 @@
+export const normalizeKnowledgeGraphDepth = value => {
+  const depth = Number(value)
+  if (!Number.isFinite(depth)) return 2
+  return Math.min(2, Math.max(1, Math.trunc(depth)))
+}
+
 export const selectGraphNeighborhood = (graph, currentId, depth) => {
   const currentNodeExists = graph.nodes.some(node => node.id === currentId)
 

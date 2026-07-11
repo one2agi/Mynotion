@@ -99,6 +99,18 @@ const graph = {
   edges: [{ source: 'current', target: 'related' }]
 }
 
+const depthGraph = {
+  nodes: [
+    { id: 'current', title: 'Current article', slug: '/current' },
+    { id: 'related', title: 'Related article', slug: '/related' },
+    { id: 'two-hop', title: 'Two-hop article', slug: '/two-hop' }
+  ],
+  edges: [
+    { source: 'current', target: 'related' },
+    { source: 'related', target: 'two-hop' }
+  ]
+}
+
 const router = {
   push: jest.fn(),
   events: {
@@ -146,6 +158,31 @@ test.each([
   ).toHaveLength(1)
   expect(fetch).not.toHaveBeenCalled()
 })
+
+test.each([
+  [0, 2],
+  [1, 2],
+  [2, 3],
+  [3, 3]
+])(
+  'propagates configured depth %i through the shared launcher',
+  async (depth, expectedNodes) => {
+    const user = userEvent.setup()
+    siteConfig.mockImplementation(key => {
+      if (key === 'KNOWLEDGE_GRAPH_ENABLE' || key === 'CAN_COPY') return true
+      if (key === 'KNOWLEDGE_GRAPH_DEPTH') return depth
+      return false
+    })
+    mockGraphResponse(depthGraph)
+
+    render(<ExternalPlugin post={{ id: 'current', slug: '/current' }} />)
+    await user.click(await screen.findByRole('button', { name: '知识图谱' }))
+
+    expect(
+      await screen.findByRole('button', { name: '选择图谱节点' })
+    ).toHaveAttribute('data-node-count', String(expectedNodes))
+  }
+)
 
 test('loads the drawer only after its accessible launcher is activated', async () => {
   const user = userEvent.setup()

@@ -110,6 +110,11 @@ const ExternalPlugin = props => {
     false,
     NOTION_CONFIG
   )
+  const KNOWLEDGE_GRAPH_DEPTH = siteConfig(
+    'KNOWLEDGE_GRAPH_DEPTH',
+    2,
+    NOTION_CONFIG
+  )
   const TIANLI_KEY = siteConfig('TianliGPT_KEY', null, NOTION_CONFIG)
   const GLOBAL_JS = siteConfig('GLOBAL_JS', '', NOTION_CONFIG)
   const CLARITY_ID = siteConfig('CLARITY_ID', null, NOTION_CONFIG)
@@ -264,7 +269,12 @@ const ExternalPlugin = props => {
       {COMMENT_TWIKOO_COUNT_ENABLE && <TwikooCommentCounter {...props} />}
       {RIBBON && <Ribbon />}
       {DIFY_CHATBOT_ENABLED && <DifyChatbot />}
-      {KNOWLEDGE_GRAPH_ENABLE && <KnowledgeGraphLauncher post={props?.post} />}
+      {KNOWLEDGE_GRAPH_ENABLE && (
+        <KnowledgeGraphLauncher
+          depth={KNOWLEDGE_GRAPH_DEPTH}
+          post={props?.post}
+        />
+      )}
       {CUSTOM_RIGHT_CLICK_CONTEXT_MENU && (
         <CustomContextMenu {...props} canCopy={canCopy} />
       )}

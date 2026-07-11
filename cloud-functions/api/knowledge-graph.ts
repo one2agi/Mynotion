@@ -76,15 +76,12 @@ export function createKnowledgeGraphHandler(deps: HandlerDependencies) {
 
 export const onRequestGet = async (context: FunctionContext) => {
   const clock = () => Date.now()
-  const store = createGraphStore(
-    getStore(context.env.KNOWLEDGE_GRAPH_STORE || DEFAULT_STORE_NAME),
-    clock
-  )
+  const serverConfig = resolveKnowledgeGraphServerConfig(context.env)
+  const store = createGraphStore(getStore(serverConfig.storeName), clock)
   const handler = createKnowledgeGraphHandler({
     store,
     clock,
-    refreshAfterMs:
-      refreshMinutes(context.env.KNOWLEDGE_GRAPH_REFRESH_MINUTES) * 60_000,
+    refreshAfterMs: serverConfig.refreshMinutes * 60_000,
     refresh: () =>
       refreshKnowledgeGraph({
         store,
@@ -99,6 +96,15 @@ export const onRequestGet = async (context: FunctionContext) => {
   })
 
   return handler(context)
+}
+
+export function resolveKnowledgeGraphServerConfig(env: FunctionEnv) {
+  const storeName = env.KNOWLEDGE_GRAPH_STORE?.trim()
+
+  return {
+    refreshMinutes: refreshMinutes(env.KNOWLEDGE_GRAPH_REFRESH_MINUTES),
+    storeName: storeName || DEFAULT_STORE_NAME
+  }
 }
 
 function scheduleRefresh(

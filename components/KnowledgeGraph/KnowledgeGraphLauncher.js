@@ -1,7 +1,7 @@
 import dynamic from 'next/dynamic'
 import { useCallback, useRef, useState } from 'react'
 
-const KnowledgeGraphLauncher = ({ post, isDarkMode }) => {
+const KnowledgeGraphLauncher = ({ depth, post, isDarkMode }) => {
   const launcherRef = useRef(null)
   const [Drawer, setDrawer] = useState(null)
   const [isOpen, setIsOpen] = useState(false)
@@ -49,6 +49,7 @@ const KnowledgeGraphLauncher = ({ post, isDarkMode }) => {
       </button>
       {Drawer ? (
         <Drawer
+          depth={depth}
           isDarkMode={isDarkMode}
           isOpen={isOpen}
           onClose={closeDrawer}

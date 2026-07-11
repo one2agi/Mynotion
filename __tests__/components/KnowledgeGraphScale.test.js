@@ -3,6 +3,9 @@ import { selectGraphNeighborhood } from '@/components/KnowledgeGraph/graphView'
 
 jest.mock('react-force-graph-2d', () => () => null)
 
+const MAX_1000_NODE_PAYLOAD_BYTES = 250 * 1024
+const MAX_1000_NODE_PURE_OPERATION_MS = 1000
+
 const createGraph = size => ({
   nodes: Array.from({ length: size }, (_, index) => ({
     id: `node-${index}`,
@@ -35,6 +38,13 @@ test.each([50, 500, 1000])(
     expect(neighborhood.nodes).toHaveLength(3)
     expect(neighborhood.edges).toHaveLength(2)
     expect(graph.nodes).toHaveLength(size)
+
+    if (size === 1000) {
+      expect(payloadBytes).toBeLessThan(MAX_1000_NODE_PAYLOAD_BYTES)
+      expect(cloneMs + neighborhoodMs).toBeLessThan(
+        MAX_1000_NODE_PURE_OPERATION_MS
+      )
+    }
 
     console.info(
       `[knowledge-graph-scale] nodes=${size} bytes=${payloadBytes} cloneMs=${cloneMs.toFixed(3)} neighborhoodMs=${neighborhoodMs.toFixed(3)}`

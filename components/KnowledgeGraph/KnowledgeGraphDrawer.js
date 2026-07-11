@@ -3,7 +3,10 @@ import dynamic from 'next/dynamic'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/router'
 import { useKnowledgeGraphDarkMode } from './appearance'
-import { selectGraphNeighborhood } from './graphView'
+import {
+  normalizeKnowledgeGraphDepth,
+  selectGraphNeighborhood
+} from './graphView'
 
 const KnowledgeGraphCanvas = dynamic(() => import('./KnowledgeGraphCanvas'), {
   ssr: false
@@ -16,7 +19,7 @@ const INITIALIZING_POLL_LIMIT = 3
 const isPublicGraph = value =>
   Array.isArray(value?.nodes) && Array.isArray(value?.edges)
 
-const KnowledgeGraphDrawer = ({ isDarkMode, isOpen, onClose, post }) => {
+const KnowledgeGraphDrawer = ({ depth, isDarkMode, isOpen, onClose, post }) => {
   const closeButtonRef = useRef(null)
   const router = useRouter()
   const hasCurrentPost = Boolean(post?.id)
@@ -24,6 +27,7 @@ const KnowledgeGraphDrawer = ({ isDarkMode, isOpen, onClose, post }) => {
   const [graph, setGraph] = useState(null)
   const [status, setStatus] = useState('idle')
   const [mode, setMode] = useState(hasCurrentPost ? 'local' : 'full')
+  const localDepth = normalizeKnowledgeGraphDepth(depth)
 
   useEffect(() => {
     if (!isOpen) return
@@ -96,11 +100,11 @@ const KnowledgeGraphDrawer = ({ isDarkMode, isOpen, onClose, post }) => {
   const displayedGraph = useMemo(() => {
     if (!graph) return emptyGraph
     if (mode === 'local' && post?.id) {
-      return selectGraphNeighborhood(graph, post.id, 1)
+      return selectGraphNeighborhood(graph, post.id, localDepth)
     }
 
     return graph
-  }, [graph, mode, post?.id])
+  }, [graph, localDepth, mode, post?.id])
 
   const navigateToNode = node => {
     if (node?.slug) router.push(node.slug)

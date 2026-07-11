@@ -1,9 +1,23 @@
+const parseBoolean = value => {
+  const normalized = String(value ?? '')
+    .trim()
+    .toLowerCase()
+  return normalized === 'true' || normalized === '1'
+}
+
+const parseDepth = value => {
+  const normalized = String(value ?? '').trim()
+  if (!normalized) return 2
+  const depth = Number(normalized)
+  if (!Number.isFinite(depth)) return 2
+  return Math.min(2, Math.max(1, Math.trunc(depth)))
+}
+
 module.exports = {
-  KNOWLEDGE_GRAPH_ENABLE:
-    process.env.NEXT_PUBLIC_KNOWLEDGE_GRAPH_ENABLE || false,
-  KNOWLEDGE_GRAPH_REFRESH_MINUTES:
-    process.env.KNOWLEDGE_GRAPH_REFRESH_MINUTES || 10,
-  KNOWLEDGE_GRAPH_DEPTH: process.env.NEXT_PUBLIC_KNOWLEDGE_GRAPH_DEPTH || 2,
-  KNOWLEDGE_GRAPH_STORE:
-    process.env.KNOWLEDGE_GRAPH_STORE || 'notionnext-knowledge-graph'
+  KNOWLEDGE_GRAPH_ENABLE: parseBoolean(
+    process.env.NEXT_PUBLIC_KNOWLEDGE_GRAPH_ENABLE
+  ),
+  KNOWLEDGE_GRAPH_DEPTH: parseDepth(
+    process.env.NEXT_PUBLIC_KNOWLEDGE_GRAPH_DEPTH
+  )
 }
