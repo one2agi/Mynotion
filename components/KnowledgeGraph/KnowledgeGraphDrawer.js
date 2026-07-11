@@ -53,7 +53,9 @@ const KnowledgeGraphDrawer = ({ isDarkMode, isOpen, onClose, post }) => {
           setStatus('initializing')
           if (pollCount < INITIALIZING_POLL_LIMIT) {
             pollCount += 1
-            pollTimer = window.setTimeout(loadGraph, INITIALIZING_POLL_DELAY)
+            pollTimer = window.setTimeout(() => {
+              void loadGraph()
+            }, INITIALIZING_POLL_DELAY)
           }
           return
         }

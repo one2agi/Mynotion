@@ -58,6 +58,7 @@
     "perf:lighthouse": "lhci autorun",
     "perf:audit:themes": "node scripts/audit-theme-performance.js",
     "perf:page-data": "node scripts/check-page-data-budget.js",
+    "smoke:knowledge-graph": "node scripts/smoke-knowledge-graph.mjs",
     "translate": "node scripts/translate/index.js",
     "translate:all": "node scripts/translate/index.js --batch",
     "translate:check": "node scripts/translate/index.js --check-drift",

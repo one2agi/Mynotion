@@ -105,6 +105,11 @@ const ExternalPlugin = props => {
     null,
     NOTION_CONFIG
   )
+  const KNOWLEDGE_GRAPH_ENABLE = siteConfig(
+    'KNOWLEDGE_GRAPH_ENABLE',
+    false,
+    NOTION_CONFIG
+  )
   const TIANLI_KEY = siteConfig('TianliGPT_KEY', null, NOTION_CONFIG)
   const GLOBAL_JS = siteConfig('GLOBAL_JS', '', NOTION_CONFIG)
   const CLARITY_ID = siteConfig('CLARITY_ID', null, NOTION_CONFIG)
@@ -259,6 +264,7 @@ const ExternalPlugin = props => {
       {COMMENT_TWIKOO_COUNT_ENABLE && <TwikooCommentCounter {...props} />}
       {RIBBON && <Ribbon />}
       {DIFY_CHATBOT_ENABLED && <DifyChatbot />}
+      {KNOWLEDGE_GRAPH_ENABLE && <KnowledgeGraphLauncher post={props?.post} />}
       {CUSTOM_RIGHT_CLICK_CONTEXT_MENU && (
         <CustomContextMenu {...props} canCopy={canCopy} />
       )}
@@ -451,7 +457,12 @@ const ExternalPlugin = props => {
 
       {/* UMAMI 统计 */}
       {UMAMI_ID && (
-        <script async defer src={UMAMI_HOST} data-website-id={UMAMI_ID}></script>
+        <script
+          async
+          defer
+          src={UMAMI_HOST}
+          data-website-id={UMAMI_ID}
+        ></script>
       )}
 
       {/* 谷歌统计 */}
@@ -571,5 +582,9 @@ const LA51 = dynamic(() => import('@/components/LA51'), {
 const TianliGPT = dynamic(() => import('@/components/TianliGPT'), {
   ssr: false
 })
+const KnowledgeGraphLauncher = dynamic(
+  () => import('@/components/KnowledgeGraph/KnowledgeGraphLauncher'),
+  { ssr: false }
+)
 
 export default ExternalPlugin

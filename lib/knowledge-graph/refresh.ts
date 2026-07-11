@@ -197,16 +197,19 @@ function numericDate(value: unknown): number | null {
   return Number.isFinite(timestamp) ? timestamp : null
 }
 
-function asRefreshSnapshot(
-  snapshot: PageSnapshot | null
-): RefreshSnapshot | null {
-  if (!snapshot || !isRecord(snapshot)) return null
-  const lastEditedDate = numericDate(
-    (snapshot as Record<string, unknown>).lastEditedDate
-  )
+function asRefreshSnapshot(snapshot: unknown): RefreshSnapshot | null {
+  if (!isRecord(snapshot)) return null
+  const lastEditedDate = numericDate(snapshot.lastEditedDate)
   return lastEditedDate === null
     ? null
-    : { links: snapshot.links || [], lastEditedDate }
+    : {
+        links: Array.isArray(snapshot.links)
+          ? snapshot.links.filter(
+              (link): link is string => typeof link === 'string'
+            )
+          : [],
+        lastEditedDate
+      }
 }
 
 function pageValueFromRecordMap(
@@ -232,7 +235,7 @@ function unwrapValue(value: unknown): Record<string, unknown> | null {
   return current
 }
 
-function isRecord(value: unknown): value is Record<string, any> {
+function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 

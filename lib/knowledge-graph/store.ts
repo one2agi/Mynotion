@@ -21,7 +21,7 @@ type ListOptions = {
 }
 
 export interface GraphBlobStore {
-  get(key: string, options: JsonReadOptions): Promise<unknown | null>
+  get(key: string, options: JsonReadOptions): Promise<unknown>
   list(options?: ListOptions): Promise<{ blobs: Array<{ key: string }> }>
   setJSON(
     key: string,

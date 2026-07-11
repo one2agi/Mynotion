@@ -1,6 +1,8 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { useRouter } from 'next/router'
+import { siteConfig } from '@/lib/config'
+import ExternalPlugin from '@/components/ExternalPlugins'
 import KnowledgeGraphCanvas, {
   getCanvasDimensions
 } from '@/components/KnowledgeGraph/KnowledgeGraphCanvas'
@@ -11,6 +13,24 @@ import { __pauseAnimation } from 'react-force-graph-2d'
 jest.mock('next/router', () => ({
   useRouter: jest.fn()
 }))
+
+jest.mock('@/lib/config', () => ({
+  siteConfig: jest.fn()
+}))
+
+jest.mock('@/lib/global', () => ({
+  useGlobal: () => ({ lang: 'zh-CN' })
+}))
+
+jest.mock('@/lib/db/notion/convertInnerUrl', () => ({
+  convertInnerUrl: jest.fn()
+}))
+
+jest.mock('@/components/GlobalStyle', () => ({
+  GlobalStyle: () => null
+}))
+
+jest.mock('@/components/VConsole', () => () => null)
 
 jest.mock('next/dynamic', () => {
   const React = require('react')
@@ -97,7 +117,34 @@ const mockGraphResponse = (body = graph, status = 200) => {
 
 beforeEach(() => {
   useRouter.mockReturnValue(router)
+  siteConfig.mockImplementation(key => key === 'CAN_COPY')
   mockGraphResponse()
+})
+
+test('does not mount a global launcher when the knowledge graph is disabled', async () => {
+  render(<ExternalPlugin post={{ id: 'current', slug: '/current' }} />)
+
+  await waitFor(() => {
+    expect(
+      screen.queryByRole('button', { name: '知识图谱' })
+    ).not.toBeInTheDocument()
+  })
+})
+
+test.each([
+  ['article', { id: 'current', slug: '/current' }],
+  ['non-article', undefined]
+])('mounts one global launcher on a %s page when enabled', async (_, post) => {
+  siteConfig.mockImplementation(
+    key => key === 'KNOWLEDGE_GRAPH_ENABLE' || key === 'CAN_COPY'
+  )
+
+  render(<ExternalPlugin post={post} />)
+
+  expect(
+    await screen.findAllByRole('button', { name: '知识图谱' })
+  ).toHaveLength(1)
+  expect(fetch).not.toHaveBeenCalled()
 })
 
 test('loads the drawer only after its accessible launcher is activated', async () => {
