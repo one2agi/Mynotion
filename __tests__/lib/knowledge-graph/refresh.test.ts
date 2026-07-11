@@ -1,4 +1,5 @@
 import { refreshKnowledgeGraph } from '@/lib/knowledge-graph/refresh'
+import { EmptyData } from '@/lib/db/SiteDataFallback'
 import type { PageSnapshot, PublicGraph } from '@/lib/knowledge-graph/types'
 
 declare const jest: any
@@ -201,18 +202,31 @@ test('keeps the prior snapshot when one changed page fails', async () => {
   )
 })
 
-test('does not overwrite graph or state when the global page list fails', async () => {
+test('rejects the real global fallback before changing stored graph data', async () => {
   const context = setup()
-  context.deps.fetchGlobalAllData = jest.fn(async () => {
-    throw new Error('global list failed')
-  })
+  context.deps.fetchGlobalAllData = jest.fn(async () =>
+    EmptyData({
+      pageId: 'sanitized-invalid-page-id',
+      siteInfo: {},
+      homeBannerImage: '/bg_image.jpg'
+    })
+  )
 
   await expect(refreshKnowledgeGraph(context.deps)).rejects.toThrow(
-    'global list failed'
+    'Published Notion article metadata is invalid'
   )
-  expect(context.store.putGraph).not.toHaveBeenCalled()
-  expect(context.store.putState).not.toHaveBeenCalled()
+  expect(context.fetchNotionPageBlocks).not.toHaveBeenCalled()
+  expect(context.store.getState).not.toHaveBeenCalled()
+  expect(context.store.getPageSnapshot).not.toHaveBeenCalled()
+  expect(context.store.putPageSnapshot).not.toHaveBeenCalled()
   expect(context.store.deletePageSnapshot).not.toHaveBeenCalled()
+  expect(context.store.putGraph).not.toHaveBeenCalled()
+  expect(context.store.cleanupPublications).not.toHaveBeenCalled()
+  expect(context.store.putState).not.toHaveBeenCalled()
+  expect(await context.store.getGraph()).toEqual({
+    nodes: [{ id: A, title: 'Old', slug: 'old' }],
+    edges: []
+  })
 })
 
 test('leaves the current publication untouched when the claim is denied', async () => {
