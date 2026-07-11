@@ -1,5 +1,4 @@
 module.exports = {
-  ignoreDuringBuilds: true,
   env: {
     browser: true,
     es2021: true,
@@ -8,7 +7,6 @@ module.exports = {
   extends: [
     'plugin:react/jsx-runtime',
     'plugin:react/recommended',
-    'plugin:@next/next/recommended',
     'next',
     'prettier',
     'plugin:@typescript-eslint/recommended', // 添加 TypeScript 推荐规则
