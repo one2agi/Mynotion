@@ -30,9 +30,9 @@ The system uses request-triggered stale-while-revalidate updates. It does not re
 2. The graph API reads the latest public graph from EdgeOne Blob storage.
 3. If the internal refresh state is newer than ten minutes, the API returns the graph without refreshing.
 4. If the internal refresh state is stale, the API still returns the existing graph immediately and starts a background refresh.
-5. A refresh lease prevents multiple edge locations from updating the graph concurrently.
+5. An immutable ten-minute refresh-window claim allows one edge location to start the refresh for that window. Request workers never delete or release claims.
 6. A Cloud Function fetches the current published article list, compares `lastEditedDate`, and reparses only changed articles.
-7. The function rebuilds the deduplicated graph and replaces the public graph object.
+7. The function rebuilds the deduplicated graph, writes a unique immutable graph version, then advances a private graph pointer only after that version write succeeds.
 
 The first request on an empty store starts initial generation. The drawer displays a loading state and retries until the first graph is available.
 
@@ -40,7 +40,7 @@ The first request on an empty store starts initial generation. The drawer displa
 
 - **Graph API:** Returns the existing graph quickly and decides whether a refresh is due.
 - **Cloud Function:** Performs Notion fetching, block parsing, relation extraction, and graph assembly.
-- **EdgeOne Blob:** Stores public graph data, private refresh state, per-page extraction snapshots, and the refresh lease.
+- **EdgeOne Blob:** Stores immutable public graph versions, a private graph pointer and refresh state, per-page extraction snapshots, and immutable refresh-window claims.
 - **CDN/browser cache:** Reduces repeated graph reads while keeping the drawer responsive.
 
 The heavier update work belongs in a Cloud Function because Edge Functions have a short CPU budget. Blob is available to both Edge and Cloud Functions and supports strong reads and conditional create operations.
@@ -50,13 +50,14 @@ The heavier update work belongs in a Cloud Function because Edge Functions have 
 Use a dedicated Blob store named `notionnext-knowledge-graph` by default.
 
 ```text
-graph/current.json          Public nodes and edges only
-state/refresh.json          Private last successful refresh state
-state/refresh-lock.json     Private expiring refresh lease
-pages/<page-id>.json        Private per-page extraction snapshot
+graph/versions/<id>.json             Immutable public nodes and edges only
+state/graph-pointer.json             Private pointer to the current version
+state/refresh.json                   Private last successful refresh state
+state/refresh-claims/<window>.json   Private immutable ten-minute claim
+pages/<page-id>.json                 Private per-page extraction snapshot
 ```
 
-`graph/current.json` contains only:
+Each `graph/versions/<id>.json` object contains only:
 
 ```json
 {
@@ -67,7 +68,9 @@ pages/<page-id>.json        Private per-page extraction snapshot
 
 It does not expose generation time, schema version, Notion tokens, raw article content, Relation property names, drafts, or error details. Refresh timestamps remain in the private state object.
 
-The refresh lease uses a strongly consistent read and an `onlyIfNew` write. The updater removes the lease in a `finally` path. A lease older than the configured timeout can be replaced so a failed update cannot block future refreshes permanently.
+The API reads `state/graph-pointer.json` with strong consistency, then resolves its immutable graph version. A refresh first writes `graph/versions/<id>.json` with `onlyIfNew: true`; only a successful version write may advance the pointer. If the pointer request has an ambiguous result, it can refer only to a fully written version.
+
+Refresh work uses a deterministic key for each ten-minute window and creates it with `onlyIfNew: true`. Request workers never delete claims, so concurrent callers in the same window have one winner while the next window has a new key. Failed refreshes do not block a later window.
 
 ## Extraction Model
 
@@ -161,7 +164,7 @@ All Relation properties are included in the first release. A Relation property a
 - Preserve the previous page snapshot when one article cannot be parsed.
 - Show a contained unavailable state when Blob cannot be read; the article page remains functional.
 - Retry initial graph loading while first-time generation is running.
-- Recover refresh leases after their timeout.
+- Keep the previous graph pointer when a new version write fails; a later refresh window may retry.
 - Contain frontend chunk or renderer failures inside the drawer so navigation and article rendering continue working.
 - Log server-side update failures without exposing internal details through the public graph API.
 
@@ -172,7 +175,7 @@ Notion and EdgeOne Blob are external APIs, so tests must be grounded in observed
 1. Capture sanitized fixtures from a real Notion database containing both a page mention and a Relation property.
 2. Write extraction tests that fail before implementation, then verify they pass after implementation.
 3. Cover edge deduplication, undirected normalization, self-link removal, draft filtering, unpublishing, deletion, and per-page failure fallback.
-4. Verify Blob strong reads, conditional writes, lease cleanup, and stale lease recovery against the real EdgeOne Blob service, not only mocks.
+4. Verify Blob strong pointer reads, conditional refresh-window claims, immutable version publication order, and pointer resolution against the real EdgeOne Blob service, not only mocks.
 5. Test graph payload and rendering behavior with 50, 500, and 1,000-node fixtures.
 6. Verify the drawer on desktop and mobile, including dark mode, collision-free controls, loading and empty states, and node navigation.
 7. After deployment, create a real Notion relationship, wait until the graph becomes stale, open the drawer, and confirm that the production graph updates after the background refresh.

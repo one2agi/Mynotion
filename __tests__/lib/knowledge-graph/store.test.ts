@@ -23,6 +23,7 @@ class MemoryBlobStore {
   }> = []
   readonly deleteCalls: string[] = []
   failNextWrite = false
+  failAfterNextPointerWrite = false
 
   async get(key: string, options?: ReadOptions): Promise<unknown | null> {
     this.getCalls.push(options ? { key, options } : { key })
@@ -46,6 +47,11 @@ class MemoryBlobStore {
     }
 
     this.values.set(key, value)
+
+    if (this.failAfterNextPointerWrite && key === 'state/graph-pointer.json') {
+      this.failAfterNextPointerWrite = false
+      throw new Error('ambiguous pointer response')
+    }
   }
 
   async delete(key: string): Promise<void> {
@@ -61,7 +67,14 @@ const graph: PublicGraph = {
   edges: []
 }
 
-test('stores graph, refresh state, and normalized page snapshots under stable keys', async () => {
+const replacement: PublicGraph = {
+  nodes: [
+    { id: '00000000000000000000000000000002', title: 'Two', slug: '/two' }
+  ],
+  edges: []
+}
+
+test('stores refresh state and normalized page snapshots under stable private keys', async () => {
   const blob = new MemoryBlobStore()
   const store = createGraphStore(blob, () => 1_000)
   const snapshot: PageSnapshot = {
@@ -69,11 +82,9 @@ test('stores graph, refresh state, and normalized page snapshots under stable ke
   }
   const state = { refreshedAt: 1_000 }
 
-  await store.putGraph(graph)
   await store.putState(state)
   await store.putPageSnapshot('00000000-0000-0000-0000-000000000001', snapshot)
 
-  expect(await store.getGraph()).toEqual(graph)
   expect(await store.getState()).toEqual(state)
   expect(
     await store.getPageSnapshot('00000000-0000-0000-0000-000000000001')
@@ -82,22 +93,60 @@ test('stores graph, refresh state, and normalized page snapshots under stable ke
   await store.deletePageSnapshot('00000000-0000-0000-0000-000000000001')
 
   expect(blob.setJSONCalls.map(call => call.key)).toEqual([
-    'graph/current.json',
     'state/refresh.json',
     'pages/00000000000000000000000000000001.json'
   ])
   expect(blob.deleteCalls).toEqual([
     'pages/00000000000000000000000000000001.json'
   ])
+  expect(blob.getCalls).toEqual([
+    {
+      key: 'state/refresh.json',
+      options: { consistency: 'strong', type: 'json' }
+    },
+    {
+      key: 'pages/00000000000000000000000000000001.json',
+      options: { type: 'json' }
+    }
+  ])
 })
 
-test('uses strongly consistent JSON reads for refresh state and leases', async () => {
+test('publishes an immutable graph version before advancing a strong pointer', async () => {
+  const blob = new MemoryBlobStore()
+  const store = createGraphStore(blob, () => 1_000)
+
+  await store.putGraph(graph, 'generation-one')
+
+  expect(await store.getGraph()).toEqual(graph)
+  expect(blob.setJSONCalls).toEqual([
+    {
+      key: 'graph/versions/generation-one.json',
+      value: graph,
+      options: { onlyIfNew: true }
+    },
+    {
+      key: 'state/graph-pointer.json',
+      value: { generationId: 'generation-one' }
+    }
+  ])
+  expect(blob.getCalls).toEqual([
+    {
+      key: 'state/graph-pointer.json',
+      options: { consistency: 'strong', type: 'json' }
+    },
+    {
+      key: 'graph/versions/generation-one.json',
+      options: { consistency: 'strong', type: 'json' }
+    }
+  ])
+})
+
+test('uses strong JSON reads for refresh state and the graph pointer', async () => {
   const blob = new MemoryBlobStore()
   const store = createGraphStore(blob, () => 1_000)
 
   await store.getState()
-  await store.acquireLease('worker-a', 5_000)
-  await store.releaseLease('worker-a')
+  await store.getGraph()
 
   expect(blob.getCalls).toEqual([
     {
@@ -105,98 +154,92 @@ test('uses strongly consistent JSON reads for refresh state and leases', async (
       options: { consistency: 'strong', type: 'json' }
     },
     {
-      key: 'state/refresh-lock.json',
-      options: { consistency: 'strong', type: 'json' }
-    },
-    {
-      key: 'state/refresh-lock.json',
-      options: { consistency: 'strong', type: 'json' }
-    },
-    {
-      key: 'state/refresh-lock.json',
+      key: 'state/graph-pointer.json',
       options: { consistency: 'strong', type: 'json' }
     }
   ])
 })
 
-test('creates a lease conditionally and confirms its ownership', async () => {
+test('allows one immutable refresh claim for concurrent callers in the same window', async () => {
   const blob = new MemoryBlobStore()
-  const store = createGraphStore(blob, () => 1_000)
+  const store = createGraphStore(blob, () => 1_234_567)
 
-  expect(await store.acquireLease('worker-a', 5_000)).toEqual({
-    owner: 'worker-a',
-    acquiredAt: 1_000,
-    expiresAt: 6_000
-  })
+  const claims = await Promise.all([
+    store.acquireRefreshClaim('worker-a'),
+    store.acquireRefreshClaim('worker-b')
+  ])
+
+  expect(claims).toEqual([{ owner: 'worker-a', windowStart: 1_200_000 }, null])
   expect(blob.setJSONCalls).toEqual([
     {
-      key: 'state/refresh-lock.json',
-      value: { owner: 'worker-a', acquiredAt: 1_000, expiresAt: 6_000 },
+      key: 'state/refresh-claims/1200000.json',
+      value: { owner: 'worker-a', windowStart: 1_200_000 },
+      options: { onlyIfNew: true }
+    },
+    {
+      key: 'state/refresh-claims/1200000.json',
+      value: { owner: 'worker-b', windowStart: 1_200_000 },
       options: { onlyIfNew: true }
     }
   ])
-})
-
-test('does not let a different owner release an active lease', async () => {
-  const blob = new MemoryBlobStore()
-  const store = createGraphStore(blob, () => 1_000)
-
-  await store.acquireLease('worker-a', 5_000)
-
-  expect(await store.releaseLease('worker-b')).toBe(false)
   expect(blob.deleteCalls).toEqual([])
-  expect(await store.releaseLease('worker-a')).toBe(true)
-  expect(blob.deleteCalls).toEqual(['state/refresh-lock.json'])
 })
 
-test('does not acquire a lease that another active owner holds', async () => {
+test('allows a new immutable refresh claim in an adjacent window', async () => {
   const blob = new MemoryBlobStore()
-  const store = createGraphStore(blob, () => 1_000)
+  let now = 1_200_000
+  const store = createGraphStore(blob, () => now)
 
-  await store.acquireLease('worker-a', 5_000)
-
-  expect(await store.acquireLease('worker-b', 5_000)).toBeNull()
-  expect(blob.deleteCalls).toEqual([])
-  expect(blob.setJSONCalls).toHaveLength(1)
-})
-
-test('recovers an expired lease by deleting it and retrying one conditional create', async () => {
-  const blob = new MemoryBlobStore()
-  blob.values.set('state/refresh-lock.json', {
-    owner: 'stalled-worker',
-    acquiredAt: 0,
-    expiresAt: 999
-  })
-  const store = createGraphStore(blob, () => 1_000)
-
-  expect(await store.acquireLease('worker-a', 5_000)).toEqual({
+  expect(await store.acquireRefreshClaim('worker-a')).toEqual({
     owner: 'worker-a',
-    acquiredAt: 1_000,
-    expiresAt: 6_000
+    windowStart: 1_200_000
   })
-  expect(blob.deleteCalls).toEqual(['state/refresh-lock.json'])
-  expect(blob.setJSONCalls).toEqual([
-    {
-      key: 'state/refresh-lock.json',
-      value: { owner: 'worker-a', acquiredAt: 1_000, expiresAt: 6_000 },
-      options: { onlyIfNew: true }
-    }
+
+  now = 1_800_000
+
+  expect(await store.acquireRefreshClaim('worker-b')).toEqual({
+    owner: 'worker-b',
+    windowStart: 1_800_000
+  })
+  expect(blob.setJSONCalls.map(call => call.key)).toEqual([
+    'state/refresh-claims/1200000.json',
+    'state/refresh-claims/1800000.json'
   ])
+  expect(blob.deleteCalls).toEqual([])
 })
 
-test('leaves the last public graph intact when a replacement write fails', async () => {
+test('preserves the prior graph pointer when the next immutable graph write fails', async () => {
   const blob = new MemoryBlobStore()
   const store = createGraphStore(blob, () => 1_000)
-  const replacement: PublicGraph = {
-    nodes: [
-      { id: '00000000000000000000000000000002', title: 'Two', slug: '/two' }
-    ],
-    edges: []
-  }
 
-  await store.putGraph(graph)
+  await store.putGraph(graph, 'generation-one')
   blob.failNextWrite = true
 
-  await expect(store.putGraph(replacement)).rejects.toThrow('blob write failed')
+  await expect(store.putGraph(replacement, 'generation-two')).rejects.toThrow(
+    'blob write failed'
+  )
   expect(await store.getGraph()).toEqual(graph)
+  expect(blob.values.get('state/graph-pointer.json')).toEqual({
+    generationId: 'generation-one'
+  })
+  expect(blob.values.has('graph/versions/generation-two.json')).toBe(false)
+})
+
+test('resolves an ambiguously acknowledged pointer only to its completed graph version', async () => {
+  const blob = new MemoryBlobStore()
+  const store = createGraphStore(blob, () => 1_000)
+
+  await store.putGraph(graph, 'generation-one')
+  blob.failAfterNextPointerWrite = true
+
+  await expect(store.putGraph(replacement, 'generation-two')).rejects.toThrow(
+    'ambiguous pointer response'
+  )
+  expect(blob.values.get('state/graph-pointer.json')).toEqual({
+    generationId: 'generation-two'
+  })
+  expect(blob.values.get('graph/versions/generation-two.json')).toEqual(
+    replacement
+  )
+  expect(await store.getGraph()).toEqual(replacement)
 })

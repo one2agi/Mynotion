@@ -1,9 +1,9 @@
 import { normalizePageId } from './extract'
 import type { PageSnapshot, PublicGraph } from './types'
 
-const GRAPH_KEY = 'graph/current.json'
+const GRAPH_POINTER_KEY = 'state/graph-pointer.json'
 const STATE_KEY = 'state/refresh.json'
-const LEASE_KEY = 'state/refresh-lock.json'
+const REFRESH_CLAIM_WINDOW_MS = 10 * 60 * 1000
 
 type JsonReadOptions = {
   consistency?: 'eventual' | 'strong'
@@ -24,10 +24,13 @@ export interface GraphBlobStore {
   delete(key: string): Promise<void>
 }
 
-export interface RefreshLease {
+export interface RefreshClaim {
   owner: string
-  acquiredAt: number
-  expiresAt: number
+  windowStart: number
+}
+
+export interface GraphPointer {
+  generationId: string
 }
 
 const strongJsonRead = {
@@ -46,16 +49,26 @@ function pageSnapshotKey(id: string): string {
   return `pages/${normalizedId}.json`
 }
 
-function isRefreshLease(value: unknown): value is RefreshLease {
-  if (!value || typeof value !== 'object') return false
+function graphVersionKey(generationId: string): string {
+  if (!/^[A-Za-z0-9][A-Za-z0-9_-]*$/.test(generationId)) {
+    throw new TypeError(
+      'Graph generation id must contain only letters, numbers, _ or -'
+    )
+  }
 
-  const lease = value as Record<string, unknown>
+  return `graph/versions/${generationId}.json`
+}
+
+function refreshClaimKey(windowStart: number): string {
+  return `state/refresh-claims/${windowStart}.json`
+}
+
+function isGraphPointer(value: unknown): value is GraphPointer {
   return (
-    typeof lease.owner === 'string' &&
-    typeof lease.acquiredAt === 'number' &&
-    Number.isFinite(lease.acquiredAt) &&
-    typeof lease.expiresAt === 'number' &&
-    Number.isFinite(lease.expiresAt)
+    typeof value === 'object' &&
+    value !== null &&
+    'generationId' in value &&
+    typeof (value as { generationId?: unknown }).generationId === 'string'
   )
 }
 
@@ -72,40 +85,22 @@ export function createGraphStore(
   blobStore: GraphBlobStore,
   clock: () => number
 ) {
-  const getLease = async (): Promise<RefreshLease | null> => {
-    const lease = await blobStore.get(LEASE_KEY, strongJsonRead)
-    return isRefreshLease(lease) ? lease : null
-  }
-
-  const createLease = async (
-    owner: string,
-    acquiredAt: number,
-    expiresAt: number
-  ): Promise<RefreshLease | null> => {
-    const lease: RefreshLease = { owner, acquiredAt, expiresAt }
-
-    try {
-      await blobStore.setJSON(LEASE_KEY, lease, { onlyIfNew: true })
-    } catch (error) {
-      if (isPreconditionFailed(error)) return null
-      throw error
-    }
-
-    const confirmed = await getLease()
-    return confirmed?.owner === owner &&
-      confirmed.acquiredAt === acquiredAt &&
-      confirmed.expiresAt === expiresAt
-      ? confirmed
-      : null
-  }
-
   return {
     async getGraph(): Promise<PublicGraph | null> {
-      return (await blobStore.get(GRAPH_KEY, jsonRead)) as PublicGraph | null
+      const pointer = await blobStore.get(GRAPH_POINTER_KEY, strongJsonRead)
+      if (!isGraphPointer(pointer)) return null
+
+      return (await blobStore.get(
+        graphVersionKey(pointer.generationId),
+        strongJsonRead
+      )) as PublicGraph | null
     },
 
-    async putGraph(graph: PublicGraph): Promise<void> {
-      await blobStore.setJSON(GRAPH_KEY, graph)
+    async putGraph(graph: PublicGraph, generationId: string): Promise<void> {
+      await blobStore.setJSON(graphVersionKey(generationId), graph, {
+        onlyIfNew: true
+      })
+      await blobStore.setJSON(GRAPH_POINTER_KEY, { generationId })
     },
 
     async getState<T>(): Promise<T | null> {
@@ -131,29 +126,20 @@ export function createGraphStore(
       await blobStore.delete(pageSnapshotKey(id))
     },
 
-    async acquireLease(
-      owner: string,
-      durationMs: number
-    ): Promise<RefreshLease | null> {
-      const acquiredAt = clock()
-      const expiresAt = acquiredAt + durationMs
-      const existing = await getLease()
+    async acquireRefreshClaim(owner: string): Promise<RefreshClaim | null> {
+      const windowStart =
+        Math.floor(clock() / REFRESH_CLAIM_WINDOW_MS) * REFRESH_CLAIM_WINDOW_MS
+      const claim: RefreshClaim = { owner, windowStart }
 
-      if (existing && existing.expiresAt > acquiredAt) return null
-
-      if (existing) {
-        await blobStore.delete(LEASE_KEY)
+      try {
+        await blobStore.setJSON(refreshClaimKey(windowStart), claim, {
+          onlyIfNew: true
+        })
+        return claim
+      } catch (error) {
+        if (isPreconditionFailed(error)) return null
+        throw error
       }
-
-      return createLease(owner, acquiredAt, expiresAt)
-    },
-
-    async releaseLease(owner: string): Promise<boolean> {
-      const lease = await getLease()
-      if (!lease || lease.owner !== owner) return false
-
-      await blobStore.delete(LEASE_KEY)
-      return true
     }
   }
 }
