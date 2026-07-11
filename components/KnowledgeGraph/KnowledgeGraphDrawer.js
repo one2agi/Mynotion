@@ -5,6 +5,7 @@ import { useRouter } from 'next/router'
 import { useKnowledgeGraphDarkMode } from './appearance'
 import {
   normalizeKnowledgeGraphDepth,
+  normalizeKnowledgeGraphId,
   selectGraphNeighborhood
 } from './graphView'
 
@@ -14,7 +15,13 @@ const KnowledgeGraphCanvas = dynamic(() => import('./KnowledgeGraphCanvas'), {
 
 const emptyGraph = { nodes: [], edges: [] }
 const INITIALIZING_POLL_DELAY = 2_000
-const INITIALIZING_POLL_LIMIT = 3
+const INITIALIZING_POLL_MAX_DELAY = 10_000
+
+export const getInitializingPollDelay = attempt =>
+  Math.min(
+    INITIALIZING_POLL_DELAY * 2 ** Math.max(0, attempt),
+    INITIALIZING_POLL_MAX_DELAY
+  )
 
 const isPublicGraph = value =>
   Array.isArray(value?.nodes) && Array.isArray(value?.edges)
@@ -27,7 +34,10 @@ const KnowledgeGraphDrawer = ({ depth, isDarkMode, isOpen, onClose, post }) => {
   const [graph, setGraph] = useState(null)
   const [status, setStatus] = useState('idle')
   const [mode, setMode] = useState(hasCurrentPost ? 'local' : 'full')
+  const [retryCount, setRetryCount] = useState(0)
+  const [selectedNodeId, setSelectedNodeId] = useState('')
   const localDepth = normalizeKnowledgeGraphDepth(depth)
+  const currentId = normalizeKnowledgeGraphId(post?.id)
 
   useEffect(() => {
     if (!isOpen) return
@@ -55,12 +65,11 @@ const KnowledgeGraphDrawer = ({ depth, isDarkMode, isOpen, onClose, post }) => {
 
         if (response.status === 202) {
           setStatus('initializing')
-          if (pollCount < INITIALIZING_POLL_LIMIT) {
-            pollCount += 1
-            pollTimer = window.setTimeout(() => {
-              void loadGraph()
-            }, INITIALIZING_POLL_DELAY)
-          }
+          const delay = getInitializingPollDelay(pollCount)
+          pollCount += 1
+          pollTimer = window.setTimeout(() => {
+            void loadGraph()
+          }, delay)
           return
         }
 
@@ -88,7 +97,7 @@ const KnowledgeGraphDrawer = ({ depth, isDarkMode, isOpen, onClose, post }) => {
       cancelled = true
       window.clearTimeout(pollTimer)
     }
-  }, [isOpen])
+  }, [isOpen, retryCount])
 
   useEffect(() => {
     const closeForRouteChange = () => onClose()
@@ -99,15 +108,30 @@ const KnowledgeGraphDrawer = ({ depth, isDarkMode, isOpen, onClose, post }) => {
 
   const displayedGraph = useMemo(() => {
     if (!graph) return emptyGraph
-    if (mode === 'local' && post?.id) {
-      return selectGraphNeighborhood(graph, post.id, localDepth)
+    if (mode === 'local' && currentId) {
+      return selectGraphNeighborhood(graph, currentId, localDepth)
     }
 
     return graph
-  }, [graph, localDepth, mode, post?.id])
+  }, [currentId, graph, localDepth, mode])
+
+  useEffect(() => {
+    if (displayedGraph.nodes.some(node => node.id === selectedNodeId)) return
+    const initialNode =
+      displayedGraph.nodes.find(node => node.id === currentId) ||
+      displayedGraph.nodes[0]
+    setSelectedNodeId(initialNode?.id || '')
+  }, [currentId, displayedGraph.nodes, selectedNodeId])
 
   const navigateToNode = node => {
-    if (node?.slug) router.push(node.slug)
+    const target = node?.href || node?.slug
+    if (target) router.push(target)
+  }
+
+  const navigateToSelectedNode = () => {
+    navigateToNode(
+      displayedGraph.nodes.find(node => node.id === selectedNodeId)
+    )
   }
 
   const showEmpty = status === 'ready' && displayedGraph.edges.length === 0
@@ -241,9 +265,29 @@ const KnowledgeGraphDrawer = ({ depth, isDarkMode, isOpen, onClose, post }) => {
                 </p>
               ) : null}
               {status === 'unavailable' ? (
-                <p className='p-4 text-sm text-gray-500 dark:text-gray-400'>
-                  知识图谱暂不可用
-                </p>
+                <div className='flex items-center gap-3 p-4'>
+                  <p className='text-sm text-gray-500 dark:text-gray-400'>
+                    知识图谱暂不可用
+                  </p>
+                  <button
+                    aria-label='重试加载知识图谱'
+                    className='flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-gray-500 transition hover:bg-gray-100 hover:text-gray-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 dark:hover:bg-gray-800 dark:hover:text-gray-100'
+                    onClick={() => setRetryCount(value => value + 1)}
+                    title='重试加载知识图谱'
+                    type='button'
+                  >
+                    <svg
+                      aria-hidden='true'
+                      className='h-4 w-4'
+                      fill='none'
+                      stroke='currentColor'
+                      strokeWidth='1.75'
+                      viewBox='0 0 24 24'
+                    >
+                      <path d='M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7' />
+                    </svg>
+                  </button>
+                </div>
               ) : null}
               {showEmpty ? (
                 <p className='p-4 text-sm text-gray-500 dark:text-gray-400'>
@@ -251,13 +295,49 @@ const KnowledgeGraphDrawer = ({ depth, isDarkMode, isOpen, onClose, post }) => {
                 </p>
               ) : null}
               {status === 'ready' && !showEmpty ? (
-                <KnowledgeGraphCanvas
-                  active={isOpen}
-                  currentId={post?.id}
-                  graph={displayedGraph}
-                  isDarkMode={isDarkMode}
-                  onNodeClick={navigateToNode}
-                />
+                <div className='flex h-full min-h-0 flex-col'>
+                  <div className='flex shrink-0 items-center gap-2 border-b border-gray-200 p-2 dark:border-gray-800'>
+                    <select
+                      aria-label='选择图谱文章'
+                      className='min-w-0 flex-1 rounded-md border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100'
+                      onChange={event => setSelectedNodeId(event.target.value)}
+                      value={selectedNodeId}
+                    >
+                      {displayedGraph.nodes.map(node => (
+                        <option key={node.id} value={node.id}>
+                          {node.title}
+                        </option>
+                      ))}
+                    </select>
+                    <button
+                      aria-label='打开所选文章'
+                      className='flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-gray-500 transition hover:bg-gray-100 hover:text-gray-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 dark:hover:bg-gray-800 dark:hover:text-gray-100'
+                      onClick={navigateToSelectedNode}
+                      title='打开所选文章'
+                      type='button'
+                    >
+                      <svg
+                        aria-hidden='true'
+                        className='h-4 w-4'
+                        fill='none'
+                        stroke='currentColor'
+                        strokeWidth='1.75'
+                        viewBox='0 0 24 24'
+                      >
+                        <path d='M5 12h14M13 6l6 6-6 6' />
+                      </svg>
+                    </button>
+                  </div>
+                  <div className='min-h-0 flex-1'>
+                    <KnowledgeGraphCanvas
+                      active={isOpen}
+                      currentId={currentId}
+                      graph={displayedGraph}
+                      isDarkMode={isDarkMode}
+                      onNodeClick={navigateToNode}
+                    />
+                  </div>
+                </div>
               ) : null}
             </div>
           </div>

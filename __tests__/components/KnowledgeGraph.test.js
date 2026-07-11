@@ -6,7 +6,9 @@ import ExternalPlugin from '@/components/ExternalPlugins'
 import KnowledgeGraphCanvas, {
   getCanvasDimensions
 } from '@/components/KnowledgeGraph/KnowledgeGraphCanvas'
-import KnowledgeGraphDrawer from '@/components/KnowledgeGraph/KnowledgeGraphDrawer'
+import KnowledgeGraphDrawer, {
+  getInitializingPollDelay
+} from '@/components/KnowledgeGraph/KnowledgeGraphDrawer'
 import KnowledgeGraphLauncher from '@/components/KnowledgeGraph/KnowledgeGraphLauncher'
 import { __pauseAnimation } from 'react-force-graph-2d'
 
@@ -55,13 +57,39 @@ jest.mock('react-force-graph-2d', () => {
   const ForceGraph2D = React.forwardRef(function ForceGraph2D(props, ref) {
     React.useImperativeHandle(ref, () => ({ pauseAnimation }))
 
+    let firstNodeFill = ''
+    const context = {
+      arc: jest.fn(),
+      beginPath: jest.fn(),
+      fill: jest.fn(),
+      set fillStyle(value) {
+        firstNodeFill = value
+      }
+    }
+    if (props.graphData.nodes[0]) {
+      props.nodeCanvasObject?.(props.graphData.nodes[0], context)
+    }
+
+    const firstNodeLabel =
+      typeof props.nodeLabel === 'function'
+        ? props.nodeLabel(props.graphData.nodes[0])
+        : props.nodeLabel
+
     return (
       <>
         <button
           aria-label='选择图谱节点'
           data-background-color={props.backgroundColor}
+          data-first-node-fill={firstNodeFill}
           data-height={props.height}
-          data-node-label={props.nodeLabel}
+          data-link-count={props.graphData.links.length}
+          data-node-label-html={firstNodeLabel?.innerHTML || ''}
+          data-node-label-text={firstNodeLabel?.textContent || ''}
+          data-node-label-type={
+            firstNodeLabel instanceof HTMLElement
+              ? 'element'
+              : typeof firstNodeLabel
+          }
           data-node-count={props.graphData.nodes.length}
           data-width={props.width}
           onClick={() => props.onNodeClick?.(props.graphData.nodes[1])}
@@ -72,8 +100,8 @@ jest.mock('react-force-graph-2d', () => {
           aria-label='模拟渲染器变异'
           onClick={() => {
             props.graphData.nodes.pop()
-            if (props.graphData.edges[0]) {
-              props.graphData.edges[0].source = props.graphData.nodes[0]
+            if (props.graphData.links[0]) {
+              props.graphData.links[0].source = props.graphData.nodes[0]
             }
           }}
           tabIndex='-1'
@@ -92,18 +120,48 @@ jest.mock('react-force-graph-2d', () => {
 
 const graph = {
   nodes: [
-    { id: 'current', title: 'Current article', slug: '/current' },
-    { id: 'related', title: 'Related article', slug: '/related' },
-    { id: 'other', title: 'Other article', slug: '/other' }
+    {
+      id: 'current',
+      title: 'Current article',
+      slug: '/current',
+      href: '/resolved/current.html'
+    },
+    {
+      id: 'related',
+      title: 'Related article',
+      slug: '/wrong-related',
+      href: '/resolved/related.html'
+    },
+    {
+      id: 'other',
+      title: 'Other article',
+      slug: '/other',
+      href: '/resolved/other.html'
+    }
   ],
   edges: [{ source: 'current', target: 'related' }]
 }
 
 const depthGraph = {
   nodes: [
-    { id: 'current', title: 'Current article', slug: '/current' },
-    { id: 'related', title: 'Related article', slug: '/related' },
-    { id: 'two-hop', title: 'Two-hop article', slug: '/two-hop' }
+    {
+      id: 'current',
+      title: 'Current article',
+      slug: '/current',
+      href: '/current'
+    },
+    {
+      id: 'related',
+      title: 'Related article',
+      slug: '/related',
+      href: '/related'
+    },
+    {
+      id: 'two-hop',
+      title: 'Two-hop article',
+      slug: '/two-hop',
+      href: '/two-hop'
+    }
   ],
   edges: [
     { source: 'current', target: 'related' },
@@ -289,18 +347,21 @@ test('closes with its close button and navigates when a graph node is selected',
 
   await screen.findByRole('dialog')
   await user.click(await screen.findByRole('button', { name: '选择图谱节点' }))
-  expect(router.push).toHaveBeenCalledWith('/related')
+  expect(router.push).toHaveBeenCalledWith('/resolved/related.html')
 
   await user.click(screen.getByRole('button', { name: '关闭知识图谱' }))
   expect(onClose).toHaveBeenCalledTimes(1)
 })
 
-test('explains initializing, unavailable, and empty-relationship responses', async () => {
+test('explains initializing, error, and empty-relationship responses', async () => {
   mockGraphResponse({ status: 'initializing' }, 202)
   const initializing = render(
     <KnowledgeGraphDrawer isOpen={true} onClose={jest.fn()} />
   )
   expect(await screen.findByText('知识图谱正在初始化')).toBeInTheDocument()
+  expect(
+    screen.queryByRole('button', { name: '重试加载知识图谱' })
+  ).not.toBeInTheDocument()
   initializing.unmount()
 
   mockGraphResponse(null, 503)
@@ -308,6 +369,9 @@ test('explains initializing, unavailable, and empty-relationship responses', asy
     <KnowledgeGraphDrawer isOpen={true} onClose={jest.fn()} />
   )
   expect(await screen.findByText('知识图谱暂不可用')).toBeInTheDocument()
+  expect(
+    screen.getByRole('button', { name: '重试加载知识图谱' })
+  ).toBeInTheDocument()
   unavailable.unmount()
 
   mockGraphResponse({ nodes: [graph.nodes[0]], edges: [] })
@@ -334,12 +398,29 @@ test('shows an empty state when the local neighborhood has no relationships', as
   ).not.toBeInTheDocument()
 })
 
-test('polls a bounded number of times while initialization remains open', async () => {
+test('uses capped initialization backoff delays', () => {
+  expect([0, 1, 2, 3, 4, 20].map(getInitializingPollDelay)).toEqual([
+    2_000, 4_000, 8_000, 10_000, 10_000, 10_000
+  ])
+})
+
+test('keeps polling beyond six seconds and becomes ready when initialization completes', async () => {
   jest.useFakeTimers()
-  fetch.mockResolvedValue({
-    ok: true,
-    status: 202,
-    json: async () => ({ status: 'initializing' })
+  const openedAt = Date.now()
+  fetch.mockImplementation(async () => {
+    if (Date.now() - openedAt <= 6_000) {
+      return {
+        ok: true,
+        status: 202,
+        json: async () => ({ status: 'initializing' })
+      }
+    }
+
+    return {
+      ok: true,
+      status: 200,
+      json: async () => graph
+    }
   })
   render(<KnowledgeGraphDrawer isOpen={true} onClose={jest.fn()} />)
 
@@ -348,19 +429,28 @@ test('polls a bounded number of times while initialization remains open', async 
   })
   expect(fetch).toHaveBeenCalledTimes(1)
 
-  for (let attempt = 0; attempt < 3; attempt += 1) {
-    await act(async () => {
-      jest.advanceTimersByTime(2_000)
-      await Promise.resolve()
-    })
-  }
-  expect(fetch).toHaveBeenCalledTimes(4)
+  await act(async () => {
+    jest.advanceTimersByTime(2_000)
+    await Promise.resolve()
+    await Promise.resolve()
+  })
+  await act(async () => {
+    jest.advanceTimersByTime(4_000)
+    await Promise.resolve()
+    await Promise.resolve()
+  })
+  expect(fetch).toHaveBeenCalledTimes(3)
+  expect(screen.getByText('知识图谱正在初始化')).toBeInTheDocument()
 
   await act(async () => {
-    jest.advanceTimersByTime(60_000)
+    jest.advanceTimersByTime(8_000)
+    await Promise.resolve()
     await Promise.resolve()
   })
   expect(fetch).toHaveBeenCalledTimes(4)
+  expect(
+    await screen.findByRole('button', { name: '选择图谱节点' })
+  ).toBeInTheDocument()
 
   jest.useRealTimers()
 })
@@ -401,7 +491,7 @@ test('moves from initializing to ready with a cache-bypassing follow-up request'
   jest.useRealTimers()
 })
 
-test('cancels initializing polling when the drawer unmounts', async () => {
+test('cancels initializing polling when the drawer closes without unmounting', async () => {
   jest.useFakeTimers()
   mockGraphResponse({ status: 'initializing' }, 202)
   const view = render(
@@ -411,6 +501,7 @@ test('cancels initializing polling when the drawer unmounts', async () => {
   await act(async () => {
     await Promise.resolve()
   })
+  view.rerender(<KnowledgeGraphDrawer isOpen={false} onClose={jest.fn()} />)
   view.unmount()
   await act(async () => {
     jest.advanceTimersByTime(60_000)
@@ -419,6 +510,89 @@ test('cancels initializing polling when the drawer unmounts', async () => {
   expect(fetch).toHaveBeenCalledTimes(1)
 
   jest.useRealTimers()
+})
+
+test('retries only after an actual load error and then recovers', async () => {
+  const user = userEvent.setup()
+  fetch
+    .mockResolvedValueOnce({ ok: false, status: 503, json: async () => null })
+    .mockResolvedValueOnce({ ok: true, status: 200, json: async () => graph })
+
+  render(<KnowledgeGraphDrawer isOpen={true} onClose={jest.fn()} />)
+
+  expect(await screen.findByText('知识图谱暂不可用')).toBeInTheDocument()
+  await user.click(screen.getByRole('button', { name: '重试加载知识图谱' }))
+
+  expect(
+    await screen.findByRole('combobox', { name: '选择图谱文章' })
+  ).toBeInTheDocument()
+  expect(fetch).toHaveBeenCalledTimes(2)
+})
+
+test('provides native keyboard navigation synchronized with the displayed graph', async () => {
+  const user = userEvent.setup()
+  render(
+    <KnowledgeGraphDrawer
+      isOpen={true}
+      onClose={jest.fn()}
+      post={{ id: 'current', slug: '/current' }}
+    />
+  )
+
+  const select = await screen.findByRole('combobox', {
+    name: '选择图谱文章'
+  })
+  expect(
+    screen.getAllByRole('option').map(option => option.textContent)
+  ).toEqual(['Current article', 'Related article'])
+
+  await user.selectOptions(select, 'related')
+  await user.click(screen.getByRole('button', { name: '打开所选文章' }))
+
+  expect(router.push).toHaveBeenCalledWith('/resolved/related.html')
+})
+
+test('normalizes a hyphenated current article ID for local selection and highlighting', async () => {
+  const canonicalCurrent = '00000000000000000000000000000001'
+  const canonicalRelated = '00000000000000000000000000000002'
+  mockGraphResponse({
+    nodes: [
+      {
+        id: canonicalCurrent,
+        title: 'Current article',
+        slug: 'current',
+        href: '/current'
+      },
+      {
+        id: canonicalRelated,
+        title: 'Related article',
+        slug: 'related',
+        href: '/related'
+      },
+      {
+        id: '00000000000000000000000000000003',
+        title: 'Other article',
+        slug: 'other',
+        href: '/other'
+      }
+    ],
+    edges: [{ source: canonicalCurrent, target: canonicalRelated }]
+  })
+
+  render(
+    <KnowledgeGraphDrawer
+      isOpen={true}
+      onClose={jest.fn()}
+      post={{
+        id: '00000000-0000-0000-0000-000000000001',
+        slug: '/current'
+      }}
+    />
+  )
+
+  const canvas = await screen.findByRole('button', { name: '选择图谱节点' })
+  expect(canvas).toHaveAttribute('data-node-count', '2')
+  expect(canvas).toHaveAttribute('data-first-node-fill', '#0284c7')
 })
 
 test('traps Tab focus inside the drawer', async () => {
@@ -496,13 +670,27 @@ test('keeps measured canvas dimensions within short viewports', () => {
   })
 })
 
-test('keeps the complete title in the Canvas hover tooltip', () => {
+test('returns hostile titles as DOM text for the Canvas hover tooltip', () => {
+  const hostileTitle = '<img src=x onerror="window.__xss = true">'
   render(
-    <KnowledgeGraphCanvas active={true} currentId='current' graph={graph} />
+    <KnowledgeGraphCanvas
+      active={true}
+      currentId='current'
+      graph={{
+        ...graph,
+        nodes: [
+          { ...graph.nodes[0], title: hostileTitle },
+          ...graph.nodes.slice(1)
+        ]
+      }}
+    />
   )
 
-  expect(screen.getByRole('button', { name: '选择图谱节点' })).toHaveAttribute(
-    'data-node-label',
-    'title'
+  const canvas = screen.getByRole('button', { name: '选择图谱节点' })
+  expect(canvas).toHaveAttribute('data-node-label-type', 'element')
+  expect(canvas).toHaveAttribute('data-node-label-text', hostileTitle)
+  expect(canvas.getAttribute('data-node-label-html')).toBe(
+    '&lt;img src=x onerror="window.__xss = true"&gt;'
   )
+  expect(window.__xss).toBeUndefined()
 })

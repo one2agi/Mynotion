@@ -3,14 +3,20 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useKnowledgeGraphDarkMode } from './appearance'
 
 export const cloneGraphForRenderer = graph => ({
-  edges: graph.edges.map(edge => ({ ...edge })),
-  nodes: graph.nodes.map(node => ({ ...node }))
+  nodes: graph.nodes.map(node => ({ ...node })),
+  links: graph.edges.map(edge => ({ ...edge }))
 })
 
 export const getCanvasDimensions = ({ height, width }) => ({
   height: Math.max(0, Math.floor(height || 0)),
   width: Math.max(0, Math.floor(width || 0))
 })
+
+const createNodeLabel = node => {
+  const label = document.createElement('span')
+  label.textContent = node?.title || ''
+  return label
+}
 
 const KnowledgeGraphCanvas = ({
   active,
@@ -67,7 +73,7 @@ const KnowledgeGraphCanvas = ({
           context.fillStyle = node.id === currentId ? '#0284c7' : '#64748b'
           context.fill()
         }}
-        nodeLabel='title'
+        nodeLabel={createNodeLabel}
         onNodeClick={onNodeClick}
         ref={graphRef}
         width={dimensions.width}

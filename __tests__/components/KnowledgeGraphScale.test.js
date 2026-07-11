@@ -32,9 +32,12 @@ test.each([50, 500, 1000])(
     const neighborhood = selectGraphNeighborhood(graph, 'node-0', 2)
     const neighborhoodMs = performance.now() - neighborhoodStartedAt
 
-    expect(rendererGraph).toEqual(graph)
-    expect(rendererGraph).not.toBe(graph)
+    expect(rendererGraph).toEqual({
+      nodes: graph.nodes,
+      links: graph.edges
+    })
     expect(rendererGraph.nodes[0]).not.toBe(graph.nodes[0])
+    expect(rendererGraph.links[0]).not.toBe(graph.edges[0])
     expect(neighborhood.nodes).toHaveLength(3)
     expect(neighborhood.edges).toHaveLength(2)
     expect(graph.nodes).toHaveLength(size)

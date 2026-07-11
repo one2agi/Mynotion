@@ -4,6 +4,13 @@ export const normalizeKnowledgeGraphDepth = value => {
   return Math.min(2, Math.max(1, Math.trunc(depth)))
 }
 
+export const normalizeKnowledgeGraphId = value => {
+  if (typeof value !== 'string') return value
+  return /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(value)
+    ? value.replaceAll('-', '')
+    : value
+}
+
 export const selectGraphNeighborhood = (graph, currentId, depth) => {
   const currentNodeExists = graph.nodes.some(node => node.id === currentId)
 
