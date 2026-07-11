@@ -38,7 +38,7 @@ The first request on an empty store starts initial generation. The drawer displa
 
 ### Runtime Responsibilities
 
-- **Graph API:** Returns the existing graph quickly and decides whether a refresh is due.
+- **Graph API:** Runs as the Node.js Cloud Function at `cloud-functions/api/knowledge-graph.ts`, returns the existing graph quickly, and decides whether a refresh is due.
 - **Cloud Function:** Performs Notion fetching, block parsing, relation extraction, and graph assembly.
 - **EdgeOne Blob:** Stores immutable public graph versions, immutable publication markers, private refresh state, per-page extraction snapshots, and immutable refresh-window claims.
 - **CDN/browser cache:** Reduces repeated graph reads while keeping the drawer responsive.
