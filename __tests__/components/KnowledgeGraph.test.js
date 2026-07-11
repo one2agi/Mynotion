@@ -1,7 +1,11 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { useRouter } from 'next/router'
-import KnowledgeGraphCanvas from '@/components/KnowledgeGraph/KnowledgeGraphCanvas'
+import KnowledgeGraphCanvas, {
+  clampCanvasLabelPosition,
+  getCanvasDimensions,
+  getCanvasLabel
+} from '@/components/KnowledgeGraph/KnowledgeGraphCanvas'
 import KnowledgeGraphDrawer from '@/components/KnowledgeGraph/KnowledgeGraphDrawer'
 import KnowledgeGraphLauncher from '@/components/KnowledgeGraph/KnowledgeGraphLauncher'
 import { __pauseAnimation } from 'react-force-graph-2d'
@@ -34,13 +38,29 @@ jest.mock('react-force-graph-2d', () => {
     React.useImperativeHandle(ref, () => ({ pauseAnimation }))
 
     return (
-      <button
-        aria-label='选择图谱节点'
-        data-background-color={props.backgroundColor}
-        data-node-count={props.graphData.nodes.length}
-        onClick={() => props.onNodeClick?.(props.graphData.nodes[1])}
-        type='button'
-      />
+      <>
+        <button
+          aria-label='选择图谱节点'
+          data-background-color={props.backgroundColor}
+          data-height={props.height}
+          data-node-count={props.graphData.nodes.length}
+          data-width={props.width}
+          onClick={() => props.onNodeClick?.(props.graphData.nodes[1])}
+          tabIndex='-1'
+          type='button'
+        />
+        <button
+          aria-label='模拟渲染器变异'
+          onClick={() => {
+            props.graphData.nodes.pop()
+            if (props.graphData.edges[0]) {
+              props.graphData.edges[0].source = props.graphData.nodes[0]
+            }
+          }}
+          tabIndex='-1'
+          type='button'
+        />
+      </>
     )
   })
 
@@ -138,6 +158,32 @@ test('uses local mode for an article and can switch to full mode then return', a
   ).toHaveAttribute('data-node-count', '2')
 })
 
+test('keeps local neighbors after the renderer mutates full graph data', async () => {
+  const user = userEvent.setup()
+  mockGraphResponse({
+    nodes: graph.nodes.map(node => ({ ...node })),
+    edges: graph.edges.map(edge => ({ ...edge }))
+  })
+  render(
+    <KnowledgeGraphDrawer
+      isOpen={true}
+      onClose={jest.fn()}
+      post={{ id: 'current', slug: '/current' }}
+    />
+  )
+
+  await screen.findByRole('dialog')
+  await user.click(screen.getByRole('button', { name: '查看完整关系图' }))
+  await user.click(
+    await screen.findByRole('button', { name: '模拟渲染器变异' })
+  )
+  await user.click(screen.getByRole('button', { name: '返回当前文章关系' }))
+
+  expect(
+    await screen.findByRole('button', { name: '选择图谱节点' })
+  ).toHaveAttribute('data-node-count', '2')
+})
+
 test('uses full mode when there is no current article', async () => {
   render(<KnowledgeGraphDrawer isOpen={true} onClose={jest.fn()} />)
 
@@ -186,6 +232,96 @@ test('explains initializing, unavailable, and empty-relationship responses', asy
   expect(await screen.findByText('暂无文章关系')).toBeInTheDocument()
 })
 
+test('shows an empty state when the local neighborhood has no relationships', async () => {
+  mockGraphResponse({
+    nodes: graph.nodes,
+    edges: [{ source: 'related', target: 'other' }]
+  })
+  render(
+    <KnowledgeGraphDrawer
+      isOpen={true}
+      onClose={jest.fn()}
+      post={{ id: 'current', slug: '/current' }}
+    />
+  )
+
+  expect(await screen.findByText('暂无文章关系')).toBeInTheDocument()
+  expect(
+    screen.queryByRole('button', { name: '选择图谱节点' })
+  ).not.toBeInTheDocument()
+})
+
+test('polls a bounded number of times while initialization remains open', async () => {
+  jest.useFakeTimers()
+  fetch.mockResolvedValue({
+    ok: true,
+    status: 202,
+    json: async () => ({ status: 'initializing' })
+  })
+  render(<KnowledgeGraphDrawer isOpen={true} onClose={jest.fn()} />)
+
+  await act(async () => {
+    await Promise.resolve()
+  })
+  expect(fetch).toHaveBeenCalledTimes(1)
+
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    await act(async () => {
+      jest.advanceTimersByTime(2_000)
+      await Promise.resolve()
+    })
+  }
+  expect(fetch).toHaveBeenCalledTimes(4)
+
+  await act(async () => {
+    jest.advanceTimersByTime(60_000)
+    await Promise.resolve()
+  })
+  expect(fetch).toHaveBeenCalledTimes(4)
+
+  jest.useRealTimers()
+})
+
+test('cancels initializing polling when the drawer unmounts', async () => {
+  jest.useFakeTimers()
+  mockGraphResponse({ status: 'initializing' }, 202)
+  const view = render(
+    <KnowledgeGraphDrawer isOpen={true} onClose={jest.fn()} />
+  )
+
+  await act(async () => {
+    await Promise.resolve()
+  })
+  view.unmount()
+  await act(async () => {
+    jest.advanceTimersByTime(60_000)
+    await Promise.resolve()
+  })
+  expect(fetch).toHaveBeenCalledTimes(1)
+
+  jest.useRealTimers()
+})
+
+test('traps Tab focus inside the drawer', async () => {
+  const user = userEvent.setup()
+  render(
+    <KnowledgeGraphDrawer
+      isOpen={true}
+      onClose={jest.fn()}
+      post={{ id: 'current', slug: '/current' }}
+    />
+  )
+
+  const fullMode = screen.getByRole('button', { name: '查看完整关系图' })
+  const panel = screen.getByTestId('knowledge-graph-panel')
+  fullMode.focus()
+  await user.tab()
+  expect(panel).toContainElement(document.activeElement)
+
+  await user.tab({ shift: true })
+  expect(panel).toContainElement(document.activeElement)
+})
+
 test('pauses the canvas simulation when it is hidden', () => {
   const { rerender } = render(
     <KnowledgeGraphCanvas active={true} currentId='current' graph={graph} />
@@ -219,4 +355,50 @@ test('uses the document dark-mode state when no dark-mode prop is supplied', () 
 
   unmount()
   document.documentElement.classList.remove('dark')
+})
+
+test('uses the document dark-mode state for the drawer when no prop is supplied', async () => {
+  document.documentElement.classList.add('dark')
+  const view = render(
+    <KnowledgeGraphDrawer isOpen={true} onClose={jest.fn()} />
+  )
+
+  await screen.findByRole('dialog')
+  expect(screen.getByTestId('knowledge-graph-panel')).toHaveClass('bg-gray-950')
+
+  view.unmount()
+  document.documentElement.classList.remove('dark')
+})
+
+test('keeps measured canvas dimensions within short viewports', () => {
+  expect(getCanvasDimensions({ height: 180, width: 320 })).toEqual({
+    height: 180,
+    width: 320
+  })
+})
+
+test('only labels the current or hovered node with bounded placement', () => {
+  expect(
+    getCanvasLabel(
+      {
+        id: 'current',
+        title: 'A title that is longer than the canvas label limit'
+      },
+      'current',
+      null
+    )
+  ).toBe('A title that is longer...')
+  expect(
+    getCanvasLabel({ id: 'other', title: 'Other' }, 'current', 'other')
+  ).toBe('Other')
+  expect(
+    clampCanvasLabelPosition({
+      canvasHeight: 100,
+      canvasWidth: 100,
+      height: 12,
+      width: 50,
+      x: 90,
+      y: -90
+    })
+  ).toEqual({ x: 0, y: -38 })
 })
