@@ -68,6 +68,7 @@
   "dependencies": {
     "@clerk/localizations": "^3.37.6",
     "@clerk/nextjs": "^5.7.6",
+    "@edgeone/pages-blob": "^0.0.14",
     "@headlessui/react": "^1.7.19",
     "@next/bundle-analyzer": "^12.3.7",
     "@notionhq/client": "^2.2.15",
