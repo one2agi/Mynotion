@@ -25,6 +25,7 @@ const KnowledgeGraphCanvas = ({
   const [hoveredNode, setHoveredNode] = useState(null)
   const [tooltipPosition, setTooltipPosition] = useState({
     left: 8,
+    maxHeight: 0,
     top: 8,
     translateX: '0%',
     translateY: '0%'
@@ -65,18 +66,26 @@ const KnowledgeGraphCanvas = ({
     const y = event.clientY - bounds.top
     const horizontalPadding = 8
     const verticalPadding = 8
+    const top = Math.min(
+      Math.max(y, verticalPadding),
+      Math.max(verticalPadding, bounds.height - verticalPadding)
+    )
+    const showBelowPointer = y <= bounds.height / 2
 
     setTooltipPosition({
       left: Math.min(
         Math.max(x, horizontalPadding),
         Math.max(horizontalPadding, bounds.width - horizontalPadding)
       ),
-      top: Math.min(
-        Math.max(y, verticalPadding),
-        Math.max(verticalPadding, bounds.height - verticalPadding)
+      maxHeight: Math.max(
+        0,
+        showBelowPointer
+          ? bounds.height - top - verticalPadding
+          : top - verticalPadding
       ),
+      top,
       translateX: x > bounds.width / 2 ? '-100%' : '0%',
-      translateY: y > bounds.height / 2 ? '-100%' : '0%'
+      translateY: showBelowPointer ? '0%' : '-100%'
     })
   }
 
@@ -109,10 +118,11 @@ const KnowledgeGraphCanvas = ({
       />
       {hoveredNode?.title ? (
         <div
-          className='pointer-events-none absolute z-10 max-w-[calc(100%-1rem)] break-all rounded bg-gray-900 px-2 py-1 text-xs text-white shadow-lg dark:bg-gray-100 dark:text-gray-900'
+          className='pointer-events-none absolute z-10 max-w-[calc(100%-1rem)] overflow-auto break-all rounded bg-gray-900 px-2 py-1 text-xs text-white shadow-lg dark:bg-gray-100 dark:text-gray-900'
           data-testid='knowledge-graph-tooltip'
           style={{
             left: tooltipPosition.left,
+            maxHeight: tooltipPosition.maxHeight,
             top: tooltipPosition.top,
             transform: `translate(${tooltipPosition.translateX}, ${tooltipPosition.translateY})`
           }}

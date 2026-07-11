@@ -663,8 +663,10 @@ test('keeps measured canvas dimensions within short viewports', () => {
   })
 })
 
-test('renders hostile node titles as literal React tooltip text', () => {
-  const hostileTitle = '<img src=x onerror="window.__xss = true">'
+test('renders long hostile titles literally below a top-edge pointer within bounded tooltip space', () => {
+  const hostileTitle = `${'<img src=x onerror="window.__xss = true"> '.repeat(
+    32
+  )}Long hostile title`
   render(
     <KnowledgeGraphCanvas
       active={true}
@@ -691,7 +693,13 @@ test('renders hostile node titles as literal React tooltip text', () => {
 
   const tooltip = screen.getByTestId('knowledge-graph-tooltip')
   expect(tooltip).toHaveTextContent(hostileTitle)
-  expect(tooltip).toHaveStyle({ left: '24px', top: '16px' })
+  expect(tooltip).toHaveStyle({
+    left: '24px',
+    maxHeight: '156px',
+    top: '16px',
+    transform: 'translate(0%, 0%)'
+  })
+  expect(tooltip).toHaveClass('max-w-[calc(100%-1rem)]', 'overflow-auto')
   expect(tooltip.querySelector('img')).toBeNull()
   expect(window.__xss).toBeUndefined()
 })
@@ -707,7 +715,7 @@ test('does not pass nodeLabel to the Canvas renderer', () => {
   )
 })
 
-test('hides the Canvas tooltip after the renderer signals hover exit', () => {
+test('clears the Canvas tooltip when its container receives pointer leave', () => {
   render(
     <KnowledgeGraphCanvas active={true} currentId='current' graph={graph} />
   )
@@ -716,7 +724,7 @@ test('hides the Canvas tooltip after the renderer signals hover exit', () => {
   fireEvent.mouseEnter(canvas)
   expect(screen.getByTestId('knowledge-graph-tooltip')).toBeInTheDocument()
 
-  fireEvent.mouseLeave(canvas)
+  fireEvent.pointerLeave(canvas.parentElement)
   expect(
     screen.queryByTestId('knowledge-graph-tooltip')
   ).not.toBeInTheDocument()
