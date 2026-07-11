@@ -101,6 +101,33 @@ test('canonicalizes hyphenated page IDs before resolving normalized links', () =
   expect(JSON.stringify(snapshots)).toEqual(snapshotsBefore)
 })
 
+test('resolves canonical links from hyphenated snapshot keys without mutation', () => {
+  const canonicalSource = '0000000000000000000000000000000c'
+  const canonicalTarget = '0000000000000000000000000000000d'
+  const hyphenatedSource = '00000000-0000-0000-0000-00000000000c'
+  const publishedPages: PublishedPage[] = [
+    { id: hyphenatedSource, title: 'Source', slug: '/source' },
+    {
+      id: '00000000-0000-0000-0000-00000000000d',
+      title: 'Target',
+      slug: '/target'
+    }
+  ]
+  const snapshots: PageSnapshotMap = {
+    [hyphenatedSource]: { links: [canonicalTarget] }
+  }
+  const snapshotsBefore = JSON.stringify(snapshots)
+
+  expect(buildPublicGraph(publishedPages, snapshots)).toEqual({
+    nodes: [
+      { id: canonicalSource, title: 'Source', slug: '/source' },
+      { id: canonicalTarget, title: 'Target', slug: '/target' }
+    ],
+    edges: [{ source: canonicalSource, target: canonicalTarget }]
+  })
+  expect(JSON.stringify(snapshots)).toEqual(snapshotsBefore)
+})
+
 test('selects a depth-one local neighborhood without mutating the graph', () => {
   const graph = buildPublicGraph(pages, {
     [pageIds.a]: { links: [pageIds.b] },

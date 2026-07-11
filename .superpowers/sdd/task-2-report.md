@@ -6,12 +6,12 @@ DONE
 
 ## TDD Evidence
 
-1. RED: Added a focused public-contract test, then ran `pnpm type-check`. It failed with TS2305 for the six missing exports from `lib/knowledge-graph/types.ts`: `GraphNode`, `GraphEdge`, `PublicGraph`, `PublishedPage`, `PageSnapshot`, and `PageSnapshotMap`.
+1. RED: Added a focused public-contract test, then ran `pnpm type-check`. This demonstrated a missing shared type contract, not graph-builder behavior: TypeScript reported TS2305 for the six absent exports from `lib/knowledge-graph/types.ts`: `GraphNode`, `GraphEdge`, `PublicGraph`, `PublishedPage`, `PageSnapshot`, and `PageSnapshotMap`.
 2. GREEN: Added those contracts to the shared Task 1 type module and updated the builder to import its public input and output types. `pnpm type-check` then passed.
 
 ## Implementation
 
-- Preserved the inherited Task 2 graph builder and breadth-first neighborhood selector.
+- Implemented the Task 2 graph builder and breadth-first neighborhood selector.
 - Centralized graph contracts in `lib/knowledge-graph/types.ts` so Task 2 producers and future consumers use one public definition.
 - Added a focused contract test that exercises the shared page, snapshot, node, edge, and graph shapes through `buildPublicGraph`.
 - The graph builder retains published pages with no edges, rejects self-links and non-published targets, normalizes undirected edges, and orders output deterministically.
@@ -41,3 +41,9 @@ DONE
 - Public graph node IDs and edge endpoints use normalized lowercase, hyphen-free Notion IDs.
 - Valid links survive when `PublishedPage.id` values are hyphenated while snapshot keys and links are normalized.
 - The regression test verifies neither the published-page array nor the snapshot map is mutated.
+
+## Review Fix: Hyphenated Snapshot Keys
+
+1. RED: Added `resolves canonical links from hyphenated snapshot keys without mutation`. The focused Task 1+2 Jest command failed only in that test because the builder looked up canonical node IDs directly in the unnormalized snapshot map, producing an empty edge list.
+2. GREEN: The builder now makes one private normalized snapshot-key lookup before iterating nodes, so both hyphenated and canonical source keys resolve without scanning the map per node or mutating inputs.
+3. Verification: `pnpm test -- __tests__/lib/knowledge-graph/extract.test.ts __tests__/lib/knowledge-graph/build.test.ts --runInBand` passed with 2 suites and 13 tests; `pnpm type-check` passed.

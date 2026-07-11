@@ -13,6 +13,7 @@ export function buildPublicGraph(
   pages: PublishedPage[],
   snapshots: PageSnapshotMap
 ): PublicGraph {
+  const normalizedSnapshots = normalizeSnapshotMap(snapshots)
   const nodes: GraphNode[] = pages.flatMap(({ id, title, slug, icon }) => {
     const normalizedId = normalizePageId(id)
     if (!normalizedId) return []
@@ -30,7 +31,7 @@ export function buildPublicGraph(
   const edges = new Map<string, GraphEdge>()
 
   for (const node of nodes) {
-    for (const target of snapshots[node.id]?.links ?? []) {
+    for (const target of normalizedSnapshots.get(node.id) ?? []) {
       const normalizedTarget = normalizePageId(target)
       if (
         !normalizedTarget ||
@@ -58,4 +59,19 @@ export function buildPublicGraph(
       edgeKey(a.source, a.target).localeCompare(edgeKey(b.source, b.target))
     )
   }
+}
+
+function normalizeSnapshotMap(snapshots: PageSnapshotMap): Map<string, string[]> {
+  const normalizedSnapshots = new Map<string, string[]>()
+
+  for (const [id, snapshot] of Object.entries(snapshots)) {
+    const normalizedId = normalizePageId(id)
+    if (!normalizedId) continue
+
+    const links = normalizedSnapshots.get(normalizedId) ?? []
+    links.push(...(snapshot?.links ?? []))
+    normalizedSnapshots.set(normalizedId, links)
+  }
+
+  return normalizedSnapshots
 }
