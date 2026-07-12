@@ -26,6 +26,12 @@ const propertyNames = {
   status: 'status'
 }
 
+const localizedPublicationLabels = {
+  typePost: '文章',
+  typePage: '页面',
+  statusPublish: '已发布'
+}
+
 const COLLECTION_ID = '00000000000000000000000000000011'
 const DEFAULT_VIEW_ID = '00000000-0000-0000-0000-000000000012'
 const SECOND_VIEW_ID = '00000000-0000-0000-0000-000000000013'
@@ -78,6 +84,49 @@ test('maps article metadata and preserves raw Relation values', async () => {
   )
   expect(result.allPages.map(page => page.id)).not.toContain(
     fixture.expected.fallbackOnlyId
+  )
+})
+
+test('canonicalizes configured localized publication labels', async () => {
+  const recordMap = cloneFixtureMap()
+  const missingPageValues = JSON.parse(
+    JSON.stringify(fixture.missingPageValues)
+  )
+  recordMap.block[
+    '00000000-0000-0000-0000-000000000001'
+  ].value.value.properties.type = [['文章']]
+  recordMap.block[
+    '00000000-0000-0000-0000-000000000001'
+  ].value.value.properties.status = [['已发布']]
+  missingPageValues[
+    '00000000000000000000000000000002'
+  ].value.value.properties.type = [['页面']]
+  missingPageValues[
+    '00000000000000000000000000000002'
+  ].value.value.properties.status = [['已发布']]
+
+  const result = await fetchKnowledgeGraphSiteData({
+    pageId: fixture.databaseId,
+    postUrlPrefix: 'article',
+    propertyNames,
+    publicationLabels: localizedPublicationLabels,
+    fetchDatabase: async () => recordMap,
+    fetchPageValues: async () => missingPageValues
+  })
+
+  expect(result.allPages).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        id: fixture.expected.sourceId,
+        type: 'Post',
+        status: 'Published'
+      }),
+      expect.objectContaining({
+        id: fixture.expected.targetId,
+        type: 'Page',
+        status: 'Published'
+      })
+    ])
   )
 })
 
@@ -224,15 +273,15 @@ test('treats explicit empty collection group results as authoritative', async ()
   }
   const fetchPageValues = jest.fn(async () => fixture.missingPageValues)
 
-  await expect(
-    fetchKnowledgeGraphSiteData({
-      pageId: fixture.databaseId,
-      postUrlPrefix: 'article',
-      propertyNames,
-      fetchDatabase: async () => recordMap,
-      fetchPageValues
-    })
-  ).rejects.toThrow('Knowledge graph Notion database is unavailable')
+  const result = await fetchKnowledgeGraphSiteData({
+    pageId: fixture.databaseId,
+    postUrlPrefix: 'article',
+    propertyNames,
+    fetchDatabase: async () => recordMap,
+    fetchPageValues
+  })
+
+  expect(result.allPages).toEqual([])
   expect(fetchPageValues).not.toHaveBeenCalled()
 })
 
@@ -261,8 +310,35 @@ test.each([
       const recordMap = cloneFixtureMap()
       recordMap.collection_query['00000000000000000000000000000011'][
         '00000000-0000-0000-0000-000000000012'
+      ] = {}
+      return recordMap
+    })()
+  ],
+  [
+    'malformed page ids',
+    (() => {
+      const recordMap = cloneFixtureMap()
+      recordMap.collection_query['00000000000000000000000000000011'][
+        '00000000-0000-0000-0000-000000000012'
       ] = {
-        collection_group_results: { blockIds: [] }
+        collection_group_results: { blockIds: 'not-an-array' }
+      }
+      return recordMap
+    })()
+  ],
+  [
+    'malformed direct page-id source with reducer ids',
+    (() => {
+      const recordMap = cloneFixtureMap()
+      recordMap.collection_query['00000000000000000000000000000011'][
+        '00000000-0000-0000-0000-000000000012'
+      ] = {
+        collection_group_results: {},
+        reducerResults: {
+          collection_group_results: {
+            blockIds: [fixture.expected.targetId]
+          }
+        }
       }
       return recordMap
     })()

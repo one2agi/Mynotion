@@ -213,6 +213,11 @@ test('refreshes through the server-only Notion source with configured fields', a
         type: BLOG.NOTION_PROPERTY_NAME.type,
         status: BLOG.NOTION_PROPERTY_NAME.status
       }),
+      publicationLabels: {
+        typePost: BLOG.NOTION_PROPERTY_NAME.type_post,
+        typePage: BLOG.NOTION_PROPERTY_NAME.type_page,
+        statusPublish: BLOG.NOTION_PROPERTY_NAME.status_publish
+      },
       fetchDatabase: expect.any(Function),
       fetchPageValues: expect.any(Function)
     })

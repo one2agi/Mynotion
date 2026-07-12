@@ -9,12 +9,19 @@ export type KnowledgeGraphPropertyNames = {
   status: string
 }
 
+export type KnowledgeGraphPublicationLabels = {
+  typePost: string
+  typePage: string
+  statusPublish: string
+}
+
 export type KnowledgeGraphSourceOptions = {
   pageId: string
   locale?: string
   notionIndex?: number
   postUrlPrefix: string
   propertyNames: KnowledgeGraphPropertyNames
+  publicationLabels?: KnowledgeGraphPublicationLabels
   fetchDatabase(id: string, from: string): Promise<NotionRecordMap | null>
   fetchPageValues(ids: string[]): Promise<Record<string, unknown>>
 }
@@ -125,7 +132,7 @@ function readDatabase(
   if (!viewId) return null
 
   const pageIds = readPageIds(databaseMap, collectionId, viewId)
-  if (!pageIds.length) return null
+  if (pageIds === null) return null
 
   return {
     block: normalizeRecordKeys(block),
@@ -139,52 +146,89 @@ function readPageIds(
   recordMap: DatabaseRecordMap,
   collectionId: string,
   viewId: string
-): string[] {
+): string[] | null {
   const collectionQuery = findRecord(recordMap.collection_query, collectionId)
   const selectedQuery = isRecord(collectionQuery)
     ? findRecord(collectionQuery, viewId)
     : undefined
 
   if (isRecord(selectedQuery)) {
-    const collectionGroupBlockIds =
-      nestedBlockIds(selectedQuery, 'collection_group_results') ??
-      nestedReducerBlockIds(selectedQuery)
-    return uniqueNormalizedIds([
-      collectionGroupBlockIds,
-      nestedBlockIds(selectedQuery, 'results'),
-      selectedQuery.blockIds
-    ])
+    const groups: string[][] = []
+    const collectionGroup = readNestedBlockIds(
+      selectedQuery,
+      'collection_group_results'
+    )
+    const primaryGroup = collectionGroup.present
+      ? collectionGroup
+      : readReducerBlockIds(selectedQuery)
+    const resultsGroup = readNestedBlockIds(selectedQuery, 'results')
+    const directGroup = readBlockIds(selectedQuery, 'blockIds')
+
+    for (const group of [primaryGroup, resultsGroup, directGroup]) {
+      if (!group.present) continue
+      if (!group.ids) return null
+      groups.push(group.ids)
+    }
+
+    return groups.length ? uniqueIds(groups) : null
   }
 
   const collectionView = unwrapRecordValue(
     findRecord(recordMap.collection_view, viewId)
   )
-  return collectionView ? uniqueNormalizedIds([collectionView.page_sort]) : []
+  if (!collectionView) return null
+
+  const pageSort = readBlockIds(collectionView, 'page_sort')
+  return pageSort.present ? pageSort.ids : null
 }
 
-function nestedBlockIds(value: Record<string, unknown>, key: string): unknown {
+type BlockIdSource =
+  | { present: false }
+  | { present: true; ids: string[] | null }
+
+function readNestedBlockIds(
+  value: Record<string, unknown>,
+  key: string
+): BlockIdSource {
+  if (!hasOwn(value, key)) return { present: false }
+
   const nested = value[key]
-  return isRecord(nested) ? nested.blockIds : undefined
+  if (!isRecord(nested)) return { present: true, ids: null }
+
+  const blockIds = readBlockIds(nested, 'blockIds')
+  return blockIds.present ? blockIds : { present: true, ids: null }
 }
 
-function nestedReducerBlockIds(value: Record<string, unknown>): unknown {
+function readReducerBlockIds(value: Record<string, unknown>): BlockIdSource {
+  if (!hasOwn(value, 'reducerResults')) return { present: false }
+
   const reducerResults = value.reducerResults
-  if (!isRecord(reducerResults)) return undefined
-  return nestedBlockIds(reducerResults, 'collection_group_results')
+  return isRecord(reducerResults)
+    ? readNestedBlockIds(reducerResults, 'collection_group_results')
+    : { present: true, ids: null }
 }
 
-function uniqueNormalizedIds(groups: unknown[]): string[] {
-  const ids = new Set<string>()
+function readBlockIds(
+  value: Record<string, unknown>,
+  key: string
+): BlockIdSource {
+  if (!hasOwn(value, key)) return { present: false }
 
-  for (const group of groups) {
-    if (!Array.isArray(group)) continue
-    for (const value of group) {
-      const id = normalizePageId(value)
-      if (id) ids.add(id)
-    }
+  const source = value[key]
+  if (!Array.isArray(source)) return { present: true, ids: null }
+
+  const ids: string[] = []
+  for (const item of source) {
+    const id = normalizePageId(item)
+    if (!id) return { present: true, ids: null }
+    ids.push(id)
   }
 
-  return Array.from(ids)
+  return { present: true, ids }
+}
+
+function uniqueIds(groups: string[][]): string[] {
+  return Array.from(new Set(groups.flat()))
 }
 
 function normalizedIdAt(value: unknown, index: number): string | null {
@@ -201,8 +245,14 @@ function mapPage(
   const id = normalizePageId(value.id) || selectedId
   const title = readProperty(properties, schema, options.propertyNames.title)
   const slug = readProperty(properties, schema, options.propertyNames.slug)
-  const type = readProperty(properties, schema, options.propertyNames.type)
-  const status = readProperty(properties, schema, options.propertyNames.status)
+  const type = canonicalType(
+    readProperty(properties, schema, options.propertyNames.type),
+    options.publicationLabels
+  )
+  const status = canonicalStatus(
+    readProperty(properties, schema, options.propertyNames.status),
+    options.publicationLabels
+  )
   const format = isRecord(value.format) ? value.format : null
   const icon = format?.page_icon
 
@@ -217,6 +267,22 @@ function mapPage(
     lastEditedDate: value.last_edited_time,
     properties
   }
+}
+
+function canonicalType(
+  value: string,
+  labels: KnowledgeGraphPublicationLabels | undefined
+): string {
+  if (value === labels?.typePage) return 'Page'
+  if (value === labels?.typePost) return 'Post'
+  return value
+}
+
+function canonicalStatus(
+  value: string,
+  labels: KnowledgeGraphPublicationLabels | undefined
+): string {
+  return value === labels?.statusPublish ? 'Published' : value
 }
 
 function readProperty(
@@ -287,4 +353,8 @@ function unwrapRecordValue(value: unknown): Record<string, unknown> | null {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function hasOwn(value: Record<string, unknown>, key: string): boolean {
+  return Object.prototype.hasOwnProperty.call(value, key)
 }

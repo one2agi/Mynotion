@@ -2,6 +2,7 @@ import { Dialog } from '@headlessui/react'
 import dynamic from 'next/dynamic'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/router'
+import { normalizePageId } from '@/lib/knowledge-graph/normalizePageId'
 import { useKnowledgeGraphDarkMode } from './appearance'
 import {
   normalizeKnowledgeGraphDepth,
@@ -26,7 +27,14 @@ export const getInitializingPollDelay = attempt =>
 const isPublicGraph = value =>
   Array.isArray(value?.nodes) && Array.isArray(value?.edges)
 
-const KnowledgeGraphDrawer = ({ depth, isDarkMode, isOpen, onClose, post }) => {
+const KnowledgeGraphDrawer = ({
+  allLinkPages,
+  depth,
+  isDarkMode,
+  isOpen,
+  onClose,
+  post
+}) => {
   const closeButtonRef = useRef(null)
   const router = useRouter()
   const hasCurrentPost = Boolean(post?.id)
@@ -124,7 +132,16 @@ const KnowledgeGraphDrawer = ({ depth, isDarkMode, isOpen, onClose, post }) => {
   }, [currentId, displayedGraph.nodes, selectedNodeId])
 
   const navigateToNode = node => {
-    const target = node?.href || node?.slug
+    const nodeId = normalizePageId(node?.id)
+    const canonicalPage = nodeId
+      ? allLinkPages?.find(
+          page =>
+            normalizePageId(page?.id) === nodeId &&
+            typeof page?.href === 'string' &&
+            page.href
+        )
+      : null
+    const target = canonicalPage?.href || node?.href || node?.slug
     if (target) router.push(target)
   }
 

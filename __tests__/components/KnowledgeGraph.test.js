@@ -346,6 +346,49 @@ test('closes with its close button and navigates when a graph node is selected',
   expect(onClose).toHaveBeenCalledTimes(1)
 })
 
+test('uses the canonical allLinkPages href through the global launcher', async () => {
+  const user = userEvent.setup()
+  const currentId = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
+  const relatedId = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'
+  siteConfig.mockImplementation(
+    key => key === 'KNOWLEDGE_GRAPH_ENABLE' || key === 'CAN_COPY'
+  )
+  mockGraphResponse({
+    nodes: [
+      {
+        id: currentId,
+        title: 'Current article',
+        slug: 'current',
+        href: '/stale/current'
+      },
+      {
+        id: relatedId,
+        title: 'Related article',
+        slug: 'related',
+        href: '/stale/related'
+      }
+    ],
+    edges: [{ source: currentId, target: relatedId }]
+  })
+
+  render(
+    <ExternalPlugin
+      allLinkPages={[
+        {
+          id: 'BBBBBBBB-BBBB-BBBB-BBBB-BBBBBBBBBBBB',
+          href: '/canonical/related'
+        }
+      ]}
+      post={{ id: currentId, slug: 'current' }}
+    />
+  )
+
+  await user.click(await screen.findByRole('button', { name: '知识图谱' }))
+  await user.click(await screen.findByRole('button', { name: '选择图谱节点' }))
+
+  expect(router.push).toHaveBeenCalledWith('/canonical/related')
+})
+
 test('explains initializing, error, and empty-relationship responses', async () => {
   mockGraphResponse({ status: 'initializing' }, 202)
   const initializing = render(

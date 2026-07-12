@@ -271,6 +271,7 @@ const ExternalPlugin = props => {
       {DIFY_CHATBOT_ENABLED && <DifyChatbot />}
       {KNOWLEDGE_GRAPH_ENABLE && (
         <KnowledgeGraphLauncher
+          allLinkPages={props?.allLinkPages}
           depth={KNOWLEDGE_GRAPH_DEPTH}
           post={props?.post}
         />
