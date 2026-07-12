@@ -77,6 +77,7 @@ const KnowledgeGraphDrawer = ({
   const selectionInitializedRef = useRef(false)
   const localDepth = normalizeKnowledgeGraphDepth(settings.depth)
   const currentId = normalizeKnowledgeGraphId(post?.id)
+  const fullGraph = graph || emptyGraph
 
   useEffect(() => {
     if (!isOpen) return
@@ -148,16 +149,15 @@ const KnowledgeGraphDrawer = ({
   }, [onClose, router.events])
 
   const displayedGraph = useMemo(() => {
-    if (!graph) return emptyGraph
     if (mode === 'local' && currentId) {
-      return selectGraphNeighborhood(graph, currentId, localDepth)
+      return selectGraphNeighborhood(fullGraph, currentId, localDepth)
     }
 
-    return graph
-  }, [currentId, graph, localDepth, mode])
+    return fullGraph
+  }, [currentId, fullGraph, localDepth, mode])
 
   useEffect(() => {
-    if (displayedGraph.nodes.some(node => node.id === selectedNodeId)) return
+    if (fullGraph.nodes.some(node => node.id === selectedNodeId)) return
     if (selectionInitializedRef.current) {
       setSelectedNodeId('')
       return
@@ -167,21 +167,23 @@ const KnowledgeGraphDrawer = ({
       displayedGraph.nodes[0]
     selectionInitializedRef.current = true
     setSelectedNodeId(initialNode?.id || '')
-  }, [currentId, displayedGraph.nodes, selectedNodeId])
+  }, [currentId, displayedGraph.nodes, fullGraph.nodes, selectedNodeId])
 
   const selectedNode = useMemo(
-    () => displayedGraph.nodes.find(node => node.id === selectedNodeId) || null,
-    [displayedGraph.nodes, selectedNodeId]
+    () => fullGraph.nodes.find(node => node.id === selectedNodeId) || null,
+    [fullGraph.nodes, selectedNodeId]
   )
 
   const relatedNodes = useMemo(() => {
     if (!selectedNodeId) return []
-    const relatedIds = getOutboundNeighborIds(displayedGraph, selectedNodeId)
-    return displayedGraph.nodes.filter(node => relatedIds.has(node.id))
-  }, [displayedGraph, selectedNodeId])
+    const relatedIds = getOutboundNeighborIds(fullGraph, selectedNodeId)
+    return fullGraph.nodes.filter(node => relatedIds.has(node.id))
+  }, [fullGraph, selectedNodeId])
 
   const updateSettings = nextSettings => {
-    setSettings(saveGraphSettings(nextSettings))
+    const normalized = normalizeGraphSettings(nextSettings)
+    setSettings(normalized)
+    saveGraphSettings(normalized)
   }
 
   const restoreDefaultSettings = () => {
@@ -207,9 +209,7 @@ const KnowledgeGraphDrawer = ({
   }
 
   const navigateToSelectedNode = () => {
-    navigateToNode(
-      displayedGraph.nodes.find(node => node.id === selectedNodeId)
-    )
+    navigateToNode(fullGraph.nodes.find(node => node.id === selectedNodeId))
   }
 
   const showEmpty = status === 'ready' && displayedGraph.edges.length === 0

@@ -467,6 +467,60 @@ test('shows settings and node details, then navigates only through the explicit 
   expect(onClose).toHaveBeenCalledTimes(1)
 })
 
+test('uses the full graph for outbound details beyond the displayed local depth', async () => {
+  const user = userEvent.setup()
+  mockGraphResponse({
+    ...depthGraph,
+    edges: [
+      { source: 'current', target: 'related', origins: ['current'] },
+      { source: 'related', target: 'two-hop', origins: ['related'] }
+    ]
+  })
+  render(
+    <KnowledgeGraphDrawer
+      depth={1}
+      isOpen={true}
+      onClose={jest.fn()}
+      post={{ id: 'current', slug: '/current' }}
+    />
+  )
+
+  const canvas = await screen.findByRole('button', {
+    name: '选择图谱节点'
+  })
+  expect(canvas).toHaveAttribute('data-node-count', '2')
+
+  await user.click(canvas)
+  expect(screen.getByRole('heading', { name: 'Related article' })).toBeVisible()
+  await user.click(screen.getByRole('button', { name: 'Two-hop article' }))
+  expect(screen.getByRole('heading', { name: 'Two-hop article' })).toBeVisible()
+})
+
+test('keeps normalized session settings when localStorage writes fail', async () => {
+  const user = userEvent.setup()
+  jest.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+    throw new Error('storage unavailable')
+  })
+  render(
+    <KnowledgeGraphDrawer
+      isOpen={true}
+      onClose={jest.fn()}
+      post={{ id: 'current', slug: '/current' }}
+    />
+  )
+
+  await screen.findByRole('dialog')
+  await user.click(screen.getByRole('button', { name: '设置知识图谱' }))
+  fireEvent.change(screen.getByRole('slider', { name: '节点大小' }), {
+    target: { value: '7' }
+  })
+
+  expect(screen.getByRole('slider', { name: '节点大小' })).toHaveValue('7')
+  expect(
+    await screen.findByRole('button', { name: '选择图谱节点' })
+  ).toHaveAttribute('data-first-node-radius', '8')
+})
+
 test('uses the canonical allLinkPages href through the global launcher', async () => {
   const user = userEvent.setup()
   const currentId = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
