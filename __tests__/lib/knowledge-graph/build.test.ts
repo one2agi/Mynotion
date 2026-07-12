@@ -37,7 +37,9 @@ test('exposes graph contracts shared by the builder and its consumers', () => {
     [pageIds.b]: { links: [pageIds.a] }
   }
   const nodes: GraphNode[] = pages.slice(0, 2)
-  const edges: GraphEdge[] = [{ source: pageIds.a, target: pageIds.b }]
+  const edges: GraphEdge[] = [
+    { source: pageIds.a, target: pageIds.b, origins: [pageIds.a, pageIds.b] }
+  ]
   const expected: PublicGraph = { nodes, edges }
 
   expect(buildPublicGraph(nodes, snapshots)).toEqual(expected)
@@ -65,7 +67,13 @@ test('builds published nodes and deduplicated undirected edges', () => {
       { id: pageIds.b, title: 'B', slug: '/b' },
       { id: pageIds.isolated, title: 'Isolated', slug: '/isolated' }
     ],
-    edges: [{ source: pageIds.a, target: pageIds.b }]
+    edges: [
+      {
+        source: pageIds.a,
+        target: pageIds.b,
+        origins: [pageIds.a, pageIds.b]
+      }
+    ]
   })
 })
 
@@ -95,7 +103,13 @@ test('canonicalizes hyphenated page IDs before resolving normalized links', () =
       { id: canonicalSource, title: 'Source', slug: '/source' },
       { id: canonicalTarget, title: 'Target', slug: '/target' }
     ],
-    edges: [{ source: canonicalSource, target: canonicalTarget }]
+    edges: [
+      {
+        source: canonicalSource,
+        target: canonicalTarget,
+        origins: [canonicalSource]
+      }
+    ]
   })
   expect(JSON.stringify(publishedPages)).toEqual(pagesBefore)
   expect(JSON.stringify(snapshots)).toEqual(snapshotsBefore)
@@ -169,7 +183,13 @@ test('resolves canonical links from hyphenated snapshot keys without mutation', 
       { id: canonicalSource, title: 'Source', slug: '/source' },
       { id: canonicalTarget, title: 'Target', slug: '/target' }
     ],
-    edges: [{ source: canonicalSource, target: canonicalTarget }]
+    edges: [
+      {
+        source: canonicalSource,
+        target: canonicalTarget,
+        origins: [canonicalSource]
+      }
+    ]
   })
   expect(JSON.stringify(snapshots)).toEqual(snapshotsBefore)
 })
@@ -187,7 +207,7 @@ test('selects a depth-one local neighborhood without mutating the graph', () => 
 
   expect(result).toEqual({
     nodes: pages.slice(0, 2),
-    edges: [{ source: pageIds.a, target: pageIds.b }]
+    edges: [{ source: pageIds.a, target: pageIds.b, origins: [pageIds.a] }]
   })
   expect(JSON.stringify(graph)).toEqual(before)
 })
@@ -203,10 +223,47 @@ test('selects all nodes through the requested breadth-first depth', () => {
   expect(selectGraphNeighborhood(graph, pageIds.a, 2)).toEqual({
     nodes: pages.slice(0, 3),
     edges: [
+      { source: pageIds.a, target: pageIds.b, origins: [pageIds.a] },
+      { source: pageIds.b, target: pageIds.c, origins: [pageIds.b] }
+    ]
+  })
+})
+
+test('deduplicates visual edges while retaining outbound origins', () => {
+  expect(
+    buildPublicGraph(pages.slice(0, 3), {
+      [pageIds.a]: { links: [pageIds.b] },
+      [pageIds.b]: { links: [pageIds.a, pageIds.c] }
+    }).edges
+  ).toEqual([
+    { source: pageIds.a, target: pageIds.b, origins: [pageIds.a, pageIds.b] },
+    { source: pageIds.b, target: pageIds.c, origins: [pageIds.b] }
+  ])
+})
+
+test('local depth follows outbound origins only', () => {
+  const graph = buildPublicGraph(pages.slice(0, 3), {
+    [pageIds.a]: { links: [] },
+    [pageIds.b]: { links: [pageIds.a] },
+    [pageIds.c]: { links: [pageIds.b] }
+  })
+
+  expect(selectGraphNeighborhood(graph, pageIds.a, 2)).toEqual({
+    nodes: [pages[0]],
+    edges: []
+  })
+})
+
+test('keeps undirected traversal for legacy edges without origins', () => {
+  const graph: PublicGraph = {
+    nodes: pages.slice(0, 3),
+    edges: [
       { source: pageIds.a, target: pageIds.b },
       { source: pageIds.b, target: pageIds.c }
     ]
-  })
+  }
+
+  expect(selectGraphNeighborhood(graph, pageIds.a, 2)).toEqual(graph)
 })
 
 test('returns a complete copy when the current node is missing', () => {

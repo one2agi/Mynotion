@@ -49,9 +49,14 @@ export function buildPublicGraph(
       const targetId = sortedIds[1]
       if (source === undefined || targetId === undefined) continue
 
-      edges.set(edgeKey(source, targetId), {
+      const key = edgeKey(source, targetId)
+      const origins = new Set(edges.get(key)?.origins)
+      origins.add(node.id)
+
+      edges.set(key, {
         source,
-        target: targetId
+        target: targetId,
+        origins: Array.from(origins).sort()
       })
     }
   }

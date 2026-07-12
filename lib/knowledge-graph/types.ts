@@ -48,6 +48,7 @@ export interface GraphNode {
 export interface GraphEdge {
   source: string
   target: string
+  origins?: string[]
 }
 
 export interface PublicGraph {
