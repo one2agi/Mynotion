@@ -28,6 +28,13 @@ interface TestCanvasContext {
   textBaseline?: string
 }
 
+interface TestPointerCanvasContext {
+  arc: jest.Mock
+  beginPath: jest.Mock
+  fill: jest.Mock
+  fillStyle?: string
+}
+
 interface TestForceGraphProps {
   autoPauseRedraw?: boolean
   cooldownTicks?: number
@@ -42,6 +49,12 @@ interface TestForceGraphProps {
     context: TestCanvasContext,
     globalScale: number
   ) => void
+  nodePointerAreaPaint?: (
+    node: GraphNode,
+    color: string,
+    context: TestPointerCanvasContext,
+    globalScale: number
+  ) => void
   onBackgroundClick?: () => void
   onEngineStop?: () => void
   onNodeClick?: (
@@ -54,10 +67,15 @@ interface TestForceGraphProps {
     node: GraphNode,
     translate: { x?: number; y?: number }
   ) => void
+  onNodeHover?: (node: GraphNode | null) => void
 }
 
 interface TestForceGraphHandle {
-  centerAt: (x: number, y: number, durationMs?: number) => void
+  centerAt: (
+    x?: number,
+    y?: number,
+    durationMs?: number
+  ) => { x: number; y: number } | void
   d3Force: (name: 'center' | 'charge' | 'link') => unknown
   d3ReheatSimulation: () => void
   pauseAnimation: () => void
@@ -77,6 +95,8 @@ interface TestForceGraphMock {
   __pauseAnimation: jest.Mock
   __reheatSimulation: jest.Mock
   __resumeAnimation: jest.Mock
+  __setViewportCenter: (center: { x: number; y: number }) => void
+  __setZoom: (scale: number) => void
   __zoom: jest.Mock
 }
 
@@ -87,10 +107,24 @@ jest.mock('react-force-graph-2d', () => {
   const pauseAnimation = jest.fn()
   const reheatSimulation = jest.fn()
   const resumeAnimation = jest.fn()
-  const centerAt = jest.fn()
-  const zoom = jest.fn((scale?: number) =>
-    typeof scale === 'number' ? undefined : 1
-  )
+  let viewportCenter = { x: 0, y: 0 }
+  let zoomScale = 1
+  const centerAt = jest.fn((x?: number, y?: number) => {
+    if (x === undefined && y === undefined) return viewportCenter
+
+    viewportCenter = {
+      x: x ?? viewportCenter.x,
+      y: y ?? viewportCenter.y
+    }
+    return undefined
+  })
+  const zoom = jest.fn((scale?: number) => {
+    if (typeof scale === 'number') {
+      zoomScale = scale
+      return undefined
+    }
+    return zoomScale
+  })
   const forces = {
     center: { strength: jest.fn() },
     charge: { strength: jest.fn() },
@@ -136,6 +170,12 @@ jest.mock('react-force-graph-2d', () => {
     __pauseAnimation: pauseAnimation,
     __reheatSimulation: reheatSimulation,
     __resumeAnimation: resumeAnimation,
+    __setViewportCenter: (center: { x: number; y: number }) => {
+      viewportCenter = center
+    },
+    __setZoom: (scale: number) => {
+      zoomScale = scale
+    },
     __zoom: zoom,
     default: ForceGraph2D
   }
@@ -210,13 +250,46 @@ const installControlledAnimationFrames = () => {
 }
 
 const flushAnimationFrames = () => {
+  flushAnimationFramesAt(performance.now())
+}
+
+const flushAnimationFramesAt = (time: number) => {
   const pendingFrames = Array.from(animationFrames.values())
   animationFrames.clear()
-  pendingFrames.forEach(callback => callback(performance.now()))
+  pendingFrames.forEach(callback => callback(time))
+}
+
+const firePointerEventAt = (
+  target: Element,
+  type: string,
+  {
+    clientX,
+    clientY,
+    pointerId = 1,
+    time
+  }: {
+    clientX: number
+    clientY: number
+    pointerId?: number
+    time: number
+  }
+) => {
+  const event = new Event(type, { bubbles: true, cancelable: true })
+  Object.defineProperties(event, {
+    button: { value: 0 },
+    clientX: { value: clientX },
+    clientY: { value: clientY },
+    isPrimary: { value: true },
+    pointerId: { value: pointerId },
+    timeStamp: { value: time }
+  })
+  fireEvent(target, event)
 }
 
 beforeEach(() => {
   jest.clearAllMocks()
+  forceGraphMock.__setViewportCenter({ x: 0, y: 0 })
+  forceGraphMock.__setZoom(1)
   window.requestAnimationFrame = jest.fn((callback: FrameRequestCallback) => {
     callback(performance.now())
     return 1
@@ -688,4 +761,366 @@ test('fades unrelated nodes and edges while keeping selected outbound focus visi
   expect(unrelatedFill[0]).not.toBe('#0284c7')
   expect(props.linkColor?.(graph.edges[0]!)).toBe('#0284c7')
   expect(props.linkColor?.(graph.edges[1]!)).toContain('rgba')
+})
+
+test('paints selected and ordinary node hit areas from their rendered radius', () => {
+  setReducedMotion(false)
+  render(
+    React.createElement(KnowledgeGraphCanvas, {
+      active: true,
+      graph,
+      selectedNodeId: 'a',
+      settings: GRAPH_SETTINGS_DEFAULTS
+    })
+  )
+  const props = forceGraphMock.__getForceGraphProps()
+  const createContext = (): TestCanvasContext & TestPointerCanvasContext => ({
+    arc: jest.fn(),
+    beginPath: jest.fn(),
+    fill: jest.fn(),
+    fillStyle: '',
+    fillText: jest.fn(),
+    restore: jest.fn(),
+    save: jest.fn()
+  })
+  const selectedPaint = createContext()
+  const selectedPointerPaint = createContext()
+  const ordinaryPaint = createContext()
+  const ordinaryPointerPaint = createContext()
+
+  props.nodeCanvasObject?.(graph.nodes[0]!, selectedPaint, 2)
+  props.nodePointerAreaPaint?.(
+    graph.nodes[0]!,
+    '#pointer-selected',
+    selectedPointerPaint,
+    2
+  )
+  props.nodeCanvasObject?.(graph.nodes[1]!, ordinaryPaint, 0.5)
+  props.nodePointerAreaPaint?.(
+    graph.nodes[1]!,
+    '#pointer-ordinary',
+    ordinaryPointerPaint,
+    0.5
+  )
+
+  const getArcRadius = (context: TestCanvasContext) => {
+    const radius = context.arc.mock.calls[0]?.[2]
+    if (typeof radius !== 'number') throw new Error('Expected a node radius')
+    return radius
+  }
+
+  expect(getArcRadius(selectedPointerPaint)).toBeCloseTo(
+    getArcRadius(selectedPaint) + 4 / 2
+  )
+  expect(selectedPointerPaint.fillStyle).toBe('#pointer-selected')
+  expect(getArcRadius(ordinaryPointerPaint)).toBeCloseTo(
+    getArcRadius(ordinaryPaint) + 4 / 0.5
+  )
+  expect(ordinaryPointerPaint.fillStyle).toBe('#pointer-ordinary')
+})
+
+test('continues a quick background pan in the release direction', () => {
+  jest.useFakeTimers()
+  jest.setSystemTime(0)
+  installControlledAnimationFrames()
+  setReducedMotion(false)
+  render(
+    React.createElement(KnowledgeGraphCanvas, {
+      active: true,
+      graph,
+      settings: GRAPH_SETTINGS_DEFAULTS
+    })
+  )
+  const renderer = screen.getByRole('button', { name: 'Select graph node' })
+  const props = forceGraphMock.__getForceGraphProps()
+  forceGraphMock.__setViewportCenter({ x: 10, y: -4 })
+  forceGraphMock.__setZoom(2)
+  forceGraphMock.__centerAt.mockClear()
+
+  firePointerEventAt(renderer, 'pointerdown', {
+    clientX: 20,
+    clientY: 30,
+    time: 0
+  })
+  act(() => jest.advanceTimersByTime(16))
+  firePointerEventAt(renderer, 'pointermove', {
+    clientX: 60,
+    clientY: 30,
+    time: 16
+  })
+  act(() => jest.advanceTimersByTime(16))
+  firePointerEventAt(renderer, 'pointerup', {
+    clientX: 60,
+    clientY: 30,
+    time: 32
+  })
+  expect(window.requestAnimationFrame).toHaveBeenCalledTimes(1)
+  act(() => {
+    flushAnimationFramesAt(0)
+    flushAnimationFramesAt(16)
+  })
+
+  const panCalls = forceGraphMock.__centerAt.mock.calls.filter(
+    ([x, y]) => x !== undefined || y !== undefined
+  ) as Array<[number, number]>
+  expect(panCalls.length).toBeGreaterThan(0)
+  expect(panCalls.at(-1)?.[0]).toBeLessThan(10)
+})
+
+test('does not start inertia after the pointer is still for 80 ms', () => {
+  jest.useFakeTimers()
+  jest.setSystemTime(0)
+  installControlledAnimationFrames()
+  setReducedMotion(false)
+  render(
+    React.createElement(KnowledgeGraphCanvas, {
+      active: true,
+      graph,
+      settings: GRAPH_SETTINGS_DEFAULTS
+    })
+  )
+  const renderer = screen.getByRole('button', { name: 'Select graph node' })
+
+  firePointerEventAt(renderer, 'pointerdown', {
+    clientX: 0,
+    clientY: 0,
+    time: 0
+  })
+  act(() => jest.advanceTimersByTime(16))
+  firePointerEventAt(renderer, 'pointermove', {
+    clientX: 40,
+    clientY: 0,
+    time: 16
+  })
+  act(() => jest.advanceTimersByTime(80))
+  firePointerEventAt(renderer, 'pointerup', {
+    clientX: 40,
+    clientY: 0,
+    time: 96
+  })
+  act(() => flushAnimationFramesAt(100))
+
+  expect(forceGraphMock.__centerAt).not.toHaveBeenCalled()
+})
+
+test('does not start inertia when a hovered node owns a short pointer session', () => {
+  jest.useFakeTimers()
+  jest.setSystemTime(0)
+  installControlledAnimationFrames()
+  setReducedMotion(false)
+  render(
+    React.createElement(KnowledgeGraphCanvas, {
+      active: true,
+      graph,
+      settings: GRAPH_SETTINGS_DEFAULTS
+    })
+  )
+  const renderer = screen.getByRole('button', { name: 'Select graph node' })
+  const props = forceGraphMock.__getForceGraphProps()
+
+  act(() => props.onNodeHover?.(graph.nodes[0]!))
+
+  firePointerEventAt(renderer, 'pointerdown', {
+    clientX: 0,
+    clientY: 0,
+    time: 0
+  })
+  act(() => jest.advanceTimersByTime(16))
+  firePointerEventAt(renderer, 'pointermove', {
+    clientX: 3,
+    clientY: 0,
+    time: 16
+  })
+  firePointerEventAt(renderer, 'pointerup', {
+    clientX: 3,
+    clientY: 0,
+    time: 17
+  })
+  act(() => flushAnimationFramesAt(16))
+
+  expect(forceGraphMock.__centerAt).not.toHaveBeenCalled()
+})
+
+test('stops low-speed inertia by the 240 ms duration limit before the distance cap', () => {
+  jest.useFakeTimers()
+  jest.setSystemTime(0)
+  installControlledAnimationFrames()
+  setReducedMotion(false)
+  render(
+    React.createElement(KnowledgeGraphCanvas, {
+      active: true,
+      graph,
+      settings: GRAPH_SETTINGS_DEFAULTS
+    })
+  )
+  const renderer = screen.getByRole('button', { name: 'Select graph node' })
+  forceGraphMock.__setViewportCenter({ x: 0, y: 0 })
+  forceGraphMock.__centerAt.mockClear()
+
+  firePointerEventAt(renderer, 'pointerdown', {
+    clientX: 0,
+    clientY: 0,
+    time: 0
+  })
+  act(() => jest.advanceTimersByTime(16))
+  firePointerEventAt(renderer, 'pointermove', {
+    clientX: 5,
+    clientY: 0,
+    time: 16
+  })
+  act(() => jest.advanceTimersByTime(16))
+  firePointerEventAt(renderer, 'pointerup', {
+    clientX: 5,
+    clientY: 0,
+    time: 32
+  })
+  act(() => {
+    for (let time = 0; time <= 240; time += 16) {
+      flushAnimationFramesAt(time)
+    }
+  })
+  const panCalls = forceGraphMock.__centerAt.mock.calls.filter(
+    ([x, y]) => x !== undefined || y !== undefined
+  ) as Array<[number, number]>
+  const finalCall = panCalls.at(-1)
+  const callsAtDeadline = panCalls.length
+  act(() => flushAnimationFramesAt(256))
+
+  expect(panCalls.length).toBeGreaterThan(0)
+  expect(Math.abs(finalCall?.[0] ?? 0)).toBeLessThan(80)
+  expect(
+    forceGraphMock.__centerAt.mock.calls.filter(
+      ([x, y]) => x !== undefined || y !== undefined
+    )
+  ).toHaveLength(callsAtDeadline)
+})
+
+test('stops high-speed inertia at the 80 screen pixel distance limit', () => {
+  jest.useFakeTimers()
+  jest.setSystemTime(0)
+  installControlledAnimationFrames()
+  setReducedMotion(false)
+  render(
+    React.createElement(KnowledgeGraphCanvas, {
+      active: true,
+      graph,
+      settings: GRAPH_SETTINGS_DEFAULTS
+    })
+  )
+  const renderer = screen.getByRole('button', { name: 'Select graph node' })
+  forceGraphMock.__setViewportCenter({ x: 0, y: 0 })
+  forceGraphMock.__setZoom(2)
+  forceGraphMock.__centerAt.mockClear()
+
+  firePointerEventAt(renderer, 'pointerdown', {
+    clientX: 0,
+    clientY: 0,
+    time: 0
+  })
+  act(() => jest.advanceTimersByTime(1))
+  firePointerEventAt(renderer, 'pointermove', {
+    clientX: 800,
+    clientY: 0,
+    time: 1
+  })
+  act(() => jest.advanceTimersByTime(1))
+  firePointerEventAt(renderer, 'pointerup', {
+    clientX: 800,
+    clientY: 0,
+    time: 2
+  })
+  act(() => flushAnimationFramesAt(0))
+  act(() => flushAnimationFramesAt(16))
+  const panCalls = forceGraphMock.__centerAt.mock.calls.filter(
+    ([x, y]) => x !== undefined || y !== undefined
+  ) as Array<[number, number]>
+  const callsAtDistanceLimit = panCalls.length
+  act(() => flushAnimationFramesAt(32))
+
+  expect(Math.abs((panCalls.at(-1)?.[0] ?? 0) * 2)).toBeLessThanOrEqual(80)
+  expect(
+    forceGraphMock.__centerAt.mock.calls.filter(
+      ([x, y]) => x !== undefined || y !== undefined
+    )
+  ).toHaveLength(callsAtDistanceLimit)
+})
+
+test('reduced motion and cancellation inputs stop pending inertia', () => {
+  jest.useFakeTimers()
+  jest.setSystemTime(0)
+  installControlledAnimationFrames()
+  setReducedMotion(false)
+  const view = render(
+    React.createElement(KnowledgeGraphCanvas, {
+      active: true,
+      graph,
+      settings: GRAPH_SETTINGS_DEFAULTS
+    })
+  )
+  const renderer = screen.getByRole('button', { name: 'Select graph node' })
+  const props = forceGraphMock.__getForceGraphProps()
+
+  const startInertia = () => {
+    firePointerEventAt(renderer, 'pointerdown', {
+      clientX: 0,
+      clientY: 0,
+      time: 0
+    })
+    act(() => jest.advanceTimersByTime(16))
+    firePointerEventAt(renderer, 'pointermove', {
+      clientX: 40,
+      clientY: 0,
+      time: 16
+    })
+    act(() => jest.advanceTimersByTime(16))
+    firePointerEventAt(renderer, 'pointerup', {
+      clientX: 40,
+      clientY: 0,
+      time: 32
+    })
+  }
+  const expectCancelled = () => {
+    const callsBeforeFrame = forceGraphMock.__centerAt.mock.calls.length
+    act(() => flushAnimationFramesAt(0))
+    act(() => flushAnimationFramesAt(16))
+    expect(forceGraphMock.__centerAt.mock.calls).toHaveLength(callsBeforeFrame)
+  }
+
+  startInertia()
+  fireEvent.pointerDown(renderer, { button: 0, clientX: 40, clientY: 0 })
+  expectCancelled()
+
+  startInertia()
+  fireEvent.wheel(renderer)
+  expectCancelled()
+
+  startInertia()
+  act(() => props.onNodeClick?.(graph.nodes[0]!))
+  expectCancelled()
+
+  startInertia()
+  view.rerender(
+    React.createElement(KnowledgeGraphCanvas, {
+      active: false,
+      graph,
+      settings: GRAPH_SETTINGS_DEFAULTS
+    })
+  )
+  expectCancelled()
+
+  view.rerender(
+    React.createElement(KnowledgeGraphCanvas, {
+      active: true,
+      graph,
+      settings: GRAPH_SETTINGS_DEFAULTS
+    })
+  )
+  startInertia()
+  changeReducedMotion(true)
+  expectCancelled()
+
+  changeReducedMotion(false)
+  startInertia()
+  view.unmount()
+  expectCancelled()
 })
