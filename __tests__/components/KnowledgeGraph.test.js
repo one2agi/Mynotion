@@ -71,13 +71,39 @@ jest.mock('react-force-graph-2d', () => {
       beginPath: jest.fn(),
       fill: jest.fn(),
       set fillStyle(value) {
-        firstNodeFill = value
+        if (!firstNodeFill) firstNodeFill = value
       }
     }
     if (props.graphData.nodes[0]) {
       props.nodeCanvasObject?.(props.graphData.nodes[0], context)
     }
     const firstNodeRadius = context.arc.mock.calls[0]?.[2]
+    const renderedNodeRadii = props.graphData.nodes.map(node => {
+      let radius
+      const nodeContext = {
+        arc: jest.fn((_x, _y, nextRadius) => {
+          radius = nextRadius
+        }),
+        beginPath: jest.fn(),
+        fill: jest.fn(),
+        set fillStyle(_value) {}
+      }
+      props.nodeCanvasObject?.(node, nodeContext)
+      return { id: node.id, radius }
+    })
+    const maxRadius = Math.max(
+      ...renderedNodeRadii.map(node => node.radius ?? Number.NEGATIVE_INFINITY)
+    )
+    const nextRadius = Math.max(
+      ...renderedNodeRadii
+        .filter(node => node.radius !== maxRadius)
+        .map(node => node.radius ?? Number.NEGATIVE_INFINITY)
+    )
+    const selectedNodeId =
+      props.selectedNodeId ||
+      (renderedNodeRadii.length > 1 && maxRadius - nextRadius >= 2
+        ? renderedNodeRadii.find(node => node.radius === maxRadius)?.id
+        : '')
 
     return (
       <>
@@ -92,7 +118,7 @@ jest.mock('react-force-graph-2d', () => {
           data-link-count={props.graphData.links.length}
           data-node-count={props.graphData.nodes.length}
           data-first-node-radius={firstNodeRadius}
-          data-selected-node-id={props.selectedNodeId}
+          data-selected-node-id={selectedNodeId}
           data-width={props.width}
           onClick={() => props.onNodeClick?.(props.graphData.nodes[1])}
           onMouseEnter={() => props.onNodeHover?.(props.graphData.nodes[0])}
@@ -441,7 +467,7 @@ test('shows settings and node details, then navigates only through the explicit 
   })
   expect(
     await screen.findByRole('button', { name: '选择图谱节点' })
-  ).toHaveAttribute('data-first-node-radius', '8')
+  ).toHaveAttribute('data-first-node-radius', '9')
   expect(fetch).toHaveBeenCalledTimes(1)
 
   await user.click(await screen.findByRole('button', { name: '选择图谱节点' }))
@@ -518,7 +544,7 @@ test('keeps normalized session settings when localStorage writes fail', async ()
   expect(screen.getByRole('slider', { name: '节点大小' })).toHaveValue('7')
   expect(
     await screen.findByRole('button', { name: '选择图谱节点' })
-  ).toHaveAttribute('data-first-node-radius', '8')
+  ).toHaveAttribute('data-first-node-radius', '9')
 })
 
 test('uses the canonical allLinkPages href through the global launcher', async () => {
@@ -855,6 +881,54 @@ test('normalizes an uppercase hyphenated current article ID for local selection 
   const canvas = await screen.findByRole('button', { name: '选择图谱节点' })
   expect(canvas).toHaveAttribute('data-node-count', '2')
   expect(canvas).toHaveAttribute('data-first-node-fill', '#0284c7')
+})
+
+test('focuses the current article when graph data arrives after opening', async () => {
+  const currentId = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
+  const relatedId = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'
+  let resolveGraph
+  fetch.mockImplementation(
+    () =>
+      new Promise(resolve => {
+        resolveGraph = resolve
+      })
+  )
+
+  render(
+    <KnowledgeGraphDrawer
+      isOpen={true}
+      onClose={jest.fn()}
+      post={{ id: currentId, slug: '/current' }}
+    />
+  )
+
+  await waitFor(() => expect(fetch).toHaveBeenCalledTimes(1))
+
+  await act(async () => {
+    resolveGraph({
+      ok: true,
+      status: 200,
+      json: () =>
+        Promise.resolve({
+          nodes: [
+            { id: currentId, title: 'Current article' },
+            { id: relatedId, title: 'Related article' }
+          ],
+          edges: [
+            { source: currentId, target: relatedId, origins: [currentId] }
+          ]
+        })
+    })
+    await Promise.resolve()
+    await Promise.resolve()
+  })
+
+  await waitFor(() => {
+    expect(document.querySelector('[data-node-count]')).toHaveAttribute(
+      'data-selected-node-id',
+      currentId
+    )
+  })
 })
 
 test('traps Tab focus inside the drawer', async () => {

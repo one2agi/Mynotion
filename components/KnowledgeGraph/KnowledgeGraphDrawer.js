@@ -165,8 +165,9 @@ const KnowledgeGraphDrawer = ({
     const initialNode =
       displayedGraph.nodes.find(node => node.id === currentId) ||
       displayedGraph.nodes[0]
+    if (!initialNode) return
     selectionInitializedRef.current = true
-    setSelectedNodeId(initialNode?.id || '')
+    setSelectedNodeId(initialNode.id)
   }, [currentId, displayedGraph.nodes, fullGraph.nodes, selectedNodeId])
 
   const selectedNode = useMemo(
