@@ -27,8 +27,13 @@ export const GRAPH_SETTINGS_RANGES = Object.freeze({
 const GRAPH_SETTINGS_VERSION = 1
 const GRAPH_LABEL_MODES = new Set(['auto', 'always', 'never'])
 
-const getStorage = () =>
-  typeof localStorage === 'undefined' ? null : localStorage
+const getStorage = () => {
+  try {
+    return typeof window === 'undefined' ? null : window.localStorage
+  } catch {
+    return null
+  }
+}
 
 const parseFiniteNumber = (value, fallback) => {
   if (typeof value === 'number') {

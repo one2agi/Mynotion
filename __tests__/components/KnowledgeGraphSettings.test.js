@@ -71,3 +71,32 @@ test('returns defaults when localStorage operations throw', () => {
   })
   expect(resetGraphSettings()).toEqual(GRAPH_SETTINGS_DEFAULTS)
 })
+
+test('handles a localStorage getter that throws', () => {
+  const originalDescriptor = Object.getOwnPropertyDescriptor(
+    window,
+    'localStorage'
+  )
+
+  Object.defineProperty(window, 'localStorage', {
+    configurable: true,
+    get() {
+      throw new Error('storage blocked')
+    }
+  })
+
+  try {
+    const loaded = loadGraphSettings()
+
+    expect(loaded).toEqual(GRAPH_SETTINGS_DEFAULTS)
+    expect(loaded).not.toBe(GRAPH_SETTINGS_DEFAULTS)
+    expect(saveGraphSettings({ nodeSize: 7 })).toEqual(GRAPH_SETTINGS_DEFAULTS)
+    expect(resetGraphSettings()).toEqual(GRAPH_SETTINGS_DEFAULTS)
+  } finally {
+    if (originalDescriptor) {
+      Object.defineProperty(window, 'localStorage', originalDescriptor)
+    } else {
+      delete window.localStorage
+    }
+  }
+})
