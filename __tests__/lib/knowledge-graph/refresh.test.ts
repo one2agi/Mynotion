@@ -115,6 +115,115 @@ test('reuses an unchanged snapshot without fetching its blocks', async () => {
   expect(context.store.putPageSnapshot).not.toHaveBeenCalled()
 })
 
+test('uses current relation properties when the page edit time is unchanged', async () => {
+  const context = setup({
+    pages: [
+      page(A, 10, {
+        properties: {
+          relation: [['Related', [['p', B]]]]
+        }
+      }),
+      page(B, 20),
+      page(C, 30)
+    ],
+    snapshots: {
+      [A]: { links: [C], lastEditedDate: 10 },
+      [B]: { links: [], lastEditedDate: 20 },
+      [C]: { links: [], lastEditedDate: 30 }
+    }
+  })
+  context.deps.fetchGlobalAllData = jest.fn(async () => ({
+    allPages: [
+      page(A, 10, {
+        properties: {
+          relation: [['Related', [['p', B]]]]
+        }
+      }),
+      page(B, 20),
+      page(C, 30)
+    ],
+    schema: { relation: { type: 'relation' } }
+  }))
+
+  const result = await refreshKnowledgeGraph(context.deps)
+
+  expect(context.fetchNotionPageBlocks).not.toHaveBeenCalled()
+  expect(result).toMatchObject({
+    graph: {
+      edges: [
+        { origins: [A], source: A, target: B },
+        { origins: [A], source: A, target: C }
+      ]
+    }
+  })
+})
+
+test('stores inline mentions separately from current relation properties', async () => {
+  const context = setup({
+    pages: [
+      page(A, 10, {
+        properties: {
+          relation: [['Related', [['p', B]]]]
+        }
+      }),
+      page(B, 20),
+      page(C, 30)
+    ]
+  })
+  context.deps.fetchGlobalAllData = jest.fn(async () => ({
+    allPages: [
+      page(A, 10, {
+        properties: {
+          relation: [['Related', [['p', B]]]]
+        }
+      }),
+      page(B, 20),
+      page(C, 30)
+    ],
+    schema: { relation: { type: 'relation' } }
+  }))
+  context.deps.fetchNotionPageBlocks = jest.fn(async (id: string) => ({
+    block: {
+      [id]: {
+        value: {
+          id,
+          properties: {
+            relation: id === A ? [['Related', [['p', B]]]] : []
+          }
+        }
+      },
+      ...(id === A
+        ? {
+            child: {
+              value: {
+                id: '00000000000000000000000000000010',
+                parent_id: A,
+                properties: {
+                  title: [['Mention', [['p', C]]]]
+                }
+              }
+            }
+          }
+        : {})
+    }
+  }))
+
+  const result = await refreshKnowledgeGraph(context.deps)
+
+  expect(context.store.putPageSnapshot).toHaveBeenCalledWith(A, {
+    links: [C],
+    lastEditedDate: 10
+  })
+  expect(result).toMatchObject({
+    graph: {
+      edges: [
+        { origins: [A], source: A, target: B },
+        { origins: [A], source: A, target: C }
+      ]
+    }
+  })
+})
+
 test('normalizes the global fetch ISO edit date before comparing snapshots', async () => {
   const editedAt = '2026-07-12T01:02:03.000Z'
   const context = setup({
@@ -136,11 +245,11 @@ test('fetches changed and new pages and replaces their snapshots', async () => {
 
   expect(context.fetchNotionPageBlocks).toHaveBeenCalledTimes(2)
   expect(context.store.putPageSnapshot).toHaveBeenCalledWith(A, {
-    links: [B],
+    links: [],
     lastEditedDate: 10
   })
   expect(context.store.putPageSnapshot).toHaveBeenCalledWith(B, {
-    links: [A],
+    links: [],
     lastEditedDate: 20
   })
 })
@@ -169,7 +278,7 @@ test('scopes extracted links to the refreshed page', async () => {
   expect(context.store.putPageSnapshot).toHaveBeenCalledWith(
     scopeFixture.pageId,
     {
-      links: [...scopeFixture.validTargetIds].sort(),
+      links: [scopeFixture.validTargetIds[0]],
       lastEditedDate: 10
     }
   )
@@ -304,11 +413,21 @@ test('merges two locale data sets and publishes their resolved href values', asy
   const context = setup({ pages: [] })
   context.deps.fetchGlobalAllData = jest.fn(async () => [
     {
-      allPages: [page(A, 10, { href: '/en/article/page-1.html' })],
+      allPages: [
+        page(A, 10, {
+          href: '/en/article/page-1.html',
+          properties: { relation: [['Related', [['p', B]]]] }
+        })
+      ],
       schema: { relation: { type: 'relation' } }
     },
     {
-      allPages: [page(B, 20, { href: '/zh/article/page-2.html' })],
+      allPages: [
+        page(B, 20, {
+          href: '/zh/article/page-2.html',
+          properties: { relation: [['Related', [['p', A]]]] }
+        })
+      ],
       schema: { relation: { type: 'relation' } }
     }
   ])

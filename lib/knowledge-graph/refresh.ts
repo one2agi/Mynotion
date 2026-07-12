@@ -1,5 +1,9 @@
 import { buildPublicGraph } from './build'
-import { extractPageLinks, normalizePageId } from './extract'
+import {
+  extractInlineMentionPageIds,
+  extractRelationPageIds,
+  normalizePageId
+} from './extract'
 import type { RefreshClaim } from './store'
 import type {
   NotionPageValue,
@@ -95,7 +99,7 @@ export async function refreshKnowledgeGraph(
     const prior = asRefreshSnapshot(await deps.store.getPageSnapshot(page.id))
 
     if (prior?.lastEditedDate === page.lastEditedDate) {
-      snapshots[page.id] = prior
+      snapshots[page.id] = withCurrentRelations(prior, page)
       return
     }
 
@@ -108,20 +112,18 @@ export async function refreshKnowledgeGraph(
       if (!recordMap) throw new Error('Notion returned an empty page')
 
       const snapshot: RefreshSnapshot = {
-        links: extractPageLinks({
+        links: extractInlineMentionPageIds({
           pageId: page.id,
-          pageValue:
-            page.pageValue || pageValueFromRecordMap(recordMap, page.id),
           schema: page.schema || schemaFromRecordMap(recordMap),
           recordMap
         }),
         lastEditedDate: page.lastEditedDate
       }
       await deps.store.putPageSnapshot(page.id, snapshot)
-      snapshots[page.id] = snapshot
+      snapshots[page.id] = withCurrentRelations(snapshot, page)
     } catch (error) {
       deps.logError?.(error)
-      if (prior) snapshots[page.id] = prior
+      if (prior) snapshots[page.id] = withCurrentRelations(prior, page)
     }
   })
 
@@ -224,12 +226,17 @@ function asRefreshSnapshot(snapshot: unknown): RefreshSnapshot | null {
       }
 }
 
-function pageValueFromRecordMap(
-  recordMap: PageRecordMap,
-  pageId: string
-): NotionPageValue {
-  const entry = recordMap.block?.[pageId]
-  return (unwrapValue(entry) || {}) as NotionPageValue
+function withCurrentRelations(
+  snapshot: RefreshSnapshot,
+  page: RefreshPage
+): RefreshSnapshot {
+  const links = new Set(snapshot.links || [])
+  extractRelationPageIds(page.pageValue || {}, page.schema || {}).forEach(id =>
+    links.add(id)
+  )
+  links.delete(page.id)
+
+  return { ...snapshot, links: Array.from(links).sort() }
 }
 
 function schemaFromRecordMap(recordMap: PageRecordMap): NotionSchema {
