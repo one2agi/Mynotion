@@ -1,6 +1,8 @@
 export type NotionProperties = Record<string, unknown>
 
 export interface NotionPageValue {
+  id?: unknown
+  parent_id?: unknown
   properties?: NotionProperties
 }
 
@@ -15,6 +17,7 @@ export interface NotionSchemaEntry {
 export type NotionSchema = Record<string, NotionSchemaEntry | undefined>
 
 export interface ExtractPageLinksInput {
+  pageId: string
   pageValue?: NotionPageValue
   schema?: NotionSchema
   recordMap?: NotionRecordMap

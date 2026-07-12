@@ -1,6 +1,7 @@
 import { refreshKnowledgeGraph } from '@/lib/knowledge-graph/refresh'
 import { EmptyData } from '@/lib/db/SiteDataFallback'
 import type { PageSnapshot, PublicGraph } from '@/lib/knowledge-graph/types'
+import scopeFixture from '../../fixtures/notion/knowledge-graph-page-scope.json'
 
 declare const jest: any
 declare const test: (name: string, callback: () => Promise<void>) => void
@@ -144,6 +145,36 @@ test('fetches changed and new pages and replaces their snapshots', async () => {
   })
 })
 
+test('scopes extracted links to the refreshed page', async () => {
+  const context = setup({
+    pages: [
+      page(scopeFixture.pageId, 10, {
+        properties: {
+          related: [['Related', [['p', scopeFixture.validTargetIds[1]]]]]
+        }
+      })
+    ]
+  })
+  context.deps.fetchNotionPageBlocks = jest.fn(async () => ({
+    ...scopeFixture.recordMap,
+    collection: {
+      database: {
+        value: { schema: { related: { type: 'relation' } } }
+      }
+    }
+  }))
+
+  await refreshKnowledgeGraph(context.deps)
+
+  expect(context.store.putPageSnapshot).toHaveBeenCalledWith(
+    scopeFixture.pageId,
+    {
+      links: [...scopeFixture.validTargetIds].sort(),
+      lastEditedDate: 10
+    }
+  )
+})
+
 test('bounds changed-page block fetching to concurrency three', async () => {
   const context = setup({
     pages: [page(A, 1), page(B, 2), page(C, 3), page(D, 4)]
@@ -184,8 +215,11 @@ test('deletes snapshots for pages that are no longer published', async () => {
 
 test('keeps the prior snapshot when one changed page fails', async () => {
   const context = setup({
-    pages: [page(A, 10)],
-    snapshots: { [A]: { links: [B], lastEditedDate: 9 } }
+    pages: [page(A, 10), page(B, 20)],
+    snapshots: {
+      [A]: { links: [B], lastEditedDate: 9 },
+      [B]: { links: [], lastEditedDate: 20 }
+    }
   })
   context.deps.fetchNotionPageBlocks = jest.fn(async () => {
     throw new Error('private notion failure token-secret')
@@ -194,9 +228,14 @@ test('keeps the prior snapshot when one changed page fails', async () => {
   const result = await refreshKnowledgeGraph(context.deps)
 
   expect(context.store.putPageSnapshot).not.toHaveBeenCalled()
-  expect(result).toMatchObject({ status: 'refreshed' })
+  expect(result).toMatchObject({
+    status: 'refreshed',
+    graph: { edges: [{ source: A, target: B }] }
+  })
   expect(context.store.putGraph).toHaveBeenCalledWith(
-    expect.objectContaining({ nodes: [expect.objectContaining({ id: A })] }),
+    expect.objectContaining({
+      nodes: expect.arrayContaining([expect.objectContaining({ id: A })])
+    }),
     'generation-one',
     1_200_000
   )

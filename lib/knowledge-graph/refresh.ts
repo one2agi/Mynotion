@@ -109,6 +109,7 @@ export async function refreshKnowledgeGraph(
 
       const snapshot: RefreshSnapshot = {
         links: extractPageLinks({
+          pageId: page.id,
           pageValue:
             page.pageValue || pageValueFromRecordMap(recordMap, page.id),
           schema: page.schema || schemaFromRecordMap(recordMap),

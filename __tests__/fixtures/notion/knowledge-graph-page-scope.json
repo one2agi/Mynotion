@@ -1,0 +1,49 @@
+{
+  "pageId": "39b4f4cfc8e280a986d9f6625a9d4f85",
+  "validTargetIds": [
+    "39b4f4cfc8e2803b86edc271c60647cf",
+    "9c64f4cfc8e2823889d301928e594e80"
+  ],
+  "falseTargetIds": [
+    "38b4f4cfc8e28093b5c5d1538840976c",
+    "38b4f4cfc8e280bda864fa57d19ab138"
+  ],
+  "recordMap": {
+    "block": {
+      "39b4f4cfc8e280a986d9f6625a9d4f85": {
+        "value": {
+          "id": "39b4f4cf-c8e2-80a9-86d9-f6625a9d4f85",
+          "properties": {}
+        }
+      },
+      "00000000000000000000000000000010": {
+        "value": {
+          "id": "00000000-0000-0000-0000-000000000010",
+          "parent_id": "39b4f4cf-c8e2-80a9-86d9-f6625a9d4f85",
+          "properties": {
+            "title": [
+              ["Local mention", [["p", "39b4f4cf-c8e2-803b-86ed-c271c60647cf"]]]
+            ]
+          }
+        }
+      },
+      "00000000000000000000000000000020": {
+        "value": {
+          "id": "00000000-0000-0000-0000-000000000020",
+          "properties": {
+            "title": [
+              [
+                "Attached mention",
+                [["p", "38b4f4cf-c8e2-8093-b5c5-d1538840976c"]]
+              ],
+              [
+                "Attached relation",
+                [["p", "38b4f4cf-c8e2-80bd-a864-fa57d19ab138"]]
+              ]
+            ]
+          }
+        }
+      }
+    }
+  }
+}

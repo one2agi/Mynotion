@@ -37,16 +37,65 @@ export function extractRelationPageIds(
 }
 
 export function extractPageLinks({
+  pageId,
   pageValue,
   schema,
   recordMap
 }: ExtractPageLinksInput): string[] {
-  const ids = extractMentionPageIds(recordMap || {})
+  const normalizedPageId = normalizePageId(pageId)
+  const blocks = normalizedBlocks(recordMap || {})
+  const ids = new Set<string>()
+
+  if (normalizedPageId) {
+    blocks.forEach(block => {
+      if (!blockBelongsToPage(block, normalizedPageId, blocks)) return
+      for (const property of Object.values(block.properties || {})) {
+        collectMentionPageIds(property, ids)
+      }
+    })
+  }
+
   extractRelationPageIds(pageValue || {}, schema || {}).forEach(id =>
     ids.add(id)
   )
+  if (normalizedPageId) ids.delete(normalizedPageId)
 
   return Array.from(ids).sort()
+}
+
+function blockBelongsToPage(
+  block: NotionPageValue,
+  pageId: string,
+  blocks: Map<string, NotionPageValue>
+): boolean {
+  let current: NotionPageValue | undefined = block
+  const visited = new Set<string>()
+
+  while (current) {
+    const currentId = normalizePageId(current.id)
+    if (currentId === pageId) return true
+
+    const parentId = normalizePageId(current.parent_id)
+    if (!parentId || visited.has(parentId)) return false
+    visited.add(parentId)
+    current = blocks.get(parentId)
+  }
+
+  return false
+}
+
+function normalizedBlocks(
+  recordMap: NotionRecordMap
+): Map<string, NotionPageValue> {
+  const blocks = new Map<string, NotionPageValue>()
+
+  for (const block of Object.values(recordMap.block || {})) {
+    const value = unwrapBlockValue(block)
+    const id = normalizePageId(value?.id)
+    if (value && id) blocks.set(id, value)
+  }
+
+  return blocks
 }
 
 function collectMentionPageIds(value: unknown, ids: Set<string>): void {
