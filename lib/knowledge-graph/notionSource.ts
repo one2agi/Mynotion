@@ -146,12 +146,16 @@ function readPageIds(
     : undefined
 
   if (isRecord(selectedQuery)) {
+    const collectionGroupBlockIds = nestedBlockIds(
+      selectedQuery,
+      'collection_group_results'
+    )
     const directIds = uniqueNormalizedIds([
-      nestedBlockIds(selectedQuery, 'collection_group_results'),
+      collectionGroupBlockIds,
       nestedBlockIds(selectedQuery, 'results'),
       selectedQuery.blockIds
     ])
-    return directIds.length
+    return collectionGroupBlockIds != null || directIds.length
       ? directIds
       : uniqueNormalizedIds([nestedReducerBlockIds(selectedQuery)])
   }

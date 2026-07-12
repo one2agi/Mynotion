@@ -163,9 +163,6 @@ test('does not union reducer page ids into direct query results', async () => {
 test('uses reducer page ids when direct query results have no ids', async () => {
   const recordMap = cloneFixtureMap()
   recordMap.collection_query[COLLECTION_ID][DEFAULT_VIEW_ID] = {
-    collection_group_results: { blockIds: [] },
-    results: { blockIds: [] },
-    blockIds: [],
     reducerResults: {
       collection_group_results: {
         blockIds: [fixture.expected.targetId]
@@ -184,6 +181,30 @@ test('uses reducer page ids when direct query results have no ids', async () => 
   expect(result.allPages.map(page => page.id)).toEqual([
     fixture.expected.targetId
   ])
+})
+
+test('treats explicit empty collection group results as authoritative', async () => {
+  const recordMap = cloneFixtureMap()
+  recordMap.collection_query[COLLECTION_ID][DEFAULT_VIEW_ID] = {
+    collection_group_results: { blockIds: [] },
+    reducerResults: {
+      collection_group_results: {
+        blockIds: [fixture.expected.targetId]
+      }
+    }
+  }
+  const fetchPageValues = jest.fn(async () => fixture.missingPageValues)
+
+  await expect(
+    fetchKnowledgeGraphSiteData({
+      pageId: fixture.databaseId,
+      postUrlPrefix: 'article',
+      propertyNames,
+      fetchDatabase: async () => recordMap,
+      fetchPageValues
+    })
+  ).rejects.toThrow('Knowledge graph Notion database is unavailable')
+  expect(fetchPageValues).not.toHaveBeenCalled()
 })
 
 test.each([
