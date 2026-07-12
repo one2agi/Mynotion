@@ -14,7 +14,10 @@ const REDUCED_MOTION_QUERY = '(prefers-reduced-motion: reduce)'
 
 export const cloneGraphForRenderer = graph => ({
   nodes: graph.nodes.map(node => ({ ...node })),
-  links: graph.edges.map(edge => ({ ...edge }))
+  links: graph.edges.map(edge => ({
+    ...edge,
+    ...(Array.isArray(edge.origins) ? { origins: [...edge.origins] } : {})
+  }))
 })
 
 export const getCanvasDimensions = ({ height, width }) => ({
@@ -60,9 +63,11 @@ const KnowledgeGraphCanvas = ({
 }) => {
   const containerRef = useRef(null)
   const graphRef = useRef(null)
-  const draggedNodeRef = useRef(null)
   const dragDistanceRef = useRef({ nodeId: null, x: 0, y: 0 })
-  const dragResetTimerRef = useRef(null)
+  const previousActiveRef = useRef(active)
+  const stablePauseFrameRef = useRef(null)
+  const suppressedClickRef = useRef(null)
+  const suppressedClickExpiryRef = useRef(null)
   const [dimensions, setDimensions] = useState({ height: 0, width: 0 })
   const [hoveredNode, setHoveredNode] = useState(null)
   const [tooltipPosition, setTooltipPosition] = useState({
@@ -101,6 +106,8 @@ const KnowledgeGraphCanvas = ({
 
   useEffect(() => {
     const forceGraph = graphRef.current
+    const becameActive = active && previousActiveRef.current === false
+    previousActiveRef.current = active
     const chargeForce = forceGraph?.d3Force?.('charge')
     const linkForce = forceGraph?.d3Force?.('link')
     const centerForce = forceGraph?.d3Force?.('center')
@@ -111,10 +118,15 @@ const KnowledgeGraphCanvas = ({
     centerForce?.strength?.(normalizedSettings.centerStrength)
 
     if (!active) {
+      if (stablePauseFrameRef.current !== null) {
+        window.cancelAnimationFrame(stablePauseFrameRef.current)
+        stablePauseFrameRef.current = null
+      }
       forceGraph?.pauseAnimation?.()
       return
     }
 
+    if (becameActive) forceGraph?.resumeAnimation?.()
     const reheatTimer = window.setTimeout(
       () => forceGraph?.d3ReheatSimulation?.(),
       80
@@ -124,17 +136,16 @@ const KnowledgeGraphCanvas = ({
 
   useEffect(() => {
     const forceGraph = graphRef.current
-    return () => forceGraph?.pauseAnimation?.()
-  }, [])
-
-  useEffect(
-    () => () => {
-      if (dragResetTimerRef.current !== null) {
-        window.clearTimeout(dragResetTimerRef.current)
+    return () => {
+      if (stablePauseFrameRef.current !== null) {
+        window.cancelAnimationFrame(stablePauseFrameRef.current)
       }
-    },
-    []
-  )
+      if (suppressedClickExpiryRef.current !== null) {
+        window.clearTimeout(suppressedClickExpiryRef.current)
+      }
+      forceGraph?.pauseAnimation?.()
+    }
+  }, [])
 
   const handleNodeDrag = useCallback((node, translate = {}) => {
     if (dragDistanceRef.current.nodeId !== node.id) {
@@ -147,36 +158,52 @@ const KnowledgeGraphCanvas = ({
       dragDistanceRef.current.x,
       dragDistanceRef.current.y
     )
-    if (distance >= DRAG_THRESHOLD) draggedNodeRef.current = node.id
+    if (distance >= DRAG_THRESHOLD) suppressedClickRef.current = node.id
   }, [])
 
   const handleNodeDragEnd = useCallback((node, translate = {}) => {
     if (Math.hypot(translate.x || 0, translate.y || 0) >= DRAG_THRESHOLD) {
-      draggedNodeRef.current = node.id
+      suppressedClickRef.current = node.id
     }
     dragDistanceRef.current = { nodeId: null, x: 0, y: 0 }
-    if (draggedNodeRef.current !== node.id) return
+    if (suppressedClickRef.current !== node.id) return
 
-    if (dragResetTimerRef.current !== null) {
-      window.clearTimeout(dragResetTimerRef.current)
+    if (suppressedClickExpiryRef.current !== null) {
+      window.clearTimeout(suppressedClickExpiryRef.current)
     }
-    dragResetTimerRef.current = window.setTimeout(() => {
-      draggedNodeRef.current = null
-      dragResetTimerRef.current = null
-    }, 0)
+    suppressedClickExpiryRef.current = window.setTimeout(() => {
+      if (suppressedClickRef.current === node.id) {
+        suppressedClickRef.current = null
+      }
+      suppressedClickExpiryRef.current = null
+    }, 250)
   }, [])
 
   const handleNodeClick = useCallback(
     node => {
       dragDistanceRef.current = { nodeId: null, x: 0, y: 0 }
-      if (draggedNodeRef.current === node.id) {
-        draggedNodeRef.current = null
+      if (suppressedClickRef.current === node.id) {
+        suppressedClickRef.current = null
+        if (suppressedClickExpiryRef.current !== null) {
+          window.clearTimeout(suppressedClickExpiryRef.current)
+          suppressedClickExpiryRef.current = null
+        }
         return
       }
       onNodeClick?.(node)
     },
     [onNodeClick]
   )
+
+  const handleEngineStop = useCallback(() => {
+    if (stablePauseFrameRef.current !== null) {
+      window.cancelAnimationFrame(stablePauseFrameRef.current)
+    }
+    stablePauseFrameRef.current = window.requestAnimationFrame(() => {
+      stablePauseFrameRef.current = null
+      graphRef.current?.pauseAnimation?.()
+    })
+  }, [])
 
   const backgroundColor = darkMode ? '#030712' : '#ffffff'
   const accentColor = darkMode ? '#38bdf8' : '#0284c7'
@@ -281,7 +308,7 @@ const KnowledgeGraphCanvas = ({
           context.restore?.()
         }}
         onBackgroundClick={onBackgroundClick}
-        onEngineStop={() => graphRef.current?.pauseAnimation?.()}
+        onEngineStop={handleEngineStop}
         onNodeClick={handleNodeClick}
         onNodeDrag={handleNodeDrag}
         onNodeDragEnd={handleNodeDragEnd}
