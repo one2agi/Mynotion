@@ -11,7 +11,7 @@
 ## Global Constraints
 
 - Pointer tolerance is fixed at 4 screen pixels at every zoom.
-- Stationary time before release is fixed at 500 ms.
+- Stationary time before release is fixed at 300 ms.
 - Inertia duration is capped at 240 ms and displacement at 120 screen pixels.
 - Node drag, reduced motion, new input, inactive state, and unmount suppress or cancel inertia.
 - No settings, storage keys, dependencies, force reheating, or UI controls may be added.
@@ -29,7 +29,7 @@
 
 Assert `nodePointerAreaPaint` draws a circle with graph radius equal to rendered radius plus `4 / globalScale`, using the provided pointer color. Cover selected and ordinary node radii.
 
-Use mocked pointer events, animation frames, `centerAt()` and `zoom()` to prove: quick background release moves the viewport in the release direction; stopping for 500 ms produces no motion; node dragging produces no inertia; movement follows a smooth ease-out trajectory and stops by 240 ms and 120 px; reduced motion and cancellation inputs stop it.
+Use mocked pointer events, animation frames, `centerAt()` and `zoom()` to prove: quick background release moves the viewport in the release direction; stopping for 300 ms produces no motion; node dragging produces no inertia; movement follows a smooth ease-out trajectory and stops by 240 ms and 120 px; reduced motion and cancellation inputs stop it.
 
 - [ ] **Step 2: Run RED**
 
@@ -41,7 +41,7 @@ Expected: pointer-area and inertia props/behavior are absent.
 
 - [ ] **Step 3: Implement fixed hit area and inertia**
 
-Add named internal constants for 4 px tolerance, 500 ms idle cutoff, 240 ms duration, 120 px cap, and a 160 ms release-velocity projection window. Use one absolute cubic ease-out trajectory so frame timing cannot accumulate visible steps. Reuse the rendered radius calculation in `nodeCanvasObject` and `nodePointerAreaPaint` so visual and hit geometry cannot drift.
+Add named internal constants for 4 px tolerance, 300 ms idle cutoff, 240 ms duration, 120 px cap, and a 160 ms release-velocity projection window. Use one absolute cubic ease-out trajectory so frame timing cannot accumulate visible steps. Reuse the rendered radius calculation in `nodeCanvasObject` and `nodePointerAreaPaint` so visual and hit geometry cannot drift.
 
 Track one pointer session. Mark it as node-driven from existing node drag callbacks. On qualifying background release, read the viewport center and zoom from the force-graph ref, convert screen velocity to graph coordinates, and advance via `requestAnimationFrame`. Cancel on pointer down, wheel, node drag, inactive state, reduced motion, and unmount. Do not reheat the simulation.
 

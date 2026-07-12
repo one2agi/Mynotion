@@ -867,7 +867,7 @@ test('continues a quick background pan in the release direction', () => {
   expect(panCalls.at(-1)?.[0]).toBeLessThan(10)
 })
 
-test('does not start inertia after the pointer is still for 500 ms', () => {
+test('does not start inertia after the pointer is still for 300 ms', () => {
   jest.useFakeTimers()
   jest.setSystemTime(0)
   installControlledAnimationFrames()
@@ -892,13 +892,13 @@ test('does not start inertia after the pointer is still for 500 ms', () => {
     clientY: 0,
     time: 16
   })
-  act(() => jest.advanceTimersByTime(500))
+  act(() => jest.advanceTimersByTime(300))
   firePointerEventAt(renderer, 'pointerup', {
     clientX: 40,
     clientY: 0,
-    time: 516
+    time: 316
   })
-  act(() => flushAnimationFramesAt(520))
+  act(() => flushAnimationFramesAt(320))
 
   expect(forceGraphMock.__centerAt).not.toHaveBeenCalled()
 })

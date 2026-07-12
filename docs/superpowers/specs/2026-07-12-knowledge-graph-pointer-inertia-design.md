@@ -12,7 +12,7 @@ Make node dragging reliable across zoom levels and make background panning feel 
 - Node dragging never starts canvas inertia.
 - Background panning samples recent pointer velocity while the primary button is held.
 - Releasing during a quick pan continues movement briefly in the release direction.
-- Holding still for 500 ms before release clears velocity and produces no inertia.
+- Holding still for 300 ms before release clears velocity and produces no inertia.
 - Inertia lasts at most 240 ms and cannot move farther than 120 screen pixels.
 - A new pointer press, wheel gesture, node drag, inactive canvas, or component unmount cancels inertia immediately.
 - Reduced-motion preference disables inertia but keeps the improved node hit area.
