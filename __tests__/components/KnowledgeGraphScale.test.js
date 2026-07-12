@@ -1,4 +1,5 @@
 import { cloneGraphForRenderer } from '@/components/KnowledgeGraph/KnowledgeGraphCanvas'
+import { createGraphFocusModel } from '@/components/KnowledgeGraph/graphRenderModel'
 import { selectGraphNeighborhood } from '@/components/KnowledgeGraph/graphView'
 
 jest.mock('react-force-graph-2d', () => () => null)
@@ -32,6 +33,11 @@ test.each([50, 500, 1000])(
     const neighborhood = selectGraphNeighborhood(graph, 'node-0', 2)
     const neighborhoodMs = performance.now() - neighborhoodStartedAt
 
+    const focusStartedAt = performance.now()
+    const focus = createGraphFocusModel(graph, 'node-0')
+    const repeatedFocus = createGraphFocusModel(graph, 'node-0')
+    const focusMs = performance.now() - focusStartedAt
+
     expect(rendererGraph).toEqual({
       nodes: graph.nodes,
       links: graph.edges
@@ -40,17 +46,22 @@ test.each([50, 500, 1000])(
     expect(rendererGraph.links[0]).not.toBe(graph.edges[0])
     expect(neighborhood.nodes).toHaveLength(3)
     expect(neighborhood.edges).toHaveLength(2)
+    expect(Array.from(focus.focusedNodeIds)).toEqual(['node-0', 'node-1'])
+    expect(Array.from(focus.focusedNodeIds)).toEqual(
+      Array.from(repeatedFocus.focusedNodeIds)
+    )
+    expect(focus.focusedEdgeKeys).toEqual(new Set(['node-0:node-1']))
     expect(graph.nodes).toHaveLength(size)
 
     if (size === 1000) {
       expect(payloadBytes).toBeLessThan(MAX_1000_NODE_PAYLOAD_BYTES)
-      expect(cloneMs + neighborhoodMs).toBeLessThan(
+      expect(cloneMs + neighborhoodMs + focusMs).toBeLessThan(
         MAX_1000_NODE_PURE_OPERATION_MS
       )
     }
 
     console.info(
-      `[knowledge-graph-scale] nodes=${size} bytes=${payloadBytes} cloneMs=${cloneMs.toFixed(3)} neighborhoodMs=${neighborhoodMs.toFixed(3)}`
+      `[knowledge-graph-scale] nodes=${size} bytes=${payloadBytes} cloneMs=${cloneMs.toFixed(3)} neighborhoodMs=${neighborhoodMs.toFixed(3)} focusMs=${focusMs.toFixed(3)}`
     )
   }
 )

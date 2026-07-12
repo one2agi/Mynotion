@@ -1,6 +1,16 @@
 import ForceGraph2D from 'react-force-graph-2d'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useKnowledgeGraphDarkMode } from './appearance'
+import {
+  createGraphFocusModel,
+  getGraphEdgeKey,
+  shouldDrawLabel
+} from './graphRenderModel'
+import { normalizeGraphSettings } from './graphSettings'
+
+const DRAG_THRESHOLD = 4
+const FOCUS_FADE_ALPHA = 0.16
+const REDUCED_MOTION_QUERY = '(prefers-reduced-motion: reduce)'
 
 export const cloneGraphForRenderer = graph => ({
   nodes: graph.nodes.map(node => ({ ...node })),
@@ -12,15 +22,47 @@ export const getCanvasDimensions = ({ height, width }) => ({
   width: Math.max(0, Math.floor(width || 0))
 })
 
+const usePrefersReducedMotion = () => {
+  const [reducedMotion, setReducedMotion] = useState(
+    () =>
+      typeof window !== 'undefined' &&
+      Boolean(window.matchMedia?.(REDUCED_MOTION_QUERY).matches)
+  )
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia?.(REDUCED_MOTION_QUERY)
+    if (!mediaQuery) return
+
+    const updatePreference = event => setReducedMotion(event.matches)
+    setReducedMotion(mediaQuery.matches)
+
+    if (mediaQuery.addEventListener) {
+      mediaQuery.addEventListener('change', updatePreference)
+      return () => mediaQuery.removeEventListener('change', updatePreference)
+    }
+
+    mediaQuery.addListener?.(updatePreference)
+    return () => mediaQuery.removeListener?.(updatePreference)
+  }, [])
+
+  return reducedMotion
+}
+
 const KnowledgeGraphCanvas = ({
   active,
   currentId,
   graph,
   isDarkMode,
-  onNodeClick
+  onBackgroundClick,
+  onNodeClick,
+  selectedNodeId,
+  settings
 }) => {
   const containerRef = useRef(null)
   const graphRef = useRef(null)
+  const draggedNodeRef = useRef(null)
+  const dragDistanceRef = useRef({ nodeId: null, x: 0, y: 0 })
+  const dragResetTimerRef = useRef(null)
   const [dimensions, setDimensions] = useState({ height: 0, width: 0 })
   const [hoveredNode, setHoveredNode] = useState(null)
   const [tooltipPosition, setTooltipPosition] = useState({
@@ -31,7 +73,17 @@ const KnowledgeGraphCanvas = ({
     translateY: '0%'
   })
   const darkMode = useKnowledgeGraphDarkMode(isDarkMode)
+  const reducedMotion = usePrefersReducedMotion()
+  const normalizedSettings = useMemo(
+    () => normalizeGraphSettings(settings),
+    [settings]
+  )
   const rendererGraph = useMemo(() => cloneGraphForRenderer(graph), [graph])
+  const focusModel = useMemo(
+    () => createGraphFocusModel(graph, selectedNodeId),
+    [graph, selectedNodeId]
+  )
+  const hasFocus = Boolean(selectedNodeId)
 
   useEffect(() => {
     const measure = () => {
@@ -48,15 +100,89 @@ const KnowledgeGraphCanvas = ({
   }, [])
 
   useEffect(() => {
-    if (!active) graphRef.current?.pauseAnimation()
-  }, [active])
+    const forceGraph = graphRef.current
+    const chargeForce = forceGraph?.d3Force?.('charge')
+    const linkForce = forceGraph?.d3Force?.('link')
+    const centerForce = forceGraph?.d3Force?.('center')
+
+    chargeForce?.strength?.(-normalizedSettings.repelStrength)
+    linkForce?.distance?.(normalizedSettings.linkDistance)
+    linkForce?.strength?.(normalizedSettings.linkStrength)
+    centerForce?.strength?.(normalizedSettings.centerStrength)
+
+    if (!active) {
+      forceGraph?.pauseAnimation?.()
+      return
+    }
+
+    const reheatTimer = window.setTimeout(
+      () => forceGraph?.d3ReheatSimulation?.(),
+      80
+    )
+    return () => window.clearTimeout(reheatTimer)
+  }, [active, normalizedSettings, reducedMotion, rendererGraph])
 
   useEffect(() => {
     const forceGraph = graphRef.current
-    return () => forceGraph?.pauseAnimation()
+    return () => forceGraph?.pauseAnimation?.()
   }, [])
 
+  useEffect(
+    () => () => {
+      if (dragResetTimerRef.current !== null) {
+        window.clearTimeout(dragResetTimerRef.current)
+      }
+    },
+    []
+  )
+
+  const handleNodeDrag = useCallback((node, translate = {}) => {
+    if (dragDistanceRef.current.nodeId !== node.id) {
+      dragDistanceRef.current = { nodeId: node.id, x: 0, y: 0 }
+    }
+
+    dragDistanceRef.current.x += translate.x || 0
+    dragDistanceRef.current.y += translate.y || 0
+    const distance = Math.hypot(
+      dragDistanceRef.current.x,
+      dragDistanceRef.current.y
+    )
+    if (distance >= DRAG_THRESHOLD) draggedNodeRef.current = node.id
+  }, [])
+
+  const handleNodeDragEnd = useCallback((node, translate = {}) => {
+    if (Math.hypot(translate.x || 0, translate.y || 0) >= DRAG_THRESHOLD) {
+      draggedNodeRef.current = node.id
+    }
+    dragDistanceRef.current = { nodeId: null, x: 0, y: 0 }
+    if (draggedNodeRef.current !== node.id) return
+
+    if (dragResetTimerRef.current !== null) {
+      window.clearTimeout(dragResetTimerRef.current)
+    }
+    dragResetTimerRef.current = window.setTimeout(() => {
+      draggedNodeRef.current = null
+      dragResetTimerRef.current = null
+    }, 0)
+  }, [])
+
+  const handleNodeClick = useCallback(
+    node => {
+      dragDistanceRef.current = { nodeId: null, x: 0, y: 0 }
+      if (draggedNodeRef.current === node.id) {
+        draggedNodeRef.current = null
+        return
+      }
+      onNodeClick?.(node)
+    },
+    [onNodeClick]
+  )
+
   const backgroundColor = darkMode ? '#030712' : '#ffffff'
+  const accentColor = darkMode ? '#38bdf8' : '#0284c7'
+  const defaultLinkColor = darkMode ? '#4b5563' : '#cbd5e1'
+  const defaultNodeColor = darkMode ? '#94a3b8' : '#64748b'
+  const labelColor = darkMode ? '#e5e7eb' : '#1f2937'
   const handleNodeHover = node => setHoveredNode(node || null)
   const handlePointerMove = event => {
     const bounds = containerRef.current?.getBoundingClientRect()
@@ -98,20 +224,67 @@ const KnowledgeGraphCanvas = ({
     >
       <ForceGraph2D
         backgroundColor={backgroundColor}
-        cooldownTicks={120}
+        cooldownTicks={reducedMotion ? 1 : 80}
+        d3AlphaDecay={reducedMotion ? 1 : 0.04}
+        d3VelocityDecay={0.45}
         enableNodeDrag={true}
         graphData={rendererGraph}
         height={dimensions.height}
-        linkColor={() => (darkMode ? '#4b5563' : '#cbd5e1')}
-        linkWidth={1}
-        nodeCanvasObject={(node, context) => {
-          const radius = node.id === currentId ? 7 : 5
+        linkColor={link => {
+          if (!hasFocus) return defaultLinkColor
+          return focusModel.focusedEdgeKeys.has(getGraphEdgeKey(link))
+            ? accentColor
+            : darkMode
+              ? 'rgba(75, 85, 99, 0.16)'
+              : 'rgba(148, 163, 184, 0.16)'
+        }}
+        linkWidth={link =>
+          hasFocus && focusModel.focusedEdgeKeys.has(getGraphEdgeKey(link))
+            ? normalizedSettings.linkWidth * 1.5
+            : normalizedSettings.linkWidth
+        }
+        maxZoom={4}
+        minZoom={0.6}
+        nodeCanvasObject={(node, context, globalScale) => {
+          const selected = node.id === selectedNodeId
+          const current = node.id === currentId
+          const focused = !hasFocus || focusModel.focusedNodeIds.has(node.id)
+          const nodeAlpha = focused ? 1 : FOCUS_FADE_ALPHA
+          const radius =
+            normalizedSettings.nodeSize + (selected ? 2 : current ? 1 : 0)
+
+          context.save?.()
+          context.globalAlpha = nodeAlpha
           context.beginPath()
           context.arc(node.x, node.y, radius, 0, 2 * Math.PI)
-          context.fillStyle = node.id === currentId ? '#0284c7' : '#64748b'
+          context.fillStyle =
+            selected || current ? accentColor : defaultNodeColor
           context.fill()
+
+          if (
+            node.title &&
+            shouldDrawLabel({
+              hovered: hoveredNode?.id === node.id,
+              mode: normalizedSettings.labelMode,
+              selected,
+              zoom: globalScale
+            })
+          ) {
+            const zoom = Math.max(0.1, Number(globalScale) || 1)
+            context.globalAlpha = nodeAlpha * normalizedSettings.labelOpacity
+            context.fillStyle = labelColor
+            context.font = `${12 / zoom}px sans-serif`
+            context.textAlign = 'center'
+            context.textBaseline = 'top'
+            context.fillText?.(node.title, node.x, node.y + radius + 3 / zoom)
+          }
+          context.restore?.()
         }}
-        onNodeClick={onNodeClick}
+        onBackgroundClick={onBackgroundClick}
+        onEngineStop={() => graphRef.current?.pauseAnimation?.()}
+        onNodeClick={handleNodeClick}
+        onNodeDrag={handleNodeDrag}
+        onNodeDragEnd={handleNodeDragEnd}
         onNodeHover={handleNodeHover}
         ref={graphRef}
         width={dimensions.width}
