@@ -1,12 +1,7 @@
 import { buildPublicGraph } from './build'
-import {
-  extractInlineMentionPageIds,
-  extractRelationPageIds,
-  normalizePageId
-} from './extract'
+import { extractInlineMentionPageIds, normalizePageId } from './extract'
 import type { RefreshClaim } from './store'
 import type {
-  NotionPageValue,
   NotionRecordMap,
   NotionSchema,
   PageSnapshot,
@@ -50,7 +45,6 @@ interface GlobalPage {
   type?: unknown
   status?: unknown
   lastEditedDate?: unknown
-  properties?: unknown
 }
 
 interface GlobalData {
@@ -80,7 +74,6 @@ export type RefreshResult =
 
 type RefreshPage = PublishedPage & {
   lastEditedDate: number
-  pageValue?: NotionPageValue
   schema?: NotionSchema
 }
 
@@ -99,7 +92,7 @@ export async function refreshKnowledgeGraph(
     const prior = asRefreshSnapshot(await deps.store.getPageSnapshot(page.id))
 
     if (prior?.lastEditedDate === page.lastEditedDate) {
-      snapshots[page.id] = withCurrentRelations(prior, page)
+      snapshots[page.id] = prior
       return
     }
 
@@ -120,10 +113,10 @@ export async function refreshKnowledgeGraph(
         lastEditedDate: page.lastEditedDate
       }
       await deps.store.putPageSnapshot(page.id, snapshot)
-      snapshots[page.id] = withCurrentRelations(snapshot, page)
+      snapshots[page.id] = snapshot
     } catch (error) {
       deps.logError?.(error)
-      if (prior) snapshots[page.id] = withCurrentRelations(prior, page)
+      if (prior) snapshots[page.id] = prior
     }
   })
 
@@ -185,9 +178,6 @@ function publishedArticles(data: GlobalData | GlobalData[]): RefreshPage[] {
           : {}),
         ...(typeof icon === 'string' && icon ? { icon } : {}),
         lastEditedDate,
-        ...(isRecord(page.properties)
-          ? { pageValue: { properties: page.properties } }
-          : {}),
         ...(siteData.schema ? { schema: siteData.schema } : {})
       })
     }
@@ -224,19 +214,6 @@ function asRefreshSnapshot(snapshot: unknown): RefreshSnapshot | null {
           : [],
         lastEditedDate
       }
-}
-
-function withCurrentRelations(
-  snapshot: RefreshSnapshot,
-  page: RefreshPage
-): RefreshSnapshot {
-  const links = new Set(snapshot.links || [])
-  extractRelationPageIds(page.pageValue || {}, page.schema || {}).forEach(id =>
-    links.add(id)
-  )
-  links.delete(page.id)
-
-  return { ...snapshot, links: Array.from(links).sort() }
 }
 
 function schemaFromRecordMap(recordMap: PageRecordMap): NotionSchema {

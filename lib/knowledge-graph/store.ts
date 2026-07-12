@@ -1,7 +1,7 @@
 import { normalizePageId } from './extract'
 import type { PageSnapshot, PublicGraph } from './types'
 
-const CACHE_PREFIX = 'v4/'
+const CACHE_PREFIX = 'v5/'
 const STATE_KEY = `${CACHE_PREFIX}state/refresh.json`
 const REFRESH_CLAIM_WINDOW_MS = 10 * 60 * 1000
 const PUBLICATION_PREFIX = `${CACHE_PREFIX}state/graph-publications/`
@@ -102,7 +102,7 @@ function isPublicationMarkerKey(key: string): boolean {
 function isGraphVersionKey(key: unknown): key is string {
   return (
     typeof key === 'string' &&
-    /^v4\/graph\/versions\/[A-Za-z0-9][A-Za-z0-9_-]*\.json$/.test(key)
+    /^v5\/graph\/versions\/[A-Za-z0-9][A-Za-z0-9_-]*\.json$/.test(key)
   )
 }
 

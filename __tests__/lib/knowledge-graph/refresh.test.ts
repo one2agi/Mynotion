@@ -115,7 +115,7 @@ test('reuses an unchanged snapshot without fetching its blocks', async () => {
   expect(context.store.putPageSnapshot).not.toHaveBeenCalled()
 })
 
-test('uses current relation properties when the page edit time is unchanged', async () => {
+test('does not add relation properties to an unchanged body-only snapshot', async () => {
   const context = setup({
     pages: [
       page(A, 10, {
@@ -150,15 +150,12 @@ test('uses current relation properties when the page edit time is unchanged', as
   expect(context.fetchNotionPageBlocks).not.toHaveBeenCalled()
   expect(result).toMatchObject({
     graph: {
-      edges: [
-        { origins: [A], source: A, target: B },
-        { origins: [A], source: A, target: C }
-      ]
+      edges: [{ origins: [A], source: A, target: C }]
     }
   })
 })
 
-test('stores inline mentions separately from current relation properties', async () => {
+test('stores and publishes only body mentions for a newly fetched page', async () => {
   const context = setup({
     pages: [
       page(A, 10, {
@@ -216,10 +213,7 @@ test('stores inline mentions separately from current relation properties', async
   })
   expect(result).toMatchObject({
     graph: {
-      edges: [
-        { origins: [A], source: A, target: B },
-        { origins: [A], source: A, target: C }
-      ]
+      edges: [{ origins: [A], source: A, target: C }]
     }
   })
 })
@@ -451,7 +445,7 @@ test('merges two locale data sets and publishes their resolved href values', asy
           href: '/zh/article/page-2.html'
         }
       ],
-      edges: [{ source: A, target: B, origins: [A, B] }]
+      edges: []
     }
   })
 })

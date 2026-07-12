@@ -1,11 +1,5 @@
-import mentionFixture from '../../fixtures/notion/knowledge-graph-page-mention.json'
 import scopeFixture from '../../fixtures/notion/knowledge-graph-page-scope.json'
-import relationFixture from '../../fixtures/notion/knowledge-graph-relation.json'
-import {
-  extractMentionPageIds,
-  extractPageLinks,
-  extractRelationPageIds
-} from '@/lib/knowledge-graph/extract'
+import { extractInlineMentionPageIds } from '@/lib/knowledge-graph/extract'
 
 declare const test: (name: string, callback: () => void) => void
 declare const expect: (value: unknown) => {
@@ -13,103 +7,73 @@ declare const expect: (value: unknown) => {
   not: { toContain(expected: unknown): void }
 }
 
-test('extracts the real page mention target', () => {
-  expect(Array.from(extractMentionPageIds(mentionFixture.recordMap))).toEqual([
-    mentionFixture.expectedTargetId
-  ])
-})
+const PAGE_ID = '00000000000000000000000000000001'
+const BODY_TARGET = '00000000000000000000000000000002'
+const RELATION_TARGET = '00000000000000000000000000000003'
 
-test('extracts relation page ids from the real property shape', () => {
+test('extracts only body page mentions and excludes root relation properties', () => {
   expect(
-    Array.from(
-      extractRelationPageIds(relationFixture.page, relationFixture.schema)
-    )
-  ).toEqual(relationFixture.expectedTargetIds)
-})
-
-test('merges, deduplicates, and sorts page links deterministically', () => {
-  const mentionProperty = Object.values(mentionFixture.recordMap.block)[0]!
-    .value.properties.title
-  const input = {
-    pageId: '00000000000000000000000000000004',
-    recordMap: mentionFixture.recordMap,
-    pageValue: {
-      properties: {
-        related: [
-          ...relationFixture.page.properties.related,
-          ...mentionProperty
-        ]
-      }
-    },
-    schema: relationFixture.schema
-  }
-  const expected = [
-    relationFixture.expectedTargetIds[0]!,
-    mentionFixture.expectedTargetId
-  ]
-
-  expect(extractPageLinks(input)).toEqual(expected)
-  expect(extractPageLinks(input)).toEqual(expected)
-})
-
-test('ignores UUID-looking ordinary text', () => {
-  expect(
-    extractMentionPageIds({
-      block: {
-        ordinaryText: {
-          value: {
-            properties: {
-              title: [['0000000000000000000000000000000a']]
+    extractInlineMentionPageIds({
+      pageId: PAGE_ID,
+      schema: { related: { type: 'relation' } },
+      recordMap: {
+        block: {
+          [PAGE_ID]: {
+            value: {
+              id: PAGE_ID,
+              properties: {
+                related: [['Related', [['p', RELATION_TARGET]]]]
+              }
+            }
+          },
+          body: {
+            value: {
+              id: '00000000000000000000000000000004',
+              parent_id: PAGE_ID,
+              properties: {
+                title: [['Mention', [['p', BODY_TARGET]]]]
+              }
             }
           }
         }
       }
     })
-  ).toEqual(new Set())
+  ).toEqual([BODY_TARGET])
 })
 
-test('ignores decorated page ids in non-relation properties', () => {
+test('ignores ordinary article hyperlinks', () => {
   expect(
-    extractRelationPageIds(relationFixture.page, {
-      related: { type: 'text' }
-    })
-  ).toEqual(new Set())
-})
-
-test('ignores invalid page ids in mention and relation decorations', () => {
-  const invalidRichText = [
-    ['Invalid page id', [['p', '00000000-0000-0000-0000-00000000000g']]]
-  ]
-
-  expect(
-    extractPageLinks({
-      pageId: '0000000000000000000000000000000b',
+    extractInlineMentionPageIds({
+      pageId: PAGE_ID,
+      schema: {},
       recordMap: {
         block: {
-          invalidMention: {
-            value: { properties: { title: invalidRichText } }
+          [PAGE_ID]: {
+            value: { id: PAGE_ID, properties: {} }
+          },
+          body: {
+            value: {
+              id: '00000000000000000000000000000004',
+              parent_id: PAGE_ID,
+              properties: {
+                title: [['Article', [['a', '/article/target']]]]
+              }
+            }
           }
         }
-      },
-      pageValue: { properties: { related: invalidRichText } },
-      schema: { related: { type: 'relation' } }
+      }
     })
   ).toEqual([])
 })
 
 test('ignores mentions from attached foreign page records', () => {
-  const result = extractPageLinks({
+  const result = extractInlineMentionPageIds({
     pageId: scopeFixture.pageId,
-    pageValue: {
-      properties: {
-        related: [['Related', [['p', scopeFixture.validTargetIds[1]]]]]
-      }
-    },
     schema: { related: { type: 'relation' } },
     recordMap: scopeFixture.recordMap
   })
 
-  expect(result).toEqual([...scopeFixture.validTargetIds].sort())
+  expect(result).toEqual([scopeFixture.validTargetIds[0]])
   for (const falseTarget of scopeFixture.falseTargetIds) {
     expect(result).not.toContain(falseTarget)
   }
@@ -144,9 +108,8 @@ test('includes nested descendants and removes self links', () => {
   }
 
   expect(
-    extractPageLinks({
+    extractInlineMentionPageIds({
       pageId: scopeFixture.pageId,
-      pageValue: { properties: {} },
       schema: {},
       recordMap
     })

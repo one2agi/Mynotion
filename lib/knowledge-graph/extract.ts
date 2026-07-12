@@ -1,8 +1,7 @@
 import type {
   ExtractPageLinksInput,
   NotionPageValue,
-  NotionRecordMap,
-  NotionSchema
+  NotionRecordMap
 } from './types'
 import { normalizePageId } from './normalizePageId'
 
@@ -19,44 +18,6 @@ export function extractMentionPageIds(recordMap: NotionRecordMap): Set<string> {
   }
 
   return ids
-}
-
-export function extractRelationPageIds(
-  pageValue: NotionPageValue,
-  schema: NotionSchema
-): Set<string> {
-  const ids = new Set<string>()
-
-  for (const [property, definition] of Object.entries(schema || {})) {
-    if (definition?.type === 'relation') {
-      collectMentionPageIds(pageValue?.properties?.[property], ids)
-    }
-  }
-
-  return ids
-}
-
-export function extractPageLinks({
-  pageId,
-  pageValue,
-  schema,
-  recordMap
-}: ExtractPageLinksInput): string[] {
-  const normalizedPageId = normalizePageId(pageId)
-  const ids = new Set(
-    extractInlineMentionPageIds({
-      pageId,
-      schema: schema || {},
-      recordMap: recordMap || {}
-    })
-  )
-
-  extractRelationPageIds(pageValue || {}, schema || {}).forEach(id =>
-    ids.add(id)
-  )
-  if (normalizedPageId) ids.delete(normalizedPageId)
-
-  return Array.from(ids).sort()
 }
 
 export function extractInlineMentionPageIds({
