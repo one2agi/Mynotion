@@ -77,6 +77,7 @@ jest.mock('react-force-graph-2d', () => {
     if (props.graphData.nodes[0]) {
       props.nodeCanvasObject?.(props.graphData.nodes[0], context)
     }
+    const firstNodeRadius = context.arc.mock.calls[0]?.[2]
 
     return (
       <>
@@ -90,10 +91,19 @@ jest.mock('react-force-graph-2d', () => {
           )}
           data-link-count={props.graphData.links.length}
           data-node-count={props.graphData.nodes.length}
+          data-first-node-radius={firstNodeRadius}
+          data-selected-node-id={props.selectedNodeId}
           data-width={props.width}
           onClick={() => props.onNodeClick?.(props.graphData.nodes[1])}
           onMouseEnter={() => props.onNodeHover?.(props.graphData.nodes[0])}
           onMouseLeave={() => props.onNodeHover?.(null)}
+          tabIndex='-1'
+          type='button'
+        />
+        <button
+          aria-label='清除图谱选择'
+          data-testid='knowledge-graph-canvas-background'
+          onClick={() => props.onBackgroundClick?.()}
           tabIndex='-1'
           type='button'
         />
@@ -182,11 +192,13 @@ const mockGraphResponse = (body = graph, status = 200) => {
   fetch.mockResolvedValue({
     ok: status >= 200 && status < 300,
     status,
-    json: async () => body
+    json: () => Promise.resolve(body)
   })
 }
 
 beforeEach(() => {
+  localStorage.clear()
+  window.PointerEvent ||= MouseEvent
   useRouter.mockReturnValue(router)
   siteConfig.mockImplementation(key => key === 'CAN_COPY')
   mockGraphResponse()
@@ -254,6 +266,62 @@ test('loads the drawer only after its accessible launcher is activated', async (
 
   expect(await screen.findByRole('dialog')).toBeInTheDocument()
   expect(fetch).toHaveBeenCalledTimes(1)
+})
+
+test('persists a real launcher drag without opening the drawer', async () => {
+  render(<KnowledgeGraphLauncher post={{ id: 'current', slug: '/current' }} />)
+
+  const launcher = screen.getByRole('button', { name: '知识图谱' })
+  await waitFor(() => expect(launcher.style.left).not.toBe(''))
+  const startPosition = {
+    x: Number.parseFloat(launcher.style.left),
+    y: Number.parseFloat(launcher.style.top)
+  }
+  fireEvent.pointerDown(launcher, {
+    button: 0,
+    clientX: 100,
+    clientY: 100,
+    pointerId: 1
+  })
+  fireEvent.pointerMove(launcher, {
+    clientX: 140,
+    clientY: 130,
+    pointerId: 1
+  })
+  fireEvent.pointerUp(launcher, { pointerId: 1 })
+  fireEvent.click(launcher, { detail: 1 })
+
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  expect(
+    JSON.parse(
+      localStorage.getItem('notionnext:knowledge-graph:launcher-position:v1')
+    )
+  ).toEqual({
+    x: Math.min(window.innerWidth - 56, startPosition.x + 40),
+    y: Math.min(window.innerHeight - 56, startPosition.y + 30)
+  })
+})
+
+test('does not let a cancelled launcher drag swallow the next click', async () => {
+  render(<KnowledgeGraphLauncher post={{ id: 'current', slug: '/current' }} />)
+
+  const launcher = screen.getByRole('button', { name: '知识图谱' })
+  await waitFor(() => expect(launcher.style.left).not.toBe(''))
+  fireEvent.pointerDown(launcher, {
+    button: 0,
+    clientX: 100,
+    clientY: 100,
+    pointerId: 1
+  })
+  fireEvent.pointerMove(launcher, {
+    clientX: 140,
+    clientY: 130,
+    pointerId: 1
+  })
+  fireEvent.pointerCancel(launcher, { pointerId: 1 })
+  fireEvent.click(launcher, { detail: 1 })
+
+  expect(await screen.findByRole('dialog')).toBeInTheDocument()
 })
 
 test('closes the drawer with Escape and returns focus to its launcher', async () => {
@@ -335,26 +403,65 @@ test('uses full mode when there is no current article', async () => {
   ).toHaveAttribute('aria-pressed', 'true')
 })
 
-test('closes with its close button and navigates when a graph node is selected', async () => {
+test('shows settings and node details, then navigates only through the explicit action', async () => {
   const user = userEvent.setup()
   const onClose = jest.fn()
+  const currentId = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
+  const relatedId = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'
+  mockGraphResponse({
+    nodes: [
+      { ...graph.nodes[0], id: currentId },
+      { ...graph.nodes[1], id: relatedId }
+    ],
+    edges: [{ source: currentId, target: relatedId, origins: [currentId] }]
+  })
   render(
     <KnowledgeGraphDrawer
       allLinkPages={[
         {
-          short_id: 'cccc-cccc-cccccccccccc',
-          href: '/canonical/current-locale-only'
+          id: relatedId,
+          href: '/canonical/related'
         }
       ]}
       isOpen={true}
       onClose={onClose}
-      post={{ id: 'current', slug: '/current' }}
+      post={{ id: currentId, slug: '/current' }}
     />
   )
 
   await screen.findByRole('dialog')
+  expect(screen.getByTestId('knowledge-graph-panel-shell')).toHaveClass(
+    'w-full',
+    'sm:w-[clamp(360px,33.333vw,520px)]'
+  )
+
+  await user.click(screen.getByRole('button', { name: '设置知识图谱' }))
+  fireEvent.change(screen.getByRole('slider', { name: '节点大小' }), {
+    target: { value: '7' }
+  })
+  expect(
+    await screen.findByRole('button', { name: '选择图谱节点' })
+  ).toHaveAttribute('data-first-node-radius', '8')
+  expect(fetch).toHaveBeenCalledTimes(1)
+
   await user.click(await screen.findByRole('button', { name: '选择图谱节点' }))
-  expect(router.push).toHaveBeenCalledWith('/resolved/related.html')
+  expect(screen.getByRole('heading', { name: 'Related article' })).toBeVisible()
+  expect(router.push).not.toHaveBeenCalled()
+
+  await user.selectOptions(
+    screen.getByRole('combobox', { name: '选择图谱文章' }),
+    currentId
+  )
+  await user.click(screen.getByRole('button', { name: 'Related article' }))
+  expect(screen.getByRole('heading', { name: 'Related article' })).toBeVisible()
+  expect(router.push).not.toHaveBeenCalled()
+
+  await user.click(screen.getByRole('button', { name: '打开文章' }))
+  expect(router.push).toHaveBeenCalledWith('/canonical/related')
+
+  fireEvent.click(screen.getByTestId('knowledge-graph-canvas-background'))
+  expect(screen.queryByLabelText('所选知识节点')).not.toBeInTheDocument()
+  expect(router.push).toHaveBeenCalledTimes(1)
 
   await user.click(screen.getByRole('button', { name: '关闭知识图谱' }))
   expect(onClose).toHaveBeenCalledTimes(1)
@@ -399,6 +506,7 @@ test('uses the canonical allLinkPages href through the global launcher', async (
 
   await user.click(await screen.findByRole('button', { name: '知识图谱' }))
   await user.click(await screen.findByRole('button', { name: '选择图谱节点' }))
+  await user.click(screen.getByRole('button', { name: '打开文章' }))
 
   expect(router.push).toHaveBeenCalledWith('/canonical/related')
 })
@@ -440,6 +548,7 @@ test('uses the canonical href from shortened allLinkPages without a full id', as
   )
 
   await user.click(await screen.findByRole('button', { name: '选择图谱节点' }))
+  await user.click(screen.getByRole('button', { name: '打开文章' }))
 
   expect(router.push).toHaveBeenCalledWith('/canonical/short-related')
 })
@@ -498,20 +607,20 @@ test('uses capped initialization backoff delays', () => {
 test('keeps polling beyond six seconds and becomes ready when initialization completes', async () => {
   jest.useFakeTimers()
   const openedAt = Date.now()
-  fetch.mockImplementation(async () => {
+  fetch.mockImplementation(() => {
     if (Date.now() - openedAt <= 6_000) {
-      return {
+      return Promise.resolve({
         ok: true,
         status: 202,
-        json: async () => ({ status: 'initializing' })
-      }
+        json: () => Promise.resolve({ status: 'initializing' })
+      })
     }
 
-    return {
+    return Promise.resolve({
       ok: true,
       status: 200,
-      json: async () => graph
-    }
+      json: () => Promise.resolve(graph)
+    })
   })
   render(<KnowledgeGraphDrawer isOpen={true} onClose={jest.fn()} />)
 
@@ -552,12 +661,12 @@ test('moves from initializing to ready with a cache-bypassing follow-up request'
     .mockResolvedValueOnce({
       ok: true,
       status: 202,
-      json: async () => ({ status: 'initializing' })
+      json: () => Promise.resolve({ status: 'initializing' })
     })
     .mockResolvedValueOnce({
       ok: true,
       status: 200,
-      json: async () => graph
+      json: () => Promise.resolve(graph)
     })
   render(<KnowledgeGraphDrawer isOpen={true} onClose={jest.fn()} />)
 
@@ -606,8 +715,16 @@ test('cancels initializing polling when the drawer closes without unmounting', a
 test('retries only after an actual load error and then recovers', async () => {
   const user = userEvent.setup()
   fetch
-    .mockResolvedValueOnce({ ok: false, status: 503, json: async () => null })
-    .mockResolvedValueOnce({ ok: true, status: 200, json: async () => graph })
+    .mockResolvedValueOnce({
+      ok: false,
+      status: 503,
+      json: () => Promise.resolve(null)
+    })
+    .mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve(graph)
+    })
 
   render(<KnowledgeGraphDrawer isOpen={true} onClose={jest.fn()} />)
 
@@ -638,7 +755,7 @@ test('provides native keyboard navigation synchronized with the displayed graph'
   ).toEqual(['Current article', 'Related article'])
 
   await user.selectOptions(select, 'related')
-  await user.click(screen.getByRole('button', { name: '打开所选文章' }))
+  await user.click(screen.getByRole('button', { name: '打开文章' }))
 
   expect(router.push).toHaveBeenCalledWith('/resolved/related.html')
 })

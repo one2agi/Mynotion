@@ -6,10 +6,20 @@ import { useRouter } from 'next/router'
 import { normalizePageId } from '@/lib/knowledge-graph/normalizePageId'
 import { useKnowledgeGraphDarkMode } from './appearance'
 import {
+  getOutboundNeighborIds,
   normalizeKnowledgeGraphDepth,
   normalizeKnowledgeGraphId,
   selectGraphNeighborhood
 } from './graphView'
+import {
+  GRAPH_SETTINGS_STORAGE_KEY,
+  loadGraphSettings,
+  normalizeGraphSettings,
+  resetGraphSettings,
+  saveGraphSettings
+} from './graphSettings'
+import KnowledgeGraphNodeDetails from './KnowledgeGraphNodeDetails'
+import KnowledgeGraphSettingsPanel from './KnowledgeGraphSettingsPanel'
 
 const KnowledgeGraphCanvas = dynamic(() => import('./KnowledgeGraphCanvas'), {
   ssr: false
@@ -28,6 +38,24 @@ export const getInitializingPollDelay = attempt =>
 const isPublicGraph = value =>
   Array.isArray(value?.nodes) && Array.isArray(value?.edges)
 
+const getInitialSettings = depth => {
+  const loaded = loadGraphSettings()
+
+  try {
+    if (
+      typeof window !== 'undefined' &&
+      !window.localStorage.getItem(GRAPH_SETTINGS_STORAGE_KEY) &&
+      depth !== undefined
+    ) {
+      return normalizeGraphSettings({ ...loaded, depth })
+    }
+  } catch {
+    return loaded
+  }
+
+  return loaded
+}
+
 const KnowledgeGraphDrawer = ({
   allLinkPages,
   depth,
@@ -45,7 +73,9 @@ const KnowledgeGraphDrawer = ({
   const [mode, setMode] = useState(hasCurrentPost ? 'local' : 'full')
   const [retryCount, setRetryCount] = useState(0)
   const [selectedNodeId, setSelectedNodeId] = useState('')
-  const localDepth = normalizeKnowledgeGraphDepth(depth)
+  const [settings, setSettings] = useState(() => getInitialSettings(depth))
+  const selectionInitializedRef = useRef(false)
+  const localDepth = normalizeKnowledgeGraphDepth(settings.depth)
   const currentId = normalizeKnowledgeGraphId(post?.id)
 
   useEffect(() => {
@@ -63,6 +93,8 @@ const KnowledgeGraphDrawer = ({
     let pollTimer
     setStatus('loading')
     setGraph(null)
+    setSelectedNodeId('')
+    selectionInitializedRef.current = false
 
     const loadGraph = async () => {
       try {
@@ -126,11 +158,35 @@ const KnowledgeGraphDrawer = ({
 
   useEffect(() => {
     if (displayedGraph.nodes.some(node => node.id === selectedNodeId)) return
+    if (selectionInitializedRef.current) {
+      setSelectedNodeId('')
+      return
+    }
     const initialNode =
       displayedGraph.nodes.find(node => node.id === currentId) ||
       displayedGraph.nodes[0]
+    selectionInitializedRef.current = true
     setSelectedNodeId(initialNode?.id || '')
   }, [currentId, displayedGraph.nodes, selectedNodeId])
+
+  const selectedNode = useMemo(
+    () => displayedGraph.nodes.find(node => node.id === selectedNodeId) || null,
+    [displayedGraph.nodes, selectedNodeId]
+  )
+
+  const relatedNodes = useMemo(() => {
+    if (!selectedNodeId) return []
+    const relatedIds = getOutboundNeighborIds(displayedGraph, selectedNodeId)
+    return displayedGraph.nodes.filter(node => relatedIds.has(node.id))
+  }, [displayedGraph, selectedNodeId])
+
+  const updateSettings = nextSettings => {
+    setSettings(saveGraphSettings(nextSettings))
+  }
+
+  const restoreDefaultSettings = () => {
+    setSettings(resetGraphSettings())
+  }
 
   const navigateToNode = node => {
     const nodeId = normalizePageId(node?.id)
@@ -170,7 +226,10 @@ const KnowledgeGraphDrawer = ({
       open={isOpen}
     >
       <Dialog.Overlay className='absolute inset-0 cursor-default bg-black/45' />
-      <div className='relative flex h-full w-full max-w-[420px]'>
+      <div
+        className='relative flex h-full w-full sm:w-[clamp(360px,33.333vw,520px)]'
+        data-testid='knowledge-graph-panel-shell'
+      >
         <Dialog.Panel
           as='section'
           className={`flex h-full w-full flex-col border-l shadow-2xl ${panelColor}`}
@@ -275,6 +334,11 @@ const KnowledgeGraphDrawer = ({
                 </button>
               ) : null}
             </div>
+            <KnowledgeGraphSettingsPanel
+              onChange={updateSettings}
+              onReset={restoreDefaultSettings}
+              settings={settings}
+            />
             <div className='min-h-0 flex-1'>
               {status === 'loading' ? (
                 <p className='p-4 text-sm text-gray-500 dark:text-gray-400'>
@@ -356,9 +420,18 @@ const KnowledgeGraphDrawer = ({
                       currentId={currentId}
                       graph={displayedGraph}
                       isDarkMode={isDarkMode}
-                      onNodeClick={navigateToNode}
+                      onBackgroundClick={() => setSelectedNodeId('')}
+                      onNodeClick={node => setSelectedNodeId(node.id)}
+                      selectedNodeId={selectedNodeId}
+                      settings={settings}
                     />
                   </div>
+                  <KnowledgeGraphNodeDetails
+                    onFocusNode={setSelectedNodeId}
+                    onOpenArticle={navigateToSelectedNode}
+                    relatedNodes={relatedNodes}
+                    selectedNode={selectedNode}
+                  />
                 </div>
               ) : null}
             </div>
