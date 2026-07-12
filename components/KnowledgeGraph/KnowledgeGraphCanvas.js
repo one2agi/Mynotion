@@ -67,7 +67,6 @@ const KnowledgeGraphCanvas = ({
   const pointerEventSessionsRef = useRef(new WeakMap())
   const pointerSessionRef = useRef(0)
   const simulationPausedRef = useRef(!active)
-  const stablePauseFrameRef = useRef(null)
   const suppressedClickRef = useRef(null)
   const [dimensions, setDimensions] = useState({ height: 0, width: 0 })
   const [hoveredNode, setHoveredNode] = useState(null)
@@ -117,19 +116,11 @@ const KnowledgeGraphCanvas = ({
     centerForce?.strength?.(normalizedSettings.centerStrength)
 
     if (!active) {
-      if (stablePauseFrameRef.current !== null) {
-        window.cancelAnimationFrame(stablePauseFrameRef.current)
-        stablePauseFrameRef.current = null
-      }
       forceGraph?.pauseAnimation?.()
       simulationPausedRef.current = true
       return
     }
 
-    if (stablePauseFrameRef.current !== null) {
-      window.cancelAnimationFrame(stablePauseFrameRef.current)
-      stablePauseFrameRef.current = null
-    }
     if (simulationPausedRef.current) {
       forceGraph?.resumeAnimation?.()
       simulationPausedRef.current = false
@@ -147,12 +138,27 @@ const KnowledgeGraphCanvas = ({
   useEffect(() => {
     const forceGraph = graphRef.current
     return () => {
-      if (stablePauseFrameRef.current !== null) {
-        window.cancelAnimationFrame(stablePauseFrameRef.current)
-      }
       forceGraph?.pauseAnimation?.()
     }
   }, [])
+
+  useEffect(() => {
+    if (!active || !selectedNodeId) return
+
+    const frame = window.requestAnimationFrame(() => {
+      const node = rendererGraph.nodes.find(node => node.id === selectedNodeId)
+      if (!Number.isFinite(node?.x) || !Number.isFinite(node?.y)) return
+
+      const forceGraph = graphRef.current
+      forceGraph?.centerAt?.(node.x, node.y, 300)
+      const currentZoom = Number(forceGraph?.zoom?.())
+      if (Number.isFinite(currentZoom) && currentZoom < 1.4) {
+        forceGraph?.zoom?.(1.4, 300)
+      }
+    })
+
+    return () => window.cancelAnimationFrame(frame)
+  }, [active, rendererGraph, selectedNodeId])
 
   const handleNodeDrag = useCallback((node, translate = {}) => {
     if (dragDistanceRef.current.nodeId !== node.id) {
@@ -189,9 +195,7 @@ const KnowledgeGraphCanvas = ({
           ? pointerEventSessionsRef.current.get(pointerDownEvent)
           : undefined
       const clickSession = pointerSession ?? pointerSessionRef.current
-      if (
-        suppressedClickRef.current?.pointerSession === clickSession
-      ) {
+      if (suppressedClickRef.current?.pointerSession === clickSession) {
         suppressedClickRef.current = null
         return
       }
@@ -206,17 +210,6 @@ const KnowledgeGraphCanvas = ({
     if (event.nativeEvent && typeof event.nativeEvent === 'object') {
       pointerEventSessionsRef.current.set(event.nativeEvent, pointerSession)
     }
-  }, [])
-
-  const handleEngineStop = useCallback(() => {
-    if (stablePauseFrameRef.current !== null) {
-      window.cancelAnimationFrame(stablePauseFrameRef.current)
-    }
-    stablePauseFrameRef.current = window.requestAnimationFrame(() => {
-      stablePauseFrameRef.current = null
-      graphRef.current?.pauseAnimation?.()
-      simulationPausedRef.current = true
-    })
   }, [])
 
   const backgroundColor = darkMode ? '#030712' : '#ffffff'
@@ -265,6 +258,7 @@ const KnowledgeGraphCanvas = ({
       ref={containerRef}
     >
       <ForceGraph2D
+        autoPauseRedraw={true}
         backgroundColor={backgroundColor}
         cooldownTicks={reducedMotion ? 1 : 80}
         d3AlphaDecay={reducedMotion ? 1 : 0.04}
@@ -323,7 +317,6 @@ const KnowledgeGraphCanvas = ({
           context.restore?.()
         }}
         onBackgroundClick={onBackgroundClick}
-        onEngineStop={handleEngineStop}
         onNodeClick={handleNodeClick}
         onNodeDrag={handleNodeDrag}
         onNodeDragEnd={handleNodeDragEnd}

@@ -29,9 +29,11 @@ interface TestCanvasContext {
 }
 
 interface TestForceGraphProps {
+  autoPauseRedraw?: boolean
   cooldownTicks?: number
   d3AlphaDecay?: number
   d3VelocityDecay?: number
+  graphData?: GraphData<GraphNode, GraphEdge>
   linkColor?: (edge: GraphEdge) => string
   maxZoom?: number
   minZoom?: number
@@ -55,10 +57,12 @@ interface TestForceGraphProps {
 }
 
 interface TestForceGraphHandle {
+  centerAt: (x: number, y: number, durationMs?: number) => void
   d3Force: (name: 'center' | 'charge' | 'link') => unknown
   d3ReheatSimulation: () => void
   pauseAnimation: () => void
   resumeAnimation: () => void
+  zoom: (scale?: number, durationMs?: number) => number | void
 }
 
 interface TestForceGraphMock {
@@ -67,11 +71,13 @@ interface TestForceGraphMock {
     charge: { strength: jest.Mock }
     link: { distance: jest.Mock; strength: jest.Mock }
   }
+  __centerAt: jest.Mock
   __getPointerDownEvent: () => Event | null
   __getForceGraphProps: () => TestForceGraphProps
   __pauseAnimation: jest.Mock
   __reheatSimulation: jest.Mock
   __resumeAnimation: jest.Mock
+  __zoom: jest.Mock
 }
 
 jest.mock('react-force-graph-2d', () => {
@@ -81,6 +87,10 @@ jest.mock('react-force-graph-2d', () => {
   const pauseAnimation = jest.fn()
   const reheatSimulation = jest.fn()
   const resumeAnimation = jest.fn()
+  const centerAt = jest.fn()
+  const zoom = jest.fn((scale?: number) =>
+    typeof scale === 'number' ? undefined : 1
+  )
   const forces = {
     center: { strength: jest.fn() },
     charge: { strength: jest.fn() },
@@ -99,10 +109,12 @@ jest.mock('react-force-graph-2d', () => {
   ) {
     latestProps = props
     ReactModule.useImperativeHandle(ref, () => ({
+      centerAt,
       d3Force: name => forces[name],
       d3ReheatSimulation: reheatSimulation,
       pauseAnimation,
-      resumeAnimation
+      resumeAnimation,
+      zoom
     }))
 
     return ReactModule.createElement('button', {
@@ -119,10 +131,12 @@ jest.mock('react-force-graph-2d', () => {
     __esModule: true,
     __getForceGraphProps: () => latestProps,
     __getPointerDownEvent: () => latestPointerDownEvent,
+    __centerAt: centerAt,
     __forces: forces,
     __pauseAnimation: pauseAnimation,
     __reheatSimulation: reheatSimulation,
     __resumeAnimation: resumeAnimation,
+    __zoom: zoom,
     default: ForceGraph2D
   }
 })
@@ -203,6 +217,11 @@ const flushAnimationFrames = () => {
 
 beforeEach(() => {
   jest.clearAllMocks()
+  window.requestAnimationFrame = jest.fn((callback: FrameRequestCallback) => {
+    callback(performance.now())
+    return 1
+  })
+  window.cancelAnimationFrame = jest.fn()
 })
 
 afterEach(() => {
@@ -347,10 +366,9 @@ test('resumes before reheating when the canvas becomes active', () => {
   ).toBeLessThan(forceGraphMock.__reheatSimulation.mock.invocationCallOrder[0]!)
 })
 
-test('defers stable pause by one frame and cancels pending frames on unmount', () => {
-  installControlledAnimationFrames()
+test('keeps active pointer interaction after the simulation engine stops', () => {
   setReducedMotion(false)
-  const view = render(
+  render(
     React.createElement(KnowledgeGraphCanvas, {
       active: true,
       graph,
@@ -358,38 +376,16 @@ test('defers stable pause by one frame and cancels pending frames on unmount', (
     })
   )
   const props = forceGraphMock.__getForceGraphProps()
-  const initialPauseCalls = forceGraphMock.__pauseAnimation.mock.calls.length
 
-  act(() => {
-    props.onEngineStop?.()
-  })
-  expect(forceGraphMock.__pauseAnimation).toHaveBeenCalledTimes(
-    initialPauseCalls
-  )
-
-  act(() => flushAnimationFrames())
-  expect(forceGraphMock.__pauseAnimation).toHaveBeenCalledTimes(
-    initialPauseCalls + 1
-  )
-
-  act(() => {
-    props.onEngineStop?.()
-  })
-  view.unmount()
-  expect(window.cancelAnimationFrame).toHaveBeenCalled()
-  const pauseCallsAfterUnmount =
-    forceGraphMock.__pauseAnimation.mock.calls.length
-  act(() => flushAnimationFrames())
-  expect(forceGraphMock.__pauseAnimation).toHaveBeenCalledTimes(
-    pauseCallsAfterUnmount
-  )
+  expect(props.autoPauseRedraw).toBe(true)
+  expect(props.onEngineStop).toBeUndefined()
+  expect(forceGraphMock.__pauseAnimation).not.toHaveBeenCalled()
 })
 
 test.each(['settings', 'graph'])(
-  'resumes a stably paused simulation before %s update reheating',
+  'reheats after a %s update without pausing active interaction',
   updateType => {
     jest.useFakeTimers()
-    installControlledAnimationFrames()
     setReducedMotion(false)
     const view = render(
       React.createElement(KnowledgeGraphCanvas, {
@@ -398,12 +394,6 @@ test.each(['settings', 'graph'])(
         settings: GRAPH_SETTINGS_DEFAULTS
       })
     )
-    const props = forceGraphMock.__getForceGraphProps()
-
-    act(() => {
-      props.onEngineStop?.()
-      flushAnimationFrames()
-    })
     forceGraphMock.__resumeAnimation.mockClear()
     forceGraphMock.__reheatSimulation.mockClear()
 
@@ -421,21 +411,16 @@ test.each(['settings', 'graph'])(
       })
     )
 
-    expect(forceGraphMock.__resumeAnimation).toHaveBeenCalledTimes(1)
+    expect(forceGraphMock.__resumeAnimation).not.toHaveBeenCalled()
+    expect(forceGraphMock.__pauseAnimation).not.toHaveBeenCalled()
     expect(forceGraphMock.__reheatSimulation).not.toHaveBeenCalled()
     act(() => jest.advanceTimersByTime(80))
     expect(forceGraphMock.__reheatSimulation).toHaveBeenCalledTimes(1)
-    expect(
-      forceGraphMock.__resumeAnimation.mock.invocationCallOrder[0]
-    ).toBeLessThan(
-      forceGraphMock.__reheatSimulation.mock.invocationCallOrder[0]!
-    )
   }
 )
 
-test('resumes a stably paused simulation before reduced-motion reheating', () => {
+test('updates reduced motion without pausing active interaction', () => {
   jest.useFakeTimers()
-  installControlledAnimationFrames()
   setReducedMotion(false)
   render(
     React.createElement(KnowledgeGraphCanvas, {
@@ -444,21 +429,50 @@ test('resumes a stably paused simulation before reduced-motion reheating', () =>
       settings: GRAPH_SETTINGS_DEFAULTS
     })
   )
-  const props = forceGraphMock.__getForceGraphProps()
-
-  act(() => {
-    props.onEngineStop?.()
-    flushAnimationFrames()
-  })
   forceGraphMock.__resumeAnimation.mockClear()
   forceGraphMock.__reheatSimulation.mockClear()
 
   changeReducedMotion(true)
 
-  expect(forceGraphMock.__resumeAnimation).toHaveBeenCalledTimes(1)
+  expect(forceGraphMock.__resumeAnimation).not.toHaveBeenCalled()
+  expect(forceGraphMock.__pauseAnimation).not.toHaveBeenCalled()
   expect(forceGraphMock.__reheatSimulation).not.toHaveBeenCalled()
   act(() => jest.advanceTimersByTime(80))
   expect(forceGraphMock.__reheatSimulation).toHaveBeenCalledTimes(1)
+})
+
+test('centers and gently zooms when the selected node changes', () => {
+  installControlledAnimationFrames()
+  setReducedMotion(false)
+  const view = render(
+    React.createElement(KnowledgeGraphCanvas, {
+      active: true,
+      graph,
+      selectedNodeId: 'a',
+      settings: GRAPH_SETTINGS_DEFAULTS
+    })
+  )
+  const rendererGraph = forceGraphMock.__getForceGraphProps().graphData
+  const selectedNode = rendererGraph?.nodes.find(node => node.id === 'b')
+  if (!selectedNode) throw new Error('Renderer node b was not provided')
+  selectedNode.x = 42
+  selectedNode.y = -18
+  forceGraphMock.__centerAt.mockClear()
+  forceGraphMock.__zoom.mockClear()
+
+  view.rerender(
+    React.createElement(KnowledgeGraphCanvas, {
+      active: true,
+      graph,
+      selectedNodeId: 'b',
+      settings: GRAPH_SETTINGS_DEFAULTS
+    })
+  )
+  act(() => flushAnimationFrames())
+
+  expect(forceGraphMock.__centerAt).toHaveBeenCalledWith(42, -18, 300)
+  expect(forceGraphMock.__zoom).toHaveBeenNthCalledWith(1)
+  expect(forceGraphMock.__zoom).toHaveBeenNthCalledWith(2, 1.4, 300)
 })
 
 test('reduces motion and debounces graph reheating', () => {

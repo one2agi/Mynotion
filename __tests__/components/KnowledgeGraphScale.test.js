@@ -193,15 +193,10 @@ test.each([50, 500, 1000])(
     expect(renderer).toHaveAttribute('data-max-zoom', '4')
 
     const initialPauseCalls = forceGraphMock.__pauseAnimation.mock.calls.length
-    act(() => {
-      forceGraphMock.__getForceGraphProps().onEngineStop?.()
-    })
+    expect(forceGraphMock.__getForceGraphProps().autoPauseRedraw).toBe(true)
+    expect(forceGraphMock.__getForceGraphProps().onEngineStop).toBeUndefined()
     expect(forceGraphMock.__pauseAnimation).toHaveBeenCalledTimes(
       initialPauseCalls
-    )
-    act(() => flushAnimationFrames())
-    expect(forceGraphMock.__pauseAnimation).toHaveBeenCalledTimes(
-      initialPauseCalls + 1
     )
     expect(renderer).toBeInTheDocument()
 
