@@ -1,5 +1,6 @@
 import { Dialog } from '@headlessui/react'
 import dynamic from 'next/dynamic'
+import { idToUuid } from 'notion-utils'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/router'
 import { normalizePageId } from '@/lib/knowledge-graph/normalizePageId'
@@ -133,14 +134,18 @@ const KnowledgeGraphDrawer = ({
 
   const navigateToNode = node => {
     const nodeId = normalizePageId(node?.id)
-    const canonicalPage = nodeId
-      ? allLinkPages?.find(
-          page =>
-            normalizePageId(page?.id) === nodeId &&
-            typeof page?.href === 'string' &&
-            page.href
-        )
-      : null
+    const nodeUuid = nodeId ? idToUuid(nodeId) : null
+    const canonicalPage =
+      nodeId && Array.isArray(allLinkPages)
+        ? allLinkPages.find(
+            page =>
+              (normalizePageId(page?.id) === nodeId ||
+                (typeof page?.short_id === 'string' &&
+                  nodeUuid.indexOf(page.short_id) === 14)) &&
+              typeof page?.href === 'string' &&
+              page.href
+          )
+        : null
     const target = canonicalPage?.href || node?.href || node?.slug
     if (target) router.push(target)
   }

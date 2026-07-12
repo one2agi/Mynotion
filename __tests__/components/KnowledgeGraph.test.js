@@ -12,6 +12,14 @@ import KnowledgeGraphDrawer, {
 import KnowledgeGraphLauncher from '@/components/KnowledgeGraph/KnowledgeGraphLauncher'
 import { __pauseAnimation } from 'react-force-graph-2d'
 
+jest.mock('notion-utils', () => ({
+  idToUuid: id =>
+    `${id.slice(0, 8)}-${id.slice(8, 12)}-${id.slice(12, 16)}-${id.slice(
+      16,
+      20
+    )}-${id.slice(20)}`
+}))
+
 jest.mock('next/router', () => ({
   useRouter: jest.fn()
 }))
@@ -332,6 +340,12 @@ test('closes with its close button and navigates when a graph node is selected',
   const onClose = jest.fn()
   render(
     <KnowledgeGraphDrawer
+      allLinkPages={[
+        {
+          short_id: 'cccc-cccc-cccccccccccc',
+          href: '/canonical/current-locale-only'
+        }
+      ]}
       isOpen={true}
       onClose={onClose}
       post={{ id: 'current', slug: '/current' }}
@@ -387,6 +401,47 @@ test('uses the canonical allLinkPages href through the global launcher', async (
   await user.click(await screen.findByRole('button', { name: '选择图谱节点' }))
 
   expect(router.push).toHaveBeenCalledWith('/canonical/related')
+})
+
+test('uses the canonical href from shortened allLinkPages without a full id', async () => {
+  const user = userEvent.setup()
+  const currentId = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
+  const relatedId = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'
+  mockGraphResponse({
+    nodes: [
+      {
+        id: currentId,
+        title: 'Current article',
+        slug: 'current',
+        href: '/stale/current'
+      },
+      {
+        id: relatedId,
+        title: 'Related article',
+        slug: 'related',
+        href: '/stale/related'
+      }
+    ],
+    edges: [{ source: currentId, target: relatedId }]
+  })
+
+  render(
+    <KnowledgeGraphDrawer
+      allLinkPages={[
+        {
+          short_id: 'bbbb-bbbb-bbbbbbbbbbbb',
+          href: '/canonical/short-related'
+        }
+      ]}
+      isOpen={true}
+      onClose={jest.fn()}
+      post={{ id: currentId, slug: 'current' }}
+    />
+  )
+
+  await user.click(await screen.findByRole('button', { name: '选择图谱节点' }))
+
+  expect(router.push).toHaveBeenCalledWith('/canonical/short-related')
 })
 
 test('explains initializing, error, and empty-relationship responses', async () => {

@@ -45,6 +45,7 @@ function setup(
     storedGraph?: PublicGraph | null
     refreshedAt?: number | null
     graphError?: Error
+    refreshError?: Error
     refreshResult?:
       { status: 'refreshed'; graph: PublicGraph } | { status: 'skipped' }
   } = {}
@@ -61,15 +62,17 @@ function setup(
         : { status: 'success', refreshedAt: options.refreshedAt ?? 95_000 }
     )
   }
-  const refresh = jest.fn(
-    async () => options.refreshResult || { status: 'refreshed' as const, graph }
-  )
+  const refresh = jest.fn(async () => {
+    if (options.refreshError) throw options.refreshError
+    return options.refreshResult || { status: 'refreshed' as const, graph }
+  })
+  const logError = jest.fn()
   const handler = createKnowledgeGraphHandler({
     store,
     refresh,
     clock: () => 100_000,
     refreshAfterMs: 10_000,
-    logError: jest.fn()
+    logError
   })
   const context = {
     request: new Request('https://example.com/api/knowledge-graph'),
@@ -79,7 +82,7 @@ function setup(
     }
   }
 
-  return { context, handler, refresh, store, waitUntilTasks }
+  return { context, handler, logError, refresh, store, waitUntilTasks }
 }
 
 function expectGraphHeaders(response: Response) {
@@ -324,6 +327,57 @@ test('returns initializing and starts generation when no publication exists', as
   expect(context.waitUntilTasks).toHaveLength(1)
   expectInitializingHeaders(response)
   await context.waitUntilTasks[0]
+})
+
+test('returns initializing when the EdgeOne context has no waitUntil', async () => {
+  const context = setup({ storedGraph: null, refreshedAt: null })
+  const edgeOneContext = {
+    request: context.context.request,
+    env: context.context.env
+  }
+
+  const response = await context.handler(edgeOneContext)
+
+  expect(response.status).toBe(202)
+  expect(await response.json()).toEqual({ status: 'initializing' })
+  expect(context.refresh).toHaveBeenCalledTimes(1)
+  expect(context.logError).not.toHaveBeenCalled()
+})
+
+test('returns a stale graph when the EdgeOne context has no waitUntil', async () => {
+  const context = setup({ refreshedAt: 80_000 })
+  const edgeOneContext = {
+    request: context.context.request,
+    env: context.context.env
+  }
+
+  const response = await context.handler(edgeOneContext)
+
+  expect(response.status).toBe(200)
+  expect(await response.json()).toEqual(graph)
+  expect(context.refresh).toHaveBeenCalledTimes(1)
+  expect(context.logError).not.toHaveBeenCalled()
+})
+
+test('logs one rejected refresh when the EdgeOne context has no waitUntil', async () => {
+  const refreshError = new Error('detached refresh failed')
+  const context = setup({
+    storedGraph: null,
+    refreshedAt: null,
+    refreshError
+  })
+  const edgeOneContext = {
+    request: context.context.request,
+    env: context.context.env
+  }
+
+  const response = await context.handler(edgeOneContext)
+  await Promise.resolve()
+
+  expect(response.status).toBe(202)
+  expect(context.refresh).toHaveBeenCalledTimes(1)
+  expect(context.logError).toHaveBeenCalledTimes(1)
+  expect(context.logError).toHaveBeenCalledWith(refreshError)
 })
 
 test('returns an empty 503 response when Blob reading fails', async () => {

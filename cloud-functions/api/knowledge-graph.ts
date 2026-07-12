@@ -35,7 +35,7 @@ type FunctionEnv = {
 type FunctionContext = {
   request: Request
   env: FunctionEnv
-  waitUntil(task: Promise<unknown>): void
+  waitUntil?(task: Promise<unknown>): void
 }
 
 type EndpointStore = {
@@ -168,11 +168,10 @@ function scheduleRefresh(
   context: FunctionContext,
   deps: HandlerDependencies
 ): void {
-  context.waitUntil(
-    deps.refresh().catch(error => {
-      deps.logError(error)
-    })
-  )
+  const refreshTask = deps.refresh().catch(error => {
+    deps.logError(error)
+  })
+  context.waitUntil?.(refreshTask)
 }
 
 function isStale(
