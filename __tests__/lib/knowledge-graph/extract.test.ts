@@ -10,6 +10,7 @@ declare const expect: (value: unknown) => {
 const PAGE_ID = '00000000000000000000000000000001'
 const BODY_TARGET = '00000000000000000000000000000002'
 const RELATION_TARGET = '00000000000000000000000000000003'
+const LEGACY_RELATION_TARGET = '00000000000000000000000000000005'
 
 test('extracts only body page mentions and excludes root relation properties', () => {
   expect(
@@ -23,6 +24,39 @@ test('extracts only body page mentions and excludes root relation properties', (
               id: PAGE_ID,
               properties: {
                 related: [['Related', [['p', RELATION_TARGET]]]]
+              }
+            }
+          },
+          body: {
+            value: {
+              id: '00000000000000000000000000000004',
+              parent_id: PAGE_ID,
+              properties: {
+                title: [['Mention', [['p', BODY_TARGET]]]]
+              }
+            }
+          }
+        }
+      }
+    })
+  ).toEqual([BODY_TARGET])
+})
+
+test('ignores deleted relation decorations on the root page block', () => {
+  expect(
+    extractInlineMentionPageIds({
+      pageId: PAGE_ID,
+      schema: { related: { type: 'relation' } },
+      recordMap: {
+        block: {
+          [PAGE_ID]: {
+            value: {
+              id: PAGE_ID,
+              properties: {
+                related: [['Related', [['p', RELATION_TARGET]]]],
+                deleted_related: [
+                  ['Deleted relation', [['p', LEGACY_RELATION_TARGET]]]
+                ]
               }
             }
           },

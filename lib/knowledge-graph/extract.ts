@@ -22,26 +22,18 @@ export function extractMentionPageIds(recordMap: NotionRecordMap): Set<string> {
 
 export function extractInlineMentionPageIds({
   pageId,
-  schema,
   recordMap
 }: ExtractPageLinksInput): string[] {
   const normalizedPageId = normalizePageId(pageId)
   if (!normalizedPageId) return []
 
   const blocks = normalizedBlocks(recordMap || {})
-  const relationPropertyIds = new Set(
-    Object.entries(schema || {})
-      .filter(([, definition]) => definition?.type === 'relation')
-      .map(([propertyId]) => propertyId)
-  )
   const ids = new Set<string>()
 
   blocks.forEach(block => {
+    if (normalizePageId(block.id) === normalizedPageId) return
     if (!blockBelongsToPage(block, normalizedPageId, blocks)) return
-    for (const [propertyId, property] of Object.entries(
-      block.properties || {}
-    )) {
-      if (relationPropertyIds.has(propertyId)) continue
+    for (const property of Object.values(block.properties || {})) {
       collectMentionPageIds(property, ids)
     }
   })
