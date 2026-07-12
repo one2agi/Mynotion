@@ -583,6 +583,38 @@ test('uses pointer sessions to suppress a drag click after arbitrary delay and a
   expect(onNodeClick).toHaveBeenCalledTimes(1)
 })
 
+test('suppresses a delayed drag click even when hit testing resolves another node', () => {
+  setReducedMotion(false)
+  const onNodeClick = jest.fn()
+  render(
+    React.createElement(KnowledgeGraphCanvas, {
+      active: true,
+      graph,
+      onNodeClick,
+      settings: GRAPH_SETTINGS_DEFAULTS
+    })
+  )
+  const props = forceGraphMock.__getForceGraphProps()
+  const draggedNode = graph.nodes[0]!
+  const overlappedNode = graph.nodes[1]!
+  const renderer = screen.getByRole('button', { name: 'Select graph node' })
+
+  fireEvent.pointerDown(renderer, { pointerId: 13 })
+  const dragPointerDownEvent = forceGraphMock.__getPointerDownEvent()
+
+  act(() => {
+    props.onNodeDrag?.(draggedNode, { x: 5, y: 0 })
+    props.onNodeDragEnd?.(draggedNode, { x: 5, y: 0 })
+    props.onNodeClick?.(
+      overlappedNode,
+      new Event('pointerup'),
+      dragPointerDownEvent ?? undefined
+    )
+  })
+
+  expect(onNodeClick).not.toHaveBeenCalled()
+})
+
 test('fades unrelated nodes and edges while keeping selected outbound focus visible', () => {
   setReducedMotion(false)
   render(

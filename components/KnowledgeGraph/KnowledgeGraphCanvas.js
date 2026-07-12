@@ -167,16 +167,14 @@ const KnowledgeGraphCanvas = ({
     )
     if (distance >= DRAG_THRESHOLD) {
       suppressedClickRef.current = {
-        nodeId: node.id,
         pointerSession: pointerSessionRef.current
       }
     }
   }, [])
 
-  const handleNodeDragEnd = useCallback((node, translate = {}) => {
+  const handleNodeDragEnd = useCallback((_node, translate = {}) => {
     if (Math.hypot(translate.x || 0, translate.y || 0) >= DRAG_THRESHOLD) {
       suppressedClickRef.current = {
-        nodeId: node.id,
         pointerSession: pointerSessionRef.current
       }
     }
@@ -192,8 +190,7 @@ const KnowledgeGraphCanvas = ({
           : undefined
       const clickSession = pointerSession ?? pointerSessionRef.current
       if (
-        suppressedClickRef.current?.nodeId === node.id &&
-        suppressedClickRef.current.pointerSession === clickSession
+        suppressedClickRef.current?.pointerSession === clickSession
       ) {
         suppressedClickRef.current = null
         return
