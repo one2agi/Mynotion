@@ -64,10 +64,11 @@ const KnowledgeGraphCanvas = ({
   const containerRef = useRef(null)
   const graphRef = useRef(null)
   const dragDistanceRef = useRef({ nodeId: null, x: 0, y: 0 })
-  const previousActiveRef = useRef(active)
+  const pointerEventSessionsRef = useRef(new WeakMap())
+  const pointerSessionRef = useRef(0)
+  const simulationPausedRef = useRef(!active)
   const stablePauseFrameRef = useRef(null)
   const suppressedClickRef = useRef(null)
-  const suppressedClickExpiryRef = useRef(null)
   const [dimensions, setDimensions] = useState({ height: 0, width: 0 })
   const [hoveredNode, setHoveredNode] = useState(null)
   const [tooltipPosition, setTooltipPosition] = useState({
@@ -106,8 +107,6 @@ const KnowledgeGraphCanvas = ({
 
   useEffect(() => {
     const forceGraph = graphRef.current
-    const becameActive = active && previousActiveRef.current === false
-    previousActiveRef.current = active
     const chargeForce = forceGraph?.d3Force?.('charge')
     const linkForce = forceGraph?.d3Force?.('link')
     const centerForce = forceGraph?.d3Force?.('center')
@@ -123,14 +122,25 @@ const KnowledgeGraphCanvas = ({
         stablePauseFrameRef.current = null
       }
       forceGraph?.pauseAnimation?.()
+      simulationPausedRef.current = true
       return
     }
 
-    if (becameActive) forceGraph?.resumeAnimation?.()
-    const reheatTimer = window.setTimeout(
-      () => forceGraph?.d3ReheatSimulation?.(),
-      80
-    )
+    if (stablePauseFrameRef.current !== null) {
+      window.cancelAnimationFrame(stablePauseFrameRef.current)
+      stablePauseFrameRef.current = null
+    }
+    if (simulationPausedRef.current) {
+      forceGraph?.resumeAnimation?.()
+      simulationPausedRef.current = false
+    }
+    const reheatTimer = window.setTimeout(() => {
+      if (simulationPausedRef.current) {
+        forceGraph?.resumeAnimation?.()
+        simulationPausedRef.current = false
+      }
+      forceGraph?.d3ReheatSimulation?.()
+    }, 80)
     return () => window.clearTimeout(reheatTimer)
   }, [active, normalizedSettings, reducedMotion, rendererGraph])
 
@@ -139,9 +149,6 @@ const KnowledgeGraphCanvas = ({
     return () => {
       if (stablePauseFrameRef.current !== null) {
         window.cancelAnimationFrame(stablePauseFrameRef.current)
-      }
-      if (suppressedClickExpiryRef.current !== null) {
-        window.clearTimeout(suppressedClickExpiryRef.current)
       }
       forceGraph?.pauseAnimation?.()
     }
@@ -158,42 +165,51 @@ const KnowledgeGraphCanvas = ({
       dragDistanceRef.current.x,
       dragDistanceRef.current.y
     )
-    if (distance >= DRAG_THRESHOLD) suppressedClickRef.current = node.id
+    if (distance >= DRAG_THRESHOLD) {
+      suppressedClickRef.current = {
+        nodeId: node.id,
+        pointerSession: pointerSessionRef.current
+      }
+    }
   }, [])
 
   const handleNodeDragEnd = useCallback((node, translate = {}) => {
     if (Math.hypot(translate.x || 0, translate.y || 0) >= DRAG_THRESHOLD) {
-      suppressedClickRef.current = node.id
+      suppressedClickRef.current = {
+        nodeId: node.id,
+        pointerSession: pointerSessionRef.current
+      }
     }
     dragDistanceRef.current = { nodeId: null, x: 0, y: 0 }
-    if (suppressedClickRef.current !== node.id) return
-
-    if (suppressedClickExpiryRef.current !== null) {
-      window.clearTimeout(suppressedClickExpiryRef.current)
-    }
-    suppressedClickExpiryRef.current = window.setTimeout(() => {
-      if (suppressedClickRef.current === node.id) {
-        suppressedClickRef.current = null
-      }
-      suppressedClickExpiryRef.current = null
-    }, 250)
   }, [])
 
   const handleNodeClick = useCallback(
-    node => {
+    (node, _pointerUpEvent, pointerDownEvent) => {
       dragDistanceRef.current = { nodeId: null, x: 0, y: 0 }
-      if (suppressedClickRef.current === node.id) {
+      const pointerSession =
+        pointerDownEvent && typeof pointerDownEvent === 'object'
+          ? pointerEventSessionsRef.current.get(pointerDownEvent)
+          : undefined
+      const clickSession = pointerSession ?? pointerSessionRef.current
+      if (
+        suppressedClickRef.current?.nodeId === node.id &&
+        suppressedClickRef.current.pointerSession === clickSession
+      ) {
         suppressedClickRef.current = null
-        if (suppressedClickExpiryRef.current !== null) {
-          window.clearTimeout(suppressedClickExpiryRef.current)
-          suppressedClickExpiryRef.current = null
-        }
         return
       }
       onNodeClick?.(node)
     },
     [onNodeClick]
   )
+
+  const handlePointerDownCapture = useCallback(event => {
+    const pointerSession = pointerSessionRef.current + 1
+    pointerSessionRef.current = pointerSession
+    if (event.nativeEvent && typeof event.nativeEvent === 'object') {
+      pointerEventSessionsRef.current.set(event.nativeEvent, pointerSession)
+    }
+  }, [])
 
   const handleEngineStop = useCallback(() => {
     if (stablePauseFrameRef.current !== null) {
@@ -202,6 +218,7 @@ const KnowledgeGraphCanvas = ({
     stablePauseFrameRef.current = window.requestAnimationFrame(() => {
       stablePauseFrameRef.current = null
       graphRef.current?.pauseAnimation?.()
+      simulationPausedRef.current = true
     })
   }, [])
 
@@ -246,6 +263,7 @@ const KnowledgeGraphCanvas = ({
     <div
       className='relative h-full min-h-0 w-full overflow-hidden'
       onPointerLeave={() => setHoveredNode(null)}
+      onPointerDownCapture={handlePointerDownCapture}
       onMouseMove={handlePointerMove}
       ref={containerRef}
     >

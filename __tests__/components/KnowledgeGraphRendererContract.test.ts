@@ -1,4 +1,4 @@
-import { act, render, screen } from '@testing-library/react'
+import { act, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, expect, jest, test } from '@jest/globals'
 import React from 'react'
 import type { ForwardedRef } from 'react'
@@ -42,7 +42,11 @@ interface TestForceGraphProps {
   ) => void
   onBackgroundClick?: () => void
   onEngineStop?: () => void
-  onNodeClick?: (node: GraphNode) => void
+  onNodeClick?: (
+    node: GraphNode,
+    pointerUpEvent?: Event,
+    pointerDownEvent?: Event
+  ) => void
   onNodeDrag?: (node: GraphNode, translate: { x?: number; y?: number }) => void
   onNodeDragEnd?: (
     node: GraphNode,
@@ -63,6 +67,7 @@ interface TestForceGraphMock {
     charge: { strength: jest.Mock }
     link: { distance: jest.Mock; strength: jest.Mock }
   }
+  __getPointerDownEvent: () => Event | null
   __getForceGraphProps: () => TestForceGraphProps
   __pauseAnimation: jest.Mock
   __reheatSimulation: jest.Mock
@@ -72,6 +77,7 @@ interface TestForceGraphMock {
 jest.mock('react-force-graph-2d', () => {
   const ReactModule = jest.requireActual<typeof import('react')>('react')
   let latestProps: TestForceGraphProps = {}
+  let latestPointerDownEvent: Event | null = null
   const pauseAnimation = jest.fn()
   const reheatSimulation = jest.fn()
   const resumeAnimation = jest.fn()
@@ -102,6 +108,9 @@ jest.mock('react-force-graph-2d', () => {
     return ReactModule.createElement('button', {
       'aria-label': 'Select graph node',
       'data-cooldown-ticks': props.cooldownTicks,
+      onPointerDown: (event: React.PointerEvent) => {
+        latestPointerDownEvent = event.nativeEvent
+      },
       type: 'button'
     })
   })
@@ -109,6 +118,7 @@ jest.mock('react-force-graph-2d', () => {
   return {
     __esModule: true,
     __getForceGraphProps: () => latestProps,
+    __getPointerDownEvent: () => latestPointerDownEvent,
     __forces: forces,
     __pauseAnimation: pauseAnimation,
     __reheatSimulation: reheatSimulation,
@@ -143,12 +153,30 @@ const graph: PublicGraph = {
   ]
 }
 
+let reducedMotionChangeListener:
+  ((event: Pick<MediaQueryListEvent, 'matches'>) => void) | null = null
+
 const setReducedMotion = (matches: boolean) => {
+  reducedMotionChangeListener = null
   window.matchMedia = jest.fn().mockImplementation(() => ({
-    addEventListener: jest.fn(),
+    addEventListener: jest.fn(
+      (
+        eventName: string,
+        listener: (event: Pick<MediaQueryListEvent, 'matches'>) => void
+      ) => {
+        if (eventName === 'change') reducedMotionChangeListener = listener
+      }
+    ),
     matches,
     removeEventListener: jest.fn()
   })) as typeof window.matchMedia
+}
+
+const changeReducedMotion = (matches: boolean) => {
+  if (!reducedMotionChangeListener) {
+    throw new Error('Reduced-motion listener was not registered')
+  }
+  act(() => reducedMotionChangeListener?.({ matches }))
 }
 
 let animationFrames = new Map<number, FrameRequestCallback>()
@@ -357,6 +385,82 @@ test('defers stable pause by one frame and cancels pending frames on unmount', (
   )
 })
 
+test.each(['settings', 'graph'])(
+  'resumes a stably paused simulation before %s update reheating',
+  updateType => {
+    jest.useFakeTimers()
+    installControlledAnimationFrames()
+    setReducedMotion(false)
+    const view = render(
+      React.createElement(KnowledgeGraphCanvas, {
+        active: true,
+        graph,
+        settings: GRAPH_SETTINGS_DEFAULTS
+      })
+    )
+    const props = forceGraphMock.__getForceGraphProps()
+
+    act(() => {
+      props.onEngineStop?.()
+      flushAnimationFrames()
+    })
+    forceGraphMock.__resumeAnimation.mockClear()
+    forceGraphMock.__reheatSimulation.mockClear()
+
+    view.rerender(
+      React.createElement(KnowledgeGraphCanvas, {
+        active: true,
+        graph:
+          updateType === 'graph'
+            ? { ...graph, nodes: graph.nodes.map(node => ({ ...node })) }
+            : graph,
+        settings:
+          updateType === 'settings'
+            ? { ...GRAPH_SETTINGS_DEFAULTS, linkDistance: 90 }
+            : GRAPH_SETTINGS_DEFAULTS
+      })
+    )
+
+    expect(forceGraphMock.__resumeAnimation).toHaveBeenCalledTimes(1)
+    expect(forceGraphMock.__reheatSimulation).not.toHaveBeenCalled()
+    act(() => jest.advanceTimersByTime(80))
+    expect(forceGraphMock.__reheatSimulation).toHaveBeenCalledTimes(1)
+    expect(
+      forceGraphMock.__resumeAnimation.mock.invocationCallOrder[0]
+    ).toBeLessThan(
+      forceGraphMock.__reheatSimulation.mock.invocationCallOrder[0]!
+    )
+  }
+)
+
+test('resumes a stably paused simulation before reduced-motion reheating', () => {
+  jest.useFakeTimers()
+  installControlledAnimationFrames()
+  setReducedMotion(false)
+  render(
+    React.createElement(KnowledgeGraphCanvas, {
+      active: true,
+      graph,
+      settings: GRAPH_SETTINGS_DEFAULTS
+    })
+  )
+  const props = forceGraphMock.__getForceGraphProps()
+
+  act(() => {
+    props.onEngineStop?.()
+    flushAnimationFrames()
+  })
+  forceGraphMock.__resumeAnimation.mockClear()
+  forceGraphMock.__reheatSimulation.mockClear()
+
+  changeReducedMotion(true)
+
+  expect(forceGraphMock.__resumeAnimation).toHaveBeenCalledTimes(1)
+  expect(forceGraphMock.__reheatSimulation).not.toHaveBeenCalled()
+  act(() => jest.advanceTimersByTime(80))
+  expect(forceGraphMock.__reheatSimulation).toHaveBeenCalledTimes(1)
+})
+
 test('reduces motion and debounces graph reheating', () => {
   jest.useFakeTimers()
   setReducedMotion(true)
@@ -432,7 +536,7 @@ test('accumulates small drag movements before suppressing navigation', () => {
   expect(onNodeClick).not.toHaveBeenCalled()
 })
 
-test('keeps drag click suppression through renderer timer and frame ordering', () => {
+test('uses pointer sessions to suppress a drag click after arbitrary delay and allow a later real click', () => {
   jest.useFakeTimers()
   installControlledAnimationFrames()
   setReducedMotion(false)
@@ -447,44 +551,35 @@ test('keeps drag click suppression through renderer timer and frame ordering', (
   )
   const props = forceGraphMock.__getForceGraphProps()
   const node = graph.nodes[1]!
+  const renderer = screen.getByRole('button', { name: 'Select graph node' })
+
+  fireEvent.pointerDown(renderer, { pointerId: 11 })
+  const dragPointerDownEvent = forceGraphMock.__getPointerDownEvent()
+  expect(dragPointerDownEvent).not.toBeNull()
 
   act(() => {
     props.onNodeDrag?.(node, { x: 5, y: 0 })
     props.onNodeDragEnd?.(node, { x: 5, y: 0 })
-    jest.advanceTimersByTime(0)
+    jest.advanceTimersByTime(60 * 60 * 1000)
     flushAnimationFrames()
-    props.onNodeClick?.(node)
+    props.onNodeClick?.(
+      node,
+      new Event('pointerup'),
+      dragPointerDownEvent ?? undefined
+    )
   })
   expect(onNodeClick).not.toHaveBeenCalled()
 
+  fireEvent.pointerDown(renderer, { pointerId: 12 })
+  const realPointerDownEvent = forceGraphMock.__getPointerDownEvent()
+  expect(realPointerDownEvent).not.toBe(dragPointerDownEvent)
   act(() => {
-    props.onNodeClick?.(node)
+    props.onNodeClick?.(
+      node,
+      new Event('pointerup'),
+      realPointerDownEvent ?? undefined
+    )
   })
-  expect(onNodeClick).toHaveBeenCalledTimes(1)
-})
-
-test('expires drag click suppression when the renderer emits no click', () => {
-  jest.useFakeTimers()
-  setReducedMotion(false)
-  const onNodeClick = jest.fn()
-  render(
-    React.createElement(KnowledgeGraphCanvas, {
-      active: true,
-      graph,
-      onNodeClick,
-      settings: GRAPH_SETTINGS_DEFAULTS
-    })
-  )
-  const props = forceGraphMock.__getForceGraphProps()
-  const node = graph.nodes[1]!
-
-  act(() => {
-    props.onNodeDrag?.(node, { x: 5, y: 0 })
-    props.onNodeDragEnd?.(node, { x: 5, y: 0 })
-    jest.advanceTimersByTime(1000)
-    props.onNodeClick?.(node)
-  })
-
   expect(onNodeClick).toHaveBeenCalledTimes(1)
 })
 
