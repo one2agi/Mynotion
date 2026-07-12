@@ -458,7 +458,8 @@ test('shows settings and node details, then navigates only through the explicit 
   await screen.findByRole('dialog')
   expect(screen.getByTestId('knowledge-graph-panel-shell')).toHaveClass(
     'w-full',
-    'sm:w-[clamp(360px,33.333vw,520px)]'
+    'sm:w-1/2',
+    'sm:min-w-[420px]'
   )
 
   await user.click(screen.getByRole('button', { name: '设置知识图谱' }))

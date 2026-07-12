@@ -228,7 +228,7 @@ const KnowledgeGraphDrawer = ({
     >
       <Dialog.Overlay className='absolute inset-0 cursor-default bg-black/45' />
       <div
-        className='relative flex h-full w-full sm:w-[clamp(360px,33.333vw,520px)]'
+        className='relative flex h-full w-full sm:min-w-[420px] sm:w-1/2'
         data-testid='knowledge-graph-panel-shell'
       >
         <Dialog.Panel
