@@ -643,14 +643,19 @@ test('fades unrelated nodes and edges while keeping selected outbound focus visi
   const selectedAlpha: number[] = []
   const outboundAlpha: number[] = []
   const unrelatedAlpha: number[] = []
-  const createContext = (values: number[]) => ({
+  const selectedFill: string[] = []
+  const outboundFill: string[] = []
+  const unrelatedFill: string[] = []
+  const createContext = (values: number[], fills: string[]) => ({
     arc: jest.fn(),
     beginPath: jest.fn(),
     fill: jest.fn(),
     fillText: jest.fn(),
     restore: jest.fn(),
     save: jest.fn(),
-    set fillStyle(_value: string) {},
+    set fillStyle(value: string) {
+      fills.push(value)
+    },
     set font(_value: string) {},
     set globalAlpha(value: number) {
       values.push(value)
@@ -659,13 +664,28 @@ test('fades unrelated nodes and edges while keeping selected outbound focus visi
     set textBaseline(_value: string) {}
   })
 
-  props.nodeCanvasObject?.(graph.nodes[0]!, createContext(selectedAlpha), 1)
-  props.nodeCanvasObject?.(graph.nodes[1]!, createContext(outboundAlpha), 1)
-  props.nodeCanvasObject?.(graph.nodes[2]!, createContext(unrelatedAlpha), 1)
+  props.nodeCanvasObject?.(
+    graph.nodes[0]!,
+    createContext(selectedAlpha, selectedFill),
+    1
+  )
+  props.nodeCanvasObject?.(
+    graph.nodes[1]!,
+    createContext(outboundAlpha, outboundFill),
+    1
+  )
+  props.nodeCanvasObject?.(
+    graph.nodes[2]!,
+    createContext(unrelatedAlpha, unrelatedFill),
+    1
+  )
 
   expect(selectedAlpha[0]).toBe(1)
   expect(outboundAlpha[0]).toBe(1)
   expect(unrelatedAlpha[0]).toBeLessThan(0.5)
+  expect(selectedFill[0]).toBe('#0284c7')
+  expect(outboundFill[0]).toBe('#0284c7')
+  expect(unrelatedFill[0]).not.toBe('#0284c7')
   expect(props.linkColor?.(graph.edges[0]!)).toBe('#0284c7')
   expect(props.linkColor?.(graph.edges[1]!)).toContain('rgba')
 })

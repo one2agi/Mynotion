@@ -294,7 +294,9 @@ const KnowledgeGraphCanvas = ({
           context.beginPath()
           context.arc(node.x, node.y, radius, 0, 2 * Math.PI)
           context.fillStyle =
-            selected || current ? accentColor : defaultNodeColor
+            selected || current || (hasFocus && focused)
+              ? accentColor
+              : defaultNodeColor
           context.fill()
 
           if (
