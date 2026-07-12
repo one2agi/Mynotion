@@ -867,7 +867,7 @@ test('continues a quick background pan in the release direction', () => {
   expect(panCalls.at(-1)?.[0]).toBeLessThan(10)
 })
 
-test('does not start inertia after the pointer is still for 80 ms', () => {
+test('does not start inertia after the pointer is still for 500 ms', () => {
   jest.useFakeTimers()
   jest.setSystemTime(0)
   installControlledAnimationFrames()
@@ -892,13 +892,13 @@ test('does not start inertia after the pointer is still for 80 ms', () => {
     clientY: 0,
     time: 16
   })
-  act(() => jest.advanceTimersByTime(80))
+  act(() => jest.advanceTimersByTime(500))
   firePointerEventAt(renderer, 'pointerup', {
     clientX: 40,
     clientY: 0,
-    time: 96
+    time: 516
   })
-  act(() => flushAnimationFramesAt(100))
+  act(() => flushAnimationFramesAt(520))
 
   expect(forceGraphMock.__centerAt).not.toHaveBeenCalled()
 })
@@ -941,7 +941,7 @@ test('does not start inertia when a hovered node owns a short pointer session', 
   expect(forceGraphMock.__centerAt).not.toHaveBeenCalled()
 })
 
-test('stops low-speed inertia by the 240 ms duration limit before the distance cap', () => {
+test('uses one smooth ease-out trajectory through the 240 ms duration', () => {
   jest.useFakeTimers()
   jest.setSystemTime(0)
   installControlledAnimationFrames()
@@ -986,8 +986,21 @@ test('stops low-speed inertia by the 240 ms duration limit before the distance c
   const callsAtDeadline = panCalls.length
   act(() => flushAnimationFramesAt(256))
 
+  const positions = panCalls.map(([x]) => Math.abs(x))
+  const frameMovements = positions.slice(1).map((position, index) => {
+    const previousPosition = positions[index]
+    return previousPosition === undefined ? 0 : position - previousPosition
+  })
+
   expect(panCalls.length).toBeGreaterThan(0)
-  expect(Math.abs(finalCall?.[0] ?? 0)).toBeLessThan(80)
+  expect(Math.abs(finalCall?.[0] ?? 0)).toBeCloseTo(50, 4)
+  expect(frameMovements.every(distance => distance > 0)).toBe(true)
+  expect(
+    frameMovements.every((distance, index) => {
+      const previousDistance = frameMovements[index - 1]
+      return previousDistance === undefined || distance <= previousDistance
+    })
+  ).toBe(true)
   expect(
     forceGraphMock.__centerAt.mock.calls.filter(
       ([x, y]) => x !== undefined || y !== undefined
@@ -995,7 +1008,7 @@ test('stops low-speed inertia by the 240 ms duration limit before the distance c
   ).toHaveLength(callsAtDeadline)
 })
 
-test('stops high-speed inertia at the 80 screen pixel distance limit', () => {
+test('caps high-speed inertia at 120 screen pixels', () => {
   jest.useFakeTimers()
   jest.setSystemTime(0)
   installControlledAnimationFrames()
@@ -1029,15 +1042,18 @@ test('stops high-speed inertia at the 80 screen pixel distance limit', () => {
     clientY: 0,
     time: 2
   })
-  act(() => flushAnimationFramesAt(0))
-  act(() => flushAnimationFramesAt(16))
+  act(() => {
+    for (let time = 0; time <= 240; time += 16) {
+      flushAnimationFramesAt(time)
+    }
+  })
   const panCalls = forceGraphMock.__centerAt.mock.calls.filter(
     ([x, y]) => x !== undefined || y !== undefined
   ) as Array<[number, number]>
   const callsAtDistanceLimit = panCalls.length
-  act(() => flushAnimationFramesAt(32))
+  act(() => flushAnimationFramesAt(256))
 
-  expect(Math.abs((panCalls.at(-1)?.[0] ?? 0) * 2)).toBeLessThanOrEqual(80)
+  expect(Math.abs((panCalls.at(-1)?.[0] ?? 0) * 2)).toBeCloseTo(120, 4)
   expect(
     forceGraphMock.__centerAt.mock.calls.filter(
       ([x, y]) => x !== undefined || y !== undefined

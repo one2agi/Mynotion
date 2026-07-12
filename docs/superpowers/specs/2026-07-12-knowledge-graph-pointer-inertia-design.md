@@ -12,17 +12,17 @@ Make node dragging reliable across zoom levels and make background panning feel 
 - Node dragging never starts canvas inertia.
 - Background panning samples recent pointer velocity while the primary button is held.
 - Releasing during a quick pan continues movement briefly in the release direction.
-- Holding still for 80 ms before release clears velocity and produces no inertia.
-- Inertia lasts at most 240 ms, decays every animation frame, and cannot move farther than 80 screen pixels.
+- Holding still for 500 ms before release clears velocity and produces no inertia.
+- Inertia lasts at most 240 ms and cannot move farther than 120 screen pixels.
 - A new pointer press, wheel gesture, node drag, inactive canvas, or component unmount cancels inertia immediately.
 - Reduced-motion preference disables inertia but keeps the improved node hit area.
 - These values are internal constants and are not exposed in graph settings.
 
 ## Architecture
 
-Use the force-graph `nodePointerAreaPaint` callback to paint an invisible hit circle that matches the custom Canvas node rendering. Keep the library's existing node drag and background pan behavior. Add a small pointer-session velocity tracker around the Canvas container; after a qualifying background release, advance the current viewport center with `requestAnimationFrame` and exponential decay.
+Use the force-graph `nodePointerAreaPaint` callback to paint an invisible hit circle that matches the custom Canvas node rendering. Keep the library's existing node drag and background pan behavior. Add a small pointer-session velocity tracker around the Canvas container; after a qualifying background release, project the release velocity over a fixed 160 ms window and animate the viewport center along one cubic ease-out trajectory with `requestAnimationFrame`.
 
-The inertia animation operates only after release, uses the current zoom to convert screen movement to graph coordinates, and stops at the fixed duration or displacement cap. It does not reheat the force simulation.
+The inertia animation operates only after release, uses the current zoom to convert screen movement to graph coordinates, and caps the projected displacement before starting the fixed-duration trajectory. It does not reheat the force simulation.
 
 ## Verification
 

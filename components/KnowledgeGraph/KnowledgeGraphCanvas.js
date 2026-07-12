@@ -12,11 +12,10 @@ const DRAG_THRESHOLD = 4
 const FOCUS_FADE_ALPHA = 0.16
 const REDUCED_MOTION_QUERY = '(prefers-reduced-motion: reduce)'
 const POINTER_HIT_TOLERANCE_PX = 4
-const PAN_IDLE_CUTOFF_MS = 80
+const PAN_IDLE_CUTOFF_MS = 500
 const PAN_INERTIA_DURATION_MS = 240
-const PAN_INERTIA_MAX_DISTANCE_PX = 80
-const PAN_RELEASE_SPEED_THRESHOLD = 0.08
-const PAN_INERTIA_FRAME_DECAY = 0.82
+const PAN_INERTIA_MAX_DISTANCE_PX = 120
+const PAN_INERTIA_PROJECTION_MS = 160
 
 const getPointerSample = event => ({
   time: Number.isFinite(event.timeStamp) ? event.timeStamp : performance.now(),
@@ -135,63 +134,41 @@ const KnowledgeGraphCanvas = ({
         return
       }
 
+      const screenSpeed = Math.hypot(velocity.x, velocity.y)
+      if (screenSpeed <= 0) return
+
+      const projectedDistance = Math.min(
+        screenSpeed * PAN_INERTIA_PROJECTION_MS,
+        PAN_INERTIA_MAX_DISTANCE_PX
+      )
+      const targetCenter = {
+        x:
+          viewportCenter.x -
+          (velocity.x / screenSpeed) * (projectedDistance / zoom),
+        y:
+          viewportCenter.y -
+          (velocity.y / screenSpeed) * (projectedDistance / zoom)
+      }
       const token = panInertiaTokenRef.current + 1
       panInertiaTokenRef.current = token
-      let center = viewportCenter
-      let elapsed = 0
-      let previousFrameTime = null
-      let screenDistance = 0
-      let frameVelocity = {
-        x: -velocity.x / zoom,
-        y: -velocity.y / zoom
-      }
+      let startTime = null
 
       const frame = frameTime => {
         if (token !== panInertiaTokenRef.current) return
 
-        if (previousFrameTime === null) {
-          previousFrameTime = frameTime
-          panInertiaFrameRef.current = window.requestAnimationFrame(frame)
-          return
-        }
-
-        const frameDuration = Math.min(
-          Math.max(0, frameTime - previousFrameTime),
-          PAN_INERTIA_DURATION_MS - elapsed
+        if (startTime === null) startTime = frameTime
+        const progress = Math.min(
+          Math.max(0, frameTime - startTime) / PAN_INERTIA_DURATION_MS,
+          1
         )
-        previousFrameTime = frameTime
-        elapsed += frameDuration
-        if (frameDuration <= 0 || elapsed >= PAN_INERTIA_DURATION_MS) {
-          panInertiaFrameRef.current = null
-          return
-        }
+        const easedProgress = 1 - Math.pow(1 - progress, 3)
+        forceGraph.centerAt(
+          viewportCenter.x +
+            (targetCenter.x - viewportCenter.x) * easedProgress,
+          viewportCenter.y + (targetCenter.y - viewportCenter.y) * easedProgress
+        )
 
-        const decay = Math.pow(PAN_INERTIA_FRAME_DECAY, frameDuration / 16)
-        frameVelocity = {
-          x: frameVelocity.x * decay,
-          y: frameVelocity.y * decay
-        }
-        let deltaX = frameVelocity.x * frameDuration
-        let deltaY = frameVelocity.y * frameDuration
-        const frameScreenDistance = Math.hypot(deltaX * zoom, deltaY * zoom)
-        const remainingDistance = PAN_INERTIA_MAX_DISTANCE_PX - screenDistance
-        if (frameScreenDistance > remainingDistance) {
-          const scale = remainingDistance / frameScreenDistance
-          deltaX *= scale
-          deltaY *= scale
-        }
-
-        const movement = Math.hypot(deltaX * zoom, deltaY * zoom)
-        if (movement > 0) {
-          center = { x: center.x + deltaX, y: center.y + deltaY }
-          screenDistance += movement
-          forceGraph?.centerAt?.(center.x, center.y)
-        }
-
-        if (
-          elapsed >= PAN_INERTIA_DURATION_MS ||
-          screenDistance >= PAN_INERTIA_MAX_DISTANCE_PX
-        ) {
+        if (progress >= 1) {
           panInertiaFrameRef.current = null
           return
         }
@@ -401,10 +378,6 @@ const KnowledgeGraphCanvas = ({
           (pointerSession.lastSample.y - pointerSession.previousSample.y) /
           duration
       }
-      if (Math.hypot(velocity.x, velocity.y) < PAN_RELEASE_SPEED_THRESHOLD) {
-        return
-      }
-
       startPanInertia(velocity)
     },
     [active, reducedMotion, startPanInertia]
