@@ -26,6 +26,10 @@ const propertyNames = {
   status: 'status'
 }
 
+const COLLECTION_ID = '00000000000000000000000000000011'
+const DEFAULT_VIEW_ID = '00000000-0000-0000-0000-000000000012'
+const SECOND_VIEW_ID = '00000000-0000-0000-0000-000000000013'
+
 const cloneFixtureMap = () => JSON.parse(JSON.stringify(fixture.recordMap))
 
 test('maps article metadata and preserves raw Relation values', async () => {
@@ -97,6 +101,87 @@ test('falls back to page_sort only when the selected query is unavailable', asyn
 
   expect(result.allPages.map(page => page.id)).toEqual([
     fixture.expected.sourceId,
+    fixture.expected.targetId
+  ])
+})
+
+test('selects a non-default configured database view', async () => {
+  const recordMap = cloneFixtureMap()
+  recordMap.block['00000000000000000000000000000010'].value.value.view_ids.push(
+    SECOND_VIEW_ID
+  )
+  recordMap.collection_query[COLLECTION_ID][SECOND_VIEW_ID] = {
+    collection_group_results: {
+      blockIds: [fixture.expected.targetId]
+    }
+  }
+  const fetchPageValues = jest.fn(async () => fixture.missingPageValues)
+
+  const result = await fetchKnowledgeGraphSiteData({
+    pageId: fixture.databaseId,
+    notionIndex: 1,
+    postUrlPrefix: 'article',
+    propertyNames,
+    fetchDatabase: async () => recordMap,
+    fetchPageValues
+  })
+
+  expect(fetchPageValues).toHaveBeenCalledWith([fixture.expected.targetId])
+  expect(result.allPages.map(page => page.id)).toEqual([
+    fixture.expected.targetId
+  ])
+})
+
+test('does not union reducer page ids into direct query results', async () => {
+  const recordMap = cloneFixtureMap()
+  recordMap.collection_query[COLLECTION_ID][DEFAULT_VIEW_ID] = {
+    collection_group_results: {
+      blockIds: [fixture.expected.sourceId]
+    },
+    reducerResults: {
+      collection_group_results: {
+        blockIds: [fixture.expected.targetId]
+      }
+    }
+  }
+  const fetchPageValues = jest.fn(async () => fixture.missingPageValues)
+
+  const result = await fetchKnowledgeGraphSiteData({
+    pageId: fixture.databaseId,
+    postUrlPrefix: 'article',
+    propertyNames,
+    fetchDatabase: async () => recordMap,
+    fetchPageValues
+  })
+
+  expect(fetchPageValues).not.toHaveBeenCalled()
+  expect(result.allPages.map(page => page.id)).toEqual([
+    fixture.expected.sourceId
+  ])
+})
+
+test('uses reducer page ids when direct query results have no ids', async () => {
+  const recordMap = cloneFixtureMap()
+  recordMap.collection_query[COLLECTION_ID][DEFAULT_VIEW_ID] = {
+    collection_group_results: { blockIds: [] },
+    results: { blockIds: [] },
+    blockIds: [],
+    reducerResults: {
+      collection_group_results: {
+        blockIds: [fixture.expected.targetId]
+      }
+    }
+  }
+
+  const result = await fetchKnowledgeGraphSiteData({
+    pageId: fixture.databaseId,
+    postUrlPrefix: 'article',
+    propertyNames,
+    fetchDatabase: async () => recordMap,
+    fetchPageValues: async () => fixture.missingPageValues
+  })
+
+  expect(result.allPages.map(page => page.id)).toEqual([
     fixture.expected.targetId
   ])
 })

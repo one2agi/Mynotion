@@ -12,6 +12,7 @@ export type KnowledgeGraphPropertyNames = {
 export type KnowledgeGraphSourceOptions = {
   pageId: string
   locale?: string
+  notionIndex?: number
   postUrlPrefix: string
   propertyNames: KnowledgeGraphPropertyNames
   fetchDatabase(id: string, from: string): Promise<NotionRecordMap | null>
@@ -59,7 +60,11 @@ export async function fetchKnowledgeGraphSiteData(
     options.pageId,
     'knowledge-graph-database'
   )
-  const database = readDatabase(databaseMap, options.pageId)
+  const database = readDatabase(
+    databaseMap,
+    options.pageId,
+    options.notionIndex ?? 0
+  )
   if (!database) {
     throw new TypeError(DATABASE_UNAVAILABLE)
   }
@@ -90,7 +95,8 @@ export async function fetchKnowledgeGraphSiteData(
 
 function readDatabase(
   recordMap: NotionRecordMap | null,
-  pageId: string
+  pageId: string,
+  notionIndex: number
 ): DatabaseData | null {
   if (!recordMap || !isRecord(recordMap.block)) return null
 
@@ -115,7 +121,7 @@ function readDatabase(
   const schema = collection.schema as SourceSchema
   if (!Object.keys(schema).length) return null
 
-  const viewId = firstNormalizedId(root.view_ids)
+  const viewId = normalizedIdAt(root.view_ids, notionIndex)
   if (!viewId) return null
 
   const pageIds = readPageIds(databaseMap, collectionId, viewId)
@@ -140,12 +146,14 @@ function readPageIds(
     : undefined
 
   if (isRecord(selectedQuery)) {
-    return uniqueNormalizedIds([
+    const directIds = uniqueNormalizedIds([
       nestedBlockIds(selectedQuery, 'collection_group_results'),
-      nestedReducerBlockIds(selectedQuery),
       nestedBlockIds(selectedQuery, 'results'),
       selectedQuery.blockIds
     ])
+    return directIds.length
+      ? directIds
+      : uniqueNormalizedIds([nestedReducerBlockIds(selectedQuery)])
   }
 
   const collectionView = unwrapRecordValue(
@@ -179,15 +187,8 @@ function uniqueNormalizedIds(groups: unknown[]): string[] {
   return Array.from(ids)
 }
 
-function firstNormalizedId(value: unknown): string | null {
-  if (!Array.isArray(value)) return null
-
-  for (const candidate of value) {
-    const id = normalizePageId(candidate)
-    if (id) return id
-  }
-
-  return null
+function normalizedIdAt(value: unknown, index: number): string | null {
+  return Array.isArray(value) ? normalizePageId(value[index]) : null
 }
 
 function mapPage(
