@@ -1,18 +1,27 @@
 /** @jest-environment node */
 
 jest.mock('@edgeone/pages-blob', () => ({ getStore: jest.fn() }))
-jest.mock('@/lib/db/SiteDataApi', () => ({
-  fetchGlobalAllData: jest.fn()
+jest.mock('@/lib/knowledge-graph/notionFetch', () => ({
+  fetchKnowledgeGraphPageBlocks: jest.fn(),
+  fetchKnowledgeGraphPageValues: jest.fn()
 }))
-jest.mock('@/lib/db/notion/getPostBlocks', () => ({
-  fetchNotionPageBlocks: jest.fn()
+jest.mock('@/lib/knowledge-graph/notionSource', () => ({
+  fetchKnowledgeGraphSiteData: jest.fn()
 }))
 
+import { getStore } from '@edgeone/pages-blob'
+import BLOG from '@/blog.config'
 import {
   createKnowledgeGraphHandler,
   fetchConfiguredSiteData,
+  onRequestGet,
   resolveKnowledgeGraphServerConfig
 } from '@/cloud-functions/api/knowledge-graph'
+import {
+  fetchKnowledgeGraphPageBlocks,
+  fetchKnowledgeGraphPageValues
+} from '@/lib/knowledge-graph/notionFetch'
+import { fetchKnowledgeGraphSiteData } from '@/lib/knowledge-graph/notionSource'
 import type { PublicGraph } from '@/lib/knowledge-graph/types'
 
 declare const jest: any
@@ -166,6 +175,58 @@ test('fetches every configured language database in configuration order', async 
       allPages: [{ id: `${configuredPageId.slice(0, -1)}2`, locale: 'zh' }]
     }
   ])
+})
+
+test('refreshes through the server-only Notion source with configured fields', async () => {
+  const waitUntilTasks: Promise<unknown>[] = []
+  const blobStore = {
+    delete: jest.fn(async () => undefined),
+    get: jest.fn(async () => null),
+    list: jest.fn(async () => ({ blobs: [] })),
+    setJSON: jest.fn(async () => undefined)
+  }
+  jest.mocked(getStore).mockReturnValue(blobStore)
+  jest.mocked(fetchKnowledgeGraphSiteData).mockResolvedValue({
+    allPages: [],
+    schema: {}
+  })
+
+  const response = await onRequestGet({
+    request: new Request('https://example.com/api/knowledge-graph'),
+    env: {},
+    waitUntil(task: Promise<unknown>) {
+      waitUntilTasks.push(task)
+    }
+  })
+
+  expect(response.status).toBe(202)
+  expect(waitUntilTasks).toHaveLength(1)
+  await waitUntilTasks[0]
+  expect(fetchKnowledgeGraphSiteData).toHaveBeenCalledWith(
+    expect.objectContaining({
+      pageId: expect.any(String),
+      notionIndex: Number(BLOG.NOTION_INDEX),
+      postUrlPrefix: BLOG.POST_URL_PREFIX,
+      propertyNames: expect.objectContaining({
+        title: BLOG.NOTION_PROPERTY_NAME.title,
+        slug: BLOG.NOTION_PROPERTY_NAME.slug,
+        type: BLOG.NOTION_PROPERTY_NAME.type,
+        status: BLOG.NOTION_PROPERTY_NAME.status
+      }),
+      fetchDatabase: expect.any(Function),
+      fetchPageValues: expect.any(Function)
+    })
+  )
+
+  const sourceOptions = jest.mocked(fetchKnowledgeGraphSiteData).mock
+    .calls[0]![0]
+  await sourceOptions.fetchDatabase(configuredPageId, 'source-contract')
+  await sourceOptions.fetchPageValues([configuredPageId])
+  expect(fetchKnowledgeGraphPageBlocks).toHaveBeenCalledWith(
+    configuredPageId,
+    'source-contract'
+  )
+  expect(fetchKnowledgeGraphPageValues).toHaveBeenCalledWith([configuredPageId])
 })
 
 test('keeps the single-database fetch contract unchanged', async () => {

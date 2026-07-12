@@ -1,9 +1,12 @@
 import { getStore } from '@edgeone/pages-blob'
 import { randomUUID } from 'node:crypto'
 import BLOG from '@/blog.config'
-import { fetchGlobalAllData } from '@/lib/db/SiteDataApi'
-import { fetchNotionPageBlocks } from '@/lib/db/notion/getPostBlocks'
+import {
+  fetchKnowledgeGraphPageBlocks,
+  fetchKnowledgeGraphPageValues
+} from '@/lib/knowledge-graph/notionFetch'
 import { extractLangId, extractLangPrefix } from '@/lib/utils/pageId'
+import { fetchKnowledgeGraphSiteData } from '@/lib/knowledge-graph/notionSource'
 import {
   refreshKnowledgeGraph,
   type RefreshResult,
@@ -96,9 +99,24 @@ export const onRequestGet = async (context: FunctionContext) => {
         fetchGlobalAllData: () =>
           fetchConfiguredSiteData({
             notionPageId: BLOG.NOTION_PAGE_ID,
-            fetchSiteData: fetchGlobalAllData
+            fetchSiteData: ({ pageId, locale }) =>
+              fetchKnowledgeGraphSiteData({
+                pageId,
+                ...(locale ? { locale } : {}),
+                notionIndex: Number(BLOG.NOTION_INDEX),
+                postUrlPrefix: BLOG.POST_URL_PREFIX,
+                propertyNames: {
+                  title: BLOG.NOTION_PROPERTY_NAME.title,
+                  slug: BLOG.NOTION_PROPERTY_NAME.slug,
+                  type: BLOG.NOTION_PROPERTY_NAME.type,
+                  status: BLOG.NOTION_PROPERTY_NAME.status
+                },
+                fetchDatabase: (id, from) =>
+                  fetchKnowledgeGraphPageBlocks(id, from),
+                fetchPageValues: fetchKnowledgeGraphPageValues
+              })
           }),
-        fetchNotionPageBlocks,
+        fetchNotionPageBlocks: fetchKnowledgeGraphPageBlocks,
         clock,
         createId: randomUUID,
         logError: logServerError
