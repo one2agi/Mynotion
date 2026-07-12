@@ -42,10 +42,26 @@ export async function fetchKnowledgeGraphPageValues(
     )
     const recordMap = isRecord(pageChunk) ? pageChunk.recordMap : undefined
     const blocks = isRecord(recordMap) ? recordMap.block : undefined
-    if (isRecord(blocks)) Object.assign(values, blocks)
+    if (!isRecord(blocks)) {
+      throw new TypeError('Knowledge graph block batch response is malformed')
+    }
+
+    const batch = ids.slice(index, index + batchSize)
+    const returnedIds = new Set(
+      Object.keys(blocks).map(id => canonicalNotionId(id))
+    )
+    if (batch.some(id => !returnedIds.has(canonicalNotionId(id)))) {
+      throw new TypeError('Knowledge graph block batch response is incomplete')
+    }
+
+    Object.assign(values, blocks)
   }
 
   return values
+}
+
+function canonicalNotionId(value: string): string {
+  return value.replaceAll('-', '').toLowerCase()
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

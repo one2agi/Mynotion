@@ -1,0 +1,86 @@
+{
+  "provenance": {
+    "capturedFrom": "configured Notion database via notionAPI.getBlocks",
+    "capturedOn": "2026-07-12",
+    "rawContentRetained": false,
+    "sanitization": "deterministic fake IDs and content-only placeholders"
+  },
+  "requestedIds": [
+    "00000000-0000-0000-0000-000000000001",
+    "00000000000000000000000000000002"
+  ],
+  "response": {
+    "recordMap": {
+      "block": {
+        "00000000000000000000000000000001": {
+          "spaceId": "Sanitized value",
+          "value": {
+            "value": {
+              "id": "00000000000000000000000000000001",
+              "version": 0,
+              "type": "collection_view_page",
+              "content": ["Sanitized value"],
+              "view_ids": ["Sanitized value", "Sanitized value"],
+              "collection_id": "Sanitized value",
+              "format": {
+                "site_id": "Sanitized value",
+                "block_locked": false,
+                "block_locked_by": "Sanitized value",
+                "collection_pointer": {
+                  "id": "Sanitized value",
+                  "table": "Sanitized value",
+                  "spaceId": "Sanitized value"
+                },
+                "copied_from_pointer": {
+                  "id": "Sanitized value",
+                  "table": "Sanitized value",
+                  "spaceId": "Sanitized value"
+                },
+                "page_cover_position": 0
+              },
+              "permissions": [
+                {
+                  "role": "reader",
+                  "type": "Sanitized value",
+                  "is_site": true,
+                  "added_timestamp": 0
+                }
+              ],
+              "created_time": 0,
+              "last_edited_time": 0,
+              "parent_id": "00000000000000000000000000000002",
+              "parent_table": "Sanitized value",
+              "alive": true,
+              "copied_from": "Sanitized value",
+              "file_ids": ["Sanitized value", "Sanitized value"],
+              "space_id": "Sanitized value",
+              "crdt_format_version": 0,
+              "crdt_data": {
+                "title": {
+                  "r": "Sanitized value",
+                  "n": {
+                    "sanitized-key-01": {
+                      "s": {
+                        "x": null,
+                        "i": null,
+                        "l": null
+                      },
+                      "c": []
+                    }
+                  }
+                }
+              }
+            },
+            "role": "reader"
+          }
+        },
+        "00000000000000000000000000000002": {
+          "spaceId": "Sanitized value",
+          "value": {
+            "role": "Sanitized value"
+          }
+        }
+      }
+    }
+  }
+}
