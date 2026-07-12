@@ -1,9 +1,10 @@
 import { normalizePageId } from './extract'
 import type { PageSnapshot, PublicGraph } from './types'
 
-const STATE_KEY = 'state/refresh.json'
+const CACHE_PREFIX = 'v2/'
+const STATE_KEY = `${CACHE_PREFIX}state/refresh.json`
 const REFRESH_CLAIM_WINDOW_MS = 10 * 60 * 1000
-const PUBLICATION_PREFIX = 'state/graph-publications/'
+const PUBLICATION_PREFIX = `${CACHE_PREFIX}state/graph-publications/`
 const WINDOW_KEY_WIDTH = 16
 
 type JsonReadOptions = {
@@ -54,7 +55,7 @@ function pageSnapshotKey(id: string): string {
     throw new TypeError('Page snapshot id must be a valid Notion page ID')
   }
 
-  return `pages/${normalizedId}.json`
+  return `${CACHE_PREFIX}pages/${normalizedId}.json`
 }
 
 function validateGenerationId(generationId: string): void {
@@ -67,7 +68,7 @@ function validateGenerationId(generationId: string): void {
 
 function graphVersionKey(generationId: string): string {
   validateGenerationId(generationId)
-  return `graph/versions/${generationId}.json`
+  return `${CACHE_PREFIX}graph/versions/${generationId}.json`
 }
 
 function formatWindowStart(windowStart: number): string {
@@ -89,7 +90,7 @@ function publicationMarkerKey(
 }
 
 function refreshClaimKey(windowStart: number): string {
-  return `state/refresh-claims/${windowStart}.json`
+  return `${CACHE_PREFIX}state/refresh-claims/${windowStart}.json`
 }
 
 function isPublicationMarkerKey(key: string): boolean {
@@ -101,7 +102,7 @@ function isPublicationMarkerKey(key: string): boolean {
 function isGraphVersionKey(key: unknown): key is string {
   return (
     typeof key === 'string' &&
-    /^graph\/versions\/[A-Za-z0-9][A-Za-z0-9_-]*\.json$/.test(key)
+    /^v2\/graph\/versions\/[A-Za-z0-9][A-Za-z0-9_-]*\.json$/.test(key)
   )
 }
 

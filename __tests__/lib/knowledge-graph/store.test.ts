@@ -18,7 +18,7 @@ type ListOptions = {
   prefix?: string
 }
 
-const publicationPrefix = 'state/graph-publications/'
+const publicationPrefix = 'v2/state/graph-publications/'
 const publicationKey = (windowStart: number, generationId: string): string =>
   `${publicationPrefix}${String(windowStart).padStart(16, '0')}-${generationId}.json`
 
@@ -111,6 +111,29 @@ const replacement: PublicGraph = {
   edges: []
 }
 
+test('ignores legacy cache entries after the graph extraction contract changes', async () => {
+  const blob = new MemoryBlobStore()
+  const legacyMarker =
+    'state/graph-publications/0000000001200000-generation-old.json'
+  blob.values.set('state/refresh.json', { refreshedAt: 1_000 })
+  blob.values.set('pages/00000000000000000000000000000001.json', {
+    links: ['00000000000000000000000000000002']
+  })
+  blob.values.set(legacyMarker, {
+    graphKey: 'graph/versions/generation-old.json',
+    windowStart: 1_200_000
+  })
+  blob.values.set('graph/versions/generation-old.json', graph)
+
+  const store = createGraphStore(blob, () => 1_000)
+
+  expect(await store.getGraph()).toBeNull()
+  expect(await store.getState()).toBeNull()
+  expect(
+    await store.getPageSnapshot('00000000-0000-0000-0000-000000000001')
+  ).toBeNull()
+})
+
 test('stores refresh state and normalized page snapshots under stable private keys', async () => {
   const blob = new MemoryBlobStore()
   const store = createGraphStore(blob, () => 1_000)
@@ -130,19 +153,19 @@ test('stores refresh state and normalized page snapshots under stable private ke
   await store.deletePageSnapshot('00000000-0000-0000-0000-000000000001')
 
   expect(blob.setJSONCalls.map(call => call.key)).toEqual([
-    'state/refresh.json',
-    'pages/00000000000000000000000000000001.json'
+    'v2/state/refresh.json',
+    'v2/pages/00000000000000000000000000000001.json'
   ])
   expect(blob.deleteCalls).toEqual([
-    'pages/00000000000000000000000000000001.json'
+    'v2/pages/00000000000000000000000000000001.json'
   ])
   expect(blob.getCalls).toEqual([
     {
-      key: 'state/refresh.json',
+      key: 'v2/state/refresh.json',
       options: { consistency: 'strong', type: 'json' }
     },
     {
-      key: 'pages/00000000000000000000000000000001.json',
+      key: 'v2/pages/00000000000000000000000000000001.json',
       options: { type: 'json' }
     }
   ])
@@ -159,14 +182,14 @@ test('publishes a graph version before creating its immutable publication marker
   expect(await store.getGraph()).toEqual(graph)
   expect(blob.setJSONCalls).toEqual([
     {
-      key: 'graph/versions/generation-one.json',
+      key: 'v2/graph/versions/generation-one.json',
       value: graph,
       options: { onlyIfNew: true }
     },
     {
       key: markerKey,
       value: {
-        graphKey: 'graph/versions/generation-one.json',
+        graphKey: 'v2/graph/versions/generation-one.json',
         windowStart
       },
       options: { onlyIfNew: true }
@@ -181,7 +204,7 @@ test('publishes a graph version before creating its immutable publication marker
       options: { consistency: 'strong', type: 'json' }
     },
     {
-      key: 'graph/versions/generation-one.json',
+      key: 'v2/graph/versions/generation-one.json',
       options: { consistency: 'strong', type: 'json' }
     }
   ])
@@ -199,12 +222,12 @@ test('allows one immutable refresh claim for concurrent callers in the same wind
   expect(claims).toEqual([{ owner: 'worker-a', windowStart: 1_200_000 }, null])
   expect(blob.setJSONCalls).toEqual([
     {
-      key: 'state/refresh-claims/1200000.json',
+      key: 'v2/state/refresh-claims/1200000.json',
       value: { owner: 'worker-a', windowStart: 1_200_000 },
       options: { onlyIfNew: true }
     },
     {
-      key: 'state/refresh-claims/1200000.json',
+      key: 'v2/state/refresh-claims/1200000.json',
       value: { owner: 'worker-b', windowStart: 1_200_000 },
       options: { onlyIfNew: true }
     }
@@ -229,8 +252,8 @@ test('allows a new immutable refresh claim in an adjacent window', async () => {
     windowStart: 1_800_000
   })
   expect(blob.setJSONCalls.map(call => call.key)).toEqual([
-    'state/refresh-claims/1200000.json',
-    'state/refresh-claims/1800000.json'
+    'v2/state/refresh-claims/1200000.json',
+    'v2/state/refresh-claims/1800000.json'
   ])
   expect(blob.deleteCalls).toEqual([])
 })
@@ -272,10 +295,10 @@ test('resolves an ambiguously acknowledged marker only to its completed graph ve
     store.putGraph(replacement, 'generation-two', 1_800_000)
   ).rejects.toThrow('ambiguous marker response')
   expect(blob.values.get(publicationKey(1_800_000, 'generation-two'))).toEqual({
-    graphKey: 'graph/versions/generation-two.json',
+    graphKey: 'v2/graph/versions/generation-two.json',
     windowStart: 1_800_000
   })
-  expect(blob.values.get('graph/versions/generation-two.json')).toEqual(
+  expect(blob.values.get('v2/graph/versions/generation-two.json')).toEqual(
     replacement
   )
   expect(await store.getGraph()).toEqual(replacement)
@@ -294,7 +317,7 @@ test('retains the two newest publications and only deletes an older marker after
   expect(blob.values.has(publicationKey(1_200_000, 'generation-one'))).toBe(
     false
   )
-  expect(blob.values.has('graph/versions/generation-one.json')).toBe(false)
+  expect(blob.values.has('v2/graph/versions/generation-one.json')).toBe(false)
   expect(blob.values.has(publicationKey(2_400_000, 'generation-three'))).toBe(
     true
   )
