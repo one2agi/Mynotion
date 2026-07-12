@@ -332,7 +332,7 @@ test('merges two locale data sets and publishes their resolved href values', asy
           href: '/zh/article/page-2.html'
         }
       ],
-      edges: [{ source: A, target: B }]
+      edges: [{ source: A, target: B, origins: [A, B] }]
     }
   })
 })
