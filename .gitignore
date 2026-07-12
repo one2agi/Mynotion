@@ -40,6 +40,10 @@ yarn-error.log*
 # vercel
 .vercel
 
+# EdgeOne local build output (keep .edgeone/project.json)
+/.edgeone/cloud-functions/
+/.edgeone/edge-functions/
+
 # dev
 /data.json
 /pnpm-lock.yaml
