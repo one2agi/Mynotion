@@ -183,6 +183,35 @@ test('uses reducer page ids when direct query results have no ids', async () => 
   ])
 })
 
+test('unions reducer fallback ids with results block ids', async () => {
+  const recordMap = cloneFixtureMap()
+  recordMap.collection_query[COLLECTION_ID][DEFAULT_VIEW_ID] = {
+    reducerResults: {
+      collection_group_results: {
+        blockIds: [fixture.expected.targetId]
+      }
+    },
+    results: {
+      blockIds: [fixture.expected.sourceId]
+    }
+  }
+  const fetchPageValues = jest.fn(async () => fixture.missingPageValues)
+
+  const result = await fetchKnowledgeGraphSiteData({
+    pageId: fixture.databaseId,
+    postUrlPrefix: 'article',
+    propertyNames,
+    fetchDatabase: async () => recordMap,
+    fetchPageValues
+  })
+
+  expect(fetchPageValues).toHaveBeenCalledWith([fixture.expected.targetId])
+  expect(result.allPages.map(page => page.id)).toEqual([
+    fixture.expected.targetId,
+    fixture.expected.sourceId
+  ])
+})
+
 test('treats explicit empty collection group results as authoritative', async () => {
   const recordMap = cloneFixtureMap()
   recordMap.collection_query[COLLECTION_ID][DEFAULT_VIEW_ID] = {
