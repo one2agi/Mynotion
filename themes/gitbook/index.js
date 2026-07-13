@@ -7,13 +7,10 @@ import LoadingCover from '@/components/LoadingCover'
 import NotionIcon from '@/components/NotionIcon'
 import NotionPage from '@/components/NotionPage'
 import ShareBar from '@/components/ShareBar'
-import DashboardBody from '@/components/ui/dashboard/DashboardBody'
-import DashboardHeader from '@/components/ui/dashboard/DashboardHeader'
 import { siteConfig } from '@/lib/config'
 import { useGlobal } from '@/lib/global'
 import { isBrowser } from '@/lib/utils'
 import { getShortId } from '@/lib/utils/pageId'
-import { SignIn, SignUp } from '@clerk/nextjs'
 import dynamic from 'next/dynamic'
 import Head from 'next/head'
 import SmartLink from '@/components/SmartLink'
@@ -528,97 +525,14 @@ const LayoutTagIndex = props => {
   )
 }
 
-/**
- * 登录页面
- * @param {*} props
- * @returns
- */
-const LayoutSignIn = props => {
-  const { post } = props
-  const enableClerk = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY
-
-  return (
-    <>
-      <div className='grow mt-20'>
-        {/* clerk预置表单 */}
-        {enableClerk && (
-          <div className='flex justify-center py-6'>
-            <SignIn />
-          </div>
-        )}
-        <div id='article-wrapper'>
-          <NotionPage post={post} />
-        </div>
-      </div>
-    </>
-  )
-}
-
-/**
- * 注册页面
- * @param {*} props
- * @returns
- */
-const LayoutSignUp = props => {
-  const { post } = props
-  const enableClerk = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY
-
-  return (
-    <>
-      <div className='grow mt-20'>
-        {/* clerk预置表单 */}
-        {enableClerk && (
-          <div className='flex justify-center py-6'>
-            <SignUp />
-          </div>
-        )}
-        <div id='article-wrapper'>
-          <NotionPage post={post} />
-        </div>
-      </div>
-    </>
-  )
-}
-
-/**
- * 仪表盘
- * @param {*} props
- * @returns
- */
-const LayoutDashboard = props => {
-  const { post } = props
-
-  return (
-    <>
-      <div className='container grow'>
-        <div className='flex flex-wrap justify-center -mx-4'>
-          <div id='container-inner' className='w-full p-4'>
-            {post && (
-              <div id='article-wrapper' className='mx-auto'>
-                <NotionPage {...props} />
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-      {/* 仪表盘 */}
-      <DashboardHeader />
-      <DashboardBody />
-    </>
-  )
-}
-
 export {
   Layout404,
   LayoutArchive,
   LayoutBase,
   LayoutCategoryIndex,
-  LayoutDashboard,
   LayoutIndex,
   LayoutPostList,
   LayoutSearch,
-  LayoutSignIn,
-  LayoutSignUp,
   LayoutSlug,
   LayoutTagIndex,
   CONFIG as THEME_CONFIG

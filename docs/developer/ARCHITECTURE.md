@@ -26,7 +26,7 @@ NotionNext 的主流程可以简化为：
 
 HTML 路由正常（rewrites 在请求时生效）。但 Next.js 只在构建时为**真实的页面文件路径**生成 `/_next/data/{buildId}/*.json`，不会为 rewrite 的源路径生成。客户端 router 预取 `/_next/data/{buildId}/zh-CN/archive.json` 找不到文件，会返回 404 并 fallback 到整页 reload，丢失 SPA 导航。
 
-**取舍**：locale 路由下的 4 个顶层页面因此改用 `getServerSideProps`，在请求时 SSR，跳过预生成 JSON 文件查找。多段路径的页面（`[prefix]/[slug]`、`category/[slug]`、`tag/[slug]`、`search/[keyword]`）保留 `getStaticProps`，因为其 rewrite 后的多段路径仍能匹配 Next.js 生成的数据文件。
+**取舍**：locale 路由下的 3 个顶层页面因此改用 `getServerSideProps`，在请求时 SSR，跳过预生成 JSON 文件查找。多段路径的页面（`[prefix]/[slug]`、`category/[slug]`、`tag/[slug]`、`search/[keyword]`）保留 `getStaticProps`，因为其 rewrite 后的多段路径仍能匹配 Next.js 生成的数据文件。
 
 涉及页面（commits `5d81d8fb` / `573c577e` / `33d1b338` / `5e705434`）：
 
@@ -35,9 +35,8 @@ HTML 路由正常（rewrites 在请求时生效）。但 Next.js 只在构建时
 | `pages/index.js` | `getStaticProps` | `getServerSideProps` |
 | `pages/archive/index.js` | `getStaticProps` | `getServerSideProps` |
 | `pages/page/[page].js` | `getStaticProps` + `getStaticPaths` | `getServerSideProps` |
-| `pages/dashboard/[[...index]].js` | `getStaticProps` + `getStaticPaths` | `getServerSideProps` |
 
-回归保护：`__tests__/pages/locale-routing.test.js` 结构化校验上述 4 个页面必须导出 `getServerSideProps` 且不得导出 `getStaticProps`。
+回归保护：`__tests__/pages/locale-routing.test.js` 结构化校验上述 3 个页面必须导出 `getServerSideProps` 且不得导出 `getStaticProps`。
 
 ## 数据优先级
 
@@ -61,4 +60,3 @@ HTML 路由正常（rewrites 在请求时生效）。但 Next.js 只在构建时
 - 缓存模块位于 `lib/cache/`
 - 构建阶段并发与预热逻辑位于 `lib/build/`
 - 这些模块会影响 CI/CD 和大站点构建速度，改动时需要附带验证说明
-

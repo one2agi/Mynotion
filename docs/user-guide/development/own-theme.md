@@ -127,9 +127,7 @@ const LayoutArchive = ()⇒ &lt;LayoutBase&gt;空白页面&lt;/LayoutBase&gt;
     '/category': 'LayoutCategoryIndex',
     '/[prefix]': 'LayoutSlug',
     '/[prefix]/[slug]': 'LayoutSlug',
-    '/[prefix]/[slug]/[...suffix]': 'LayoutSlug',
-    '/signin': 'LayoutSignIn',
-    '/signup': 'LayoutSignUp'
+    '/[prefix]/[slug]/[...suffix]': 'LayoutSlug'
   },
 ```
 :::

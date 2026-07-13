@@ -31,7 +31,6 @@
 ```json
 {
   "next": "^14.2.30",
-  "@clerk/nextjs": "^5.7.5",
   "react": "^18.3.1",
   "tailwindcss": "^3.4.17"
 }
