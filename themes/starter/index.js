@@ -26,18 +26,13 @@ import { Style } from './style'
 import Comment from '@/components/Comment'
 import replaceSearchResult from '@/components/Mark'
 import ShareBar from '@/components/ShareBar'
-import DashboardBody from '@/components/ui/dashboard/DashboardBody'
-import DashboardHeader from '@/components/ui/dashboard/DashboardHeader'
 import { useGlobal } from '@/lib/global'
 import { loadWowJS } from '@/lib/plugins/wow'
-import { SignIn, SignUp } from '@clerk/nextjs'
 import SmartLink from '@/components/SmartLink'
 import { ArticleLock } from './components/ArticleLock'
 import { Banner } from './components/Banner'
 import { CTA } from './components/CTA'
 import SearchInput from './components/SearchInput'
-import { SignInForm } from './components/SignInForm'
-import { SignUpForm } from './components/SignUpForm'
 import { SVG404 } from './components/svg/SVG404'
 
 /**
@@ -189,34 +184,6 @@ const LayoutSlug = props => {
           </div>
         </div>
       </div>
-    </>
-  )
-}
-
-/**
- * 仪表盘
- * @param {*} props
- * @returns
- */
-const LayoutDashboard = props => {
-  const { post } = props
-
-  return (
-    <>
-      <div className='container grow'>
-        <div className='flex flex-wrap justify-center -mx-4'>
-          <div id='container-inner' className='w-full p-4'>
-            {post && (
-              <div id='article-wrapper' className='mx-auto'>
-                <NotionPage {...props} />
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-      {/* 仪表盘 */}
-      <DashboardHeader />
-      <DashboardBody />
     </>
   )
 }
@@ -473,79 +440,14 @@ const LayoutTagIndex = props => {
     </section>
   )
 }
-/**
- * 登录页面
- * @param {*} props
- * @returns
- */
-const LayoutSignIn = props => {
-  const enableClerk = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY
-  const title = starterConfig('STARTER_SIGNIN', '登录')
-  const description = starterConfig(
-    'STARTER_SIGNIN_DESCRITION',
-    '这里是演示页面，NotionNext目前不提供会员登录功能'
-  )
-  return (
-    <>
-      <div className='grow mt-20'>
-        <Banner title={title} description={description} />
-        {/* clerk预置表单 */}
-        {enableClerk && (
-          <div className='flex justify-center py-6'>
-            <SignIn />
-          </div>
-        )}
-
-        {/* 自定义登录表单 */}
-        {!enableClerk && <SignInForm />}
-      </div>
-    </>
-  )
-}
-
-/**
- * 注册页面
- * @param {*} props
- * @returns
- */
-const LayoutSignUp = props => {
-  const enableClerk = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY
-
-  const title = starterConfig('STARTER_SIGNIN', '注册')
-  const description = starterConfig(
-    'STARTER_SIGNIN_DESCRITION',
-    '这里是演示页面，NotionNext目前不提供会员注册功能'
-  )
-  return (
-    <>
-      <div className='grow mt-20'>
-        <Banner title={title} description={description} />
-
-        {/* clerk预置表单 */}
-        {enableClerk && (
-          <div className='flex justify-center py-6'>
-            <SignUp />
-          </div>
-        )}
-
-        {/* 自定义登录表单 */}
-        {!enableClerk && <SignUpForm />}
-      </div>
-    </>
-  )
-}
-
 export {
   Layout404,
   LayoutArchive,
   LayoutBase,
   LayoutCategoryIndex,
-  LayoutDashboard,
   LayoutIndex,
   LayoutPostList,
   LayoutSearch,
-  LayoutSignIn,
-  LayoutSignUp,
   LayoutSlug,
   LayoutTagIndex,
   CONFIG as THEME_CONFIG

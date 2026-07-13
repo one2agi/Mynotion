@@ -1,8 +1,6 @@
 /* eslint-disable no-unreachable */
-import DashboardButton from '@/components/ui/dashboard/DashboardButton'
 import { starterConfig } from '../config'
 import { useGlobal } from '@/lib/global'
-import { SignedIn, SignedOut, UserButton } from '@clerk/nextjs'
 import throttle from 'lodash.throttle'
 import SmartLink from '@/components/SmartLink'
 import { useRouter } from 'next/router'
@@ -21,7 +19,10 @@ export const Header = props => {
     router.route === '/' ? 'text-white' : ''
   )
 
-  const enableClerk = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY
+  const navButton1Text = starterConfig('STARTER_NAV_BUTTON_1_TEXT', '')
+  const navButton1Url = starterConfig('STARTER_NAV_BUTTON_1_URL', '')
+  const navButton2Text = starterConfig('STARTER_NAV_BUTTON_2_TEXT', '')
+  const navButton2Url = starterConfig('STARTER_NAV_BUTTON_2_URL', '')
 
   useEffect(() => {
     if (isDarkMode || router.route === '/') {
@@ -69,41 +70,24 @@ export const Header = props => {
               <div className='flex items-center gap-4 justify-end pr-16 lg:pr-0'>
                 {/* 深色模式切换 */}
                 <DarkModeButton />
-                {/* 注册登录功能 */}
-                {enableClerk && (
-                  <>
-                    <SignedOut>
-                      <div className='hidden sm:flex gap-4'>
-                        <SmartLink
-                          href={starterConfig('STARTER_NAV_BUTTON_1_URL', '')}
-                          className={`loginBtn ${buttonTextColor} p-2 text-base font-medium hover:opacity-70`}>
-                          {starterConfig('STARTER_NAV_BUTTON_1_TEXT')}
-                        </SmartLink>
-                        <SmartLink
-                          href={starterConfig('STARTER_NAV_BUTTON_2_URL', '')}
-                          className={`signUpBtn ${buttonTextColor} p-2 rounded-md bg-white bg-opacity-20 py-2 text-base font-medium duration-300 ease-in-out hover:bg-opacity-100 hover:text-dark`}>
-                          {starterConfig('STARTER_NAV_BUTTON_2_TEXT')}
-                        </SmartLink>
-                      </div>
-                    </SignedOut>
-                    <SignedIn>
-                      <UserButton />
-                      <DashboardButton className={'hidden md:block'} />
-                    </SignedIn>
-                  </>
-                )}
-                {!enableClerk && (
+                {/* 可选的通用导航按钮 */}
+                {((navButton1Text && navButton1Url) ||
+                  (navButton2Text && navButton2Url)) && (
                   <div className='hidden sm:flex gap-4'>
-                    <SmartLink
-                      href={starterConfig('STARTER_NAV_BUTTON_1_URL', '')}
-                      className={`loginBtn ${buttonTextColor} p-2 text-base font-medium hover:opacity-70`}>
-                      {starterConfig('STARTER_NAV_BUTTON_1_TEXT')}
-                    </SmartLink>
-                    <SmartLink
-                      href={starterConfig('STARTER_NAV_BUTTON_2_URL', '')}
-                      className={`signUpBtn ${buttonTextColor} p-2 rounded-md bg-white bg-opacity-20 py-2 text-base font-medium duration-300 ease-in-out hover:bg-opacity-100 hover:text-dark`}>
-                      {starterConfig('STARTER_NAV_BUTTON_2_TEXT')}
-                    </SmartLink>
+                    {navButton1Text && navButton1Url && (
+                      <SmartLink
+                        href={navButton1Url}
+                        className={`loginBtn ${buttonTextColor} p-2 text-base font-medium hover:opacity-70`}>
+                        {navButton1Text}
+                      </SmartLink>
+                    )}
+                    {navButton2Text && navButton2Url && (
+                      <SmartLink
+                        href={navButton2Url}
+                        className={`signUpBtn ${buttonTextColor} p-2 rounded-md bg-white bg-opacity-20 py-2 text-base font-medium duration-300 ease-in-out hover:bg-opacity-100 hover:text-dark`}>
+                        {navButton2Text}
+                      </SmartLink>
+                    )}
                   </div>
                 )}
               </div>

@@ -1,5 +1,4 @@
 import { siteConfig } from '@/lib/config'
-import { useGlobal } from '@/lib/global'
 import { isBrowser, loadExternalResource } from '@/lib/utils'
 import { useRouter } from 'next/router'
 import { useEffect } from 'react'
@@ -208,9 +207,6 @@ const TechGrow = ({ lock } = {}) => {
   // 是否允许移动端场景（如果配置不存在则默认允许，避免误拦截）
   const allowMobile = getFirstConfig(['TECH_GROW_ALLOW_MOBILE'], true)
 
-  // 登录信息
-  const { isLoaded, isSignedIn } = useGlobal()
-
   // fuwari 侧栏公告也会渲染 NotionPage，优先限定在正文区域初始化
   const getArticleRoot = () => document.getElementById('article-wrapper')
   const getScopedContentNode = () => {
@@ -409,12 +405,6 @@ const TechGrow = ({ lock } = {}) => {
       return
     }
 
-    if (isSignedIn) {
-      // 用户已登录免检
-      console.log('用户已登录，放行')
-      return
-    }
-
     // if (process.env.NODE_ENV === 'development') {
     //   // 开发环境免检
     //   console.log('开发环境:屏蔽Readmore')
@@ -427,7 +417,7 @@ const TechGrow = ({ lock } = {}) => {
       return
     }
 
-    if (isBrowser && blogId && !isSignedIn) {
+    if (isBrowser && blogId) {
       toggleTocItems(true) // 禁止目录项的点击
       // 检查是否已加载
       const readMoreWrap = getScopedReadmoreWrapper()
@@ -435,7 +425,7 @@ const TechGrow = ({ lock } = {}) => {
         loadReadmore()
       }
     }
-  }, [isLoaded, router, id, lock])
+  }, [router, id, lock])
 
   return <></>
 }
