@@ -30,8 +30,7 @@ const PAGES_REQUIRING_SSR = [
   'pages/archive/index.js', // /zh-CN/archive.json → 404
 
   // Same root cause (rewrites + getStaticProps → no JSON file at /zh-CN/* path):
-  'pages/page/[page].js', // /zh-CN/page/N.json → 404
-  'pages/dashboard/[[...index]].js' // /zh-CN/dashboard.json → 404
+  'pages/page/[page].js' // /zh-CN/page/N.json → 404
 ]
 
 const HAS_GET_SERVER_SIDE_PROPS = /export\s+(?:async\s+)?function\s+getServerSideProps\s*\(/

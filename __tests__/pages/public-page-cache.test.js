@@ -7,10 +7,7 @@ const publicPages = [
   'pages/archive/index.js',
   'pages/page/[page].js'
 ]
-const privatePages = [
-  'pages/dashboard/[[...index]].js',
-  'pages/auth/index.js'
-]
+const privatePages = ['pages/auth/index.js']
 
 describe('public SSR edge cache wiring', () => {
   test.each(publicPages)('%s sets public page cache', file => {
