@@ -22,5 +22,10 @@
       "source": "/_next/data/:buildId/zh-CN/page/*.json",
       "destination": "/_next/data/:buildId/page/:splat.json"
     }
-  ]
+  ],
+  "cloudFunctions": {
+    "nodejs": {
+      "maxDuration": 120
+    }
+  }
 }

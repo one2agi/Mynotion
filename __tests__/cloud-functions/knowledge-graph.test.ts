@@ -1,5 +1,8 @@
 /** @jest-environment node */
 
+import fs from 'node:fs'
+import path from 'node:path'
+
 jest.mock('@edgeone/pages-blob', () => ({ getStore: jest.fn() }))
 jest.mock('@/lib/knowledge-graph/notionFetch', () => ({
   fetchKnowledgeGraphPageBlocks: jest.fn(),
@@ -404,4 +407,12 @@ test('never appends private refresh state to a public graph payload', async () =
 
   expect(Object.keys(payload)).toEqual(['nodes', 'edges'])
   expect(JSON.stringify(payload)).not.toContain('refreshedAt')
+})
+
+test('EdgeOne allows the knowledge graph Node function to run for 120 seconds', async () => {
+  const edgeone = JSON.parse(
+    fs.readFileSync(path.resolve(process.cwd(), 'edgeone.json'), 'utf8')
+  )
+  expect(edgeone.cloudFunctions?.nodejs?.maxDuration).toBe(120)
+  expect(edgeone.schedules).toBeUndefined()
 })
