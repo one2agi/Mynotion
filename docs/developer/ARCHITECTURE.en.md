@@ -26,7 +26,7 @@ NotionNext main flow can be simplified as:
 
 HTML routes work (rewrites apply at request time). But Next.js only generates `/_next/data/{buildId}/*.json` files at build time for **actual page file paths** — not for rewritten source paths. The client router prefetching `/_next/data/{buildId}/zh-CN/archive.json` finds no file, returns 404, and falls back to a full page reload — losing SPA navigation.
 
-**Trade-off**: the 4 top-level pages under locale routes use `getServerSideProps` (SSR at request time), skipping the pre-built JSON file lookup. Multi-segment pages (`[prefix]/[slug]`, `category/[slug]`, `tag/[slug]`, `search/[keyword]`) keep `getStaticProps`, since their rewritten multi-segment paths still match the generated data files.
+**Trade-off**: the 3 top-level pages under locale routes use `getServerSideProps` (SSR at request time), skipping the pre-built JSON file lookup. Multi-segment pages (`[prefix]/[slug]`, `category/[slug]`, `tag/[slug]`, `search/[keyword]`) keep `getStaticProps`, since their rewritten multi-segment paths still match the generated data files.
 
 Affected pages (commits `5d81d8fb` / `573c577e` / `33d1b338` / `5e705434`):
 
@@ -35,9 +35,8 @@ Affected pages (commits `5d81d8fb` / `573c577e` / `33d1b338` / `5e705434`):
 | `pages/index.js` | `getStaticProps` | `getServerSideProps` |
 | `pages/archive/index.js` | `getStaticProps` | `getServerSideProps` |
 | `pages/page/[page].js` | `getStaticProps` + `getStaticPaths` | `getServerSideProps` |
-| `pages/dashboard/[[...index]].js` | `getStaticProps` + `getStaticPaths` | `getServerSideProps` |
 
-Regression guard: `__tests__/pages/locale-routing.test.js` structurally asserts the 4 pages above must export `getServerSideProps` and must not export `getStaticProps`.
+Regression guard: `__tests__/pages/locale-routing.test.js` structurally asserts the 3 pages above must export `getServerSideProps` and must not export `getStaticProps`.
 
 ## Config priority
 
@@ -62,4 +61,3 @@ Benefits:
 - Cache modules: `lib/cache/`
 - Build prefetch/concurrency: `lib/build/`
 - Changes here can impact CI speed and deployment stability; include validation notes.
-

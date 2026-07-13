@@ -10,7 +10,7 @@
 1. **全量预热**（prefetch）：在生成路径前，为站点内**每一篇文章**拉取 block 并写入构建缓存（`lib/build/prefetch.js`）。
 2. **逐页 SSG**：为每个路由生成 HTML；单页若拉取 Notion 过慢，可能触发 Next.js 默认 **300 秒**超时（`staticPageGenerationTimeout`）。
 
-例外：`pages/index.js` / `pages/archive/index.js` / `pages/page/[page].js` / `pages/dashboard/[[...index]].js` 这 4 个 locale 顶层页面改用 `getServerSideProps`（详见 [架构总览 §Locale JSON 数据端点](../../developer/ARCHITECTURE.md#locale-json-数据端点)），运行时 SSR，**不计入构建期 SSG 超时**。
+例外：`pages/index.js` / `pages/archive/index.js` / `pages/page/[page].js` 这 3 个 locale 顶层页面改用 `getServerSideProps`（详见 [架构总览 §Locale JSON 数据端点](../../developer/ARCHITECTURE.md#locale-json-数据端点)），运行时 SSR，**不计入构建期 SSG 超时**。
 
 构建阶段访问 Notion 会经过 **RateLimiter**（`lib/db/notion/RateLimiter.ts`）：默认约 **50 次/分钟**、相邻请求至少间隔 **300ms**，与预热并发共同决定总耗时。
 
