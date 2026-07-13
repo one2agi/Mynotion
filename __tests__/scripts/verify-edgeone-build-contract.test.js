@@ -5,17 +5,18 @@ const {
 
 describe('EdgeOne locale page-data contract', () => {
   const buildId = 'build-123'
+  // Next.js i18n builds store locale-prefixed routes in the prerender manifest
   const manifest = {
     routes: {
-      '/': {
+      '/zh-CN': {
         dataRoute: '/_next/data/build-123/index.json',
         initialRevalidateSeconds: 300
       },
-      '/archive': {
+      '/zh-CN/archive': {
         dataRoute: '/_next/data/build-123/archive.json',
         initialRevalidateSeconds: 300
       },
-      '/page/2': {
+      '/zh-CN/page/2': {
         dataRoute: '/_next/data/build-123/page/2.json',
         initialRevalidateSeconds: 300
       }
@@ -31,7 +32,7 @@ describe('EdgeOne locale page-data contract', () => {
         edgeoneConfig: { rewrites: REQUIRED_LOCALE_REWRITES },
         locale: 'zh-CN'
       })
-    ).toEqual({ buildId, checkedRoutes: ['/', '/archive', '/page/2'] })
+    ).toEqual({ buildId, checkedRoutes: ['/zh-CN', '/zh-CN/archive', '/zh-CN/page/2'] })
   })
 
   test('rejects a missing locale rewrite', () => {
@@ -47,7 +48,7 @@ describe('EdgeOne locale page-data contract', () => {
 
   test('rejects SSR or a conflicting revalidation value', () => {
     const broken = JSON.parse(JSON.stringify(manifest))
-    delete broken.routes['/archive']
+    delete broken.routes['/zh-CN/archive']
     expect(() =>
       verifyBuildContract({
         buildId,
@@ -55,6 +56,6 @@ describe('EdgeOne locale page-data contract', () => {
         edgeoneConfig: { rewrites: REQUIRED_LOCALE_REWRITES },
         locale: 'zh-CN'
       })
-    ).toThrow('missing prerender route: /archive')
+    ).toThrow('missing prerender route: /zh-CN/archive')
   })
 })

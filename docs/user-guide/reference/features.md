@@ -12,7 +12,7 @@
 | `KEYWORDS` | SEO 关键词 |
 | `APPEARANCE` | `light` / `dark` / `auto` |
 | `APPEARANCE_DARK_TIME` | 自动夜间时段，如 `[18, 6]` |
-| `NEXT_REVALIDATE_SECOND` | ISR 缓存秒数，越大越省 Vercel 额度 |
+| `NEXT_REVALIDATE_SECOND` | ISR 缓存秒数，公开页面默认 300 秒（5 分钟）；越大越省 Vercel 额度；此值为请求触发型，非定时刷新 |
 | `PSEUDO_STATIC` | URL 以 `.html` 结尾 |
 | `ENABLE_RSS` | RSS 生成 |
 | `CUSTOM_MENU` | 使用 Menu/SubMenu 导航 |

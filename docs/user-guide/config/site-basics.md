@@ -251,14 +251,18 @@ NotionNext 3.13.0上线，支持更灵活的菜单配置
 网站使用NextJS开发，用户访问到的页面**本身就是静态页面**。
 :::
 
-NotionNext会将页面缓存一定的`时间`，超过此时间后，NotionNext会从Notion同步最新的文章内容。`缓存时间`通过修改`NEXT_REVALIDATE_SECOND` 配置。
+NotionNext会将页面缓存一定的时间，超过此时间后，第一个访问请求会触发从Notion同步最新的文章内容。`缓存时间`通过修改`NEXT_REVALIDATE_SECOND` 配置。
 
 另外，将 `PSEUDO_STATIC` 的值修改为 true后，页面的地址最后会以.html结尾，看上去会更像一个静态页面。
 
 ```JavaScript
 PSEUDO_STATIC: false, // 伪静态路径，开启后所有文章URL都以 .html 结尾。
-NEXT_REVALIDATE_SECOND: process.env.NEXT_PUBLIC_REVALIDATE_SECOND || 5, // 更新内容缓存间隔 单位(秒)；即每个页面有5秒的纯静态期、此期间无论多少次访问都不会抓取notion数据；调大该值有助于节省Vercel资源、同时提升访问速率，但也会使文章更新有延迟。
+NEXT_REVALIDATE_SECOND: process.env.NEXT_PUBLIC_REVALIDATE_SECOND || 300, // 更新内容缓存间隔 单位(秒)；即每个页面在300秒后才会因访问而触发ISR刷新；此期间无论多少次访问都不会抓取notion数据；调大该值有助于节省Vercel资源、同时提升访问速率，但也会使文章更新有延迟。
 ```
+
+::: tip 提示
+300 秒不是一个倒计时：只有当缓存过期后，第一次访问才会触发页面重新生成。之后的访问继续使用缓存，直到下一个 300 秒周期结束。编辑 Notion 内容不需要重新部署；新发布的文章在首次访问时可能会稍慢（因为需要生成页面），之后便恢复快速缓存响应。
+:::
 
 
 ### 9. 其它样式

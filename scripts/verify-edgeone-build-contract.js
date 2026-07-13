@@ -30,10 +30,13 @@ function verifyBuildContract({ buildId, manifest, edgeoneConfig, locale }) {
     }
   }
 
+  // Build routes use locale prefix (e.g. /zh-CN, /zh-CN/archive); data routes are stripped of locale
+  const localeRoutePrefix = 'zh-CN'
+  // Match pagination routes regardless of locale prefix (e.g. /page/2 or /zh-CN/page/2)
   const pagination = Object.keys(manifest.routes || {})
-    .filter(route => /^\/page\/\d+$/.test(route))
+    .filter(route => /\/page\/\d+$/.test(route))
     .sort((a, b) => Number(a.split('/').pop()) - Number(b.split('/').pop()))
-  const checkedRoutes = ['/', '/archive', ...pagination]
+  const checkedRoutes = [`/${localeRoutePrefix}`, `/${localeRoutePrefix}/archive`, ...pagination]
 
   for (const route of checkedRoutes) {
     const entry = manifest.routes?.[route]
@@ -41,7 +44,10 @@ function verifyBuildContract({ buildId, manifest, edgeoneConfig, locale }) {
     if (entry.initialRevalidateSeconds !== 300) {
       throw new Error(`route ${route} revalidates at ${entry.initialRevalidateSeconds}`)
     }
-    if (!entry.dataRoute?.startsWith(`/_next/data/${buildId}/`)) {
+    // data route should be stripped of locale prefix; home page maps to index.json
+    const stripped = route.replace(`/${localeRoutePrefix}`, '')
+    const expectedDataRouteSuffix = stripped === '' ? 'index' : stripped
+    if (!entry.dataRoute?.endsWith(`${expectedDataRouteSuffix}.json`)) {
       throw new Error(`route ${route} has invalid data route: ${entry.dataRoute}`)
     }
   }
