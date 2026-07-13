@@ -4,7 +4,7 @@ import { fetchGlobalAllData, getPostBlocks } from '@/lib/db/SiteDataApi'
 import { formatNotionBlock } from '@/lib/db/notion/getPostBlocks'
 import { adapterNotionBlockMap } from '@/lib/utils/notion.util'
 import { DynamicLayout } from '@/themes/theme'
-import { setPublicPageCache } from '@/lib/cache/publicPageCache'
+import { getPublicContentRevalidateSeconds } from '@/lib/cache/publicContentCache'
 
 /**
  * 文章列表分页
@@ -16,18 +16,25 @@ const Page = props => {
   return <DynamicLayout theme={theme} layoutName='LayoutPostList' {...props} />
 }
 
-// SSR (was getStaticProps + getStaticPaths) — required so the
-// /_next/data/{buildId}/zh-CN/page/{N}.json data endpoint is generated at
-// request time. With rewrites for locale stripping (next.config.js), Next.js
-// does not generate data files for rewritten source paths — converting to
-// getServerSideProps skips that lookup and fixes the client-side router's
-// prefetch 404 (which previously forced full page reloads).
-//
-// getStaticPaths is removed entirely (incompatible with getServerSideProps).
-// Invalid page numbers (non-numeric, <= 0, or beyond available pages) return
-// { notFound: true } so Next.js serves the 404 page instead of an empty list.
-export async function getServerSideProps({ params, locale, res }) {
-  setPublicPageCache(res)
+export async function getStaticPaths() {
+  const { allPages = [], NOTION_CONFIG } = await fetchGlobalAllData({
+    from: 'page-static-path'
+  })
+  const publishedPosts = allPages.filter(
+    page => page.type === 'Post' && page.status === 'Published'
+  )
+  const postsPerPage = siteConfig('POSTS_PER_PAGE', 12, NOTION_CONFIG)
+  const totalPages = Math.ceil(publishedPosts.length / postsPerPage)
+  const paths = []
+
+  for (let page = 2; page <= totalPages; page++) {
+    paths.push({ params: { page: String(page) } })
+  }
+
+  return { paths, fallback: 'blocking' }
+}
+
+export async function getStaticProps({ params, locale }) {
   const pageNum = parseInt(params.page, 10)
   if (Number.isNaN(pageNum) || pageNum < 2) {
     // page=1 is served by the home page; only page >= 2 is valid here
@@ -77,7 +84,10 @@ export async function getServerSideProps({ params, locale, res }) {
   }
 
   delete props.allPages
-  return { props }
+  return {
+    props,
+    revalidate: getPublicContentRevalidateSeconds(props.NOTION_CONFIG)
+  }
 }
 
 export default Page

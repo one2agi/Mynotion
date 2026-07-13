@@ -9,7 +9,7 @@ import { formatNotionBlock } from '@/lib/db/notion/getPostBlocks'
 import { DynamicLayout } from '@/themes/theme'
 import pLimit from 'p-limit'
 import { adapterNotionBlockMap } from '@/lib/utils/notion.util'
-import { setPublicPageCache } from '@/lib/cache/publicPageCache'
+import { getPublicContentRevalidateSeconds } from '@/lib/cache/publicContentCache'
 
 /**
  * 首页布局
@@ -22,27 +22,9 @@ const Index = props => {
 }
 
 /**
- * SSR data fetching (was getStaticProps).
- *
- * Why SSR instead of static:
- *   next.config.js uses rewrites to strip the locale prefix from URLs
- *   (e.g., /zh-CN/ → /). Next.js only generates /_next/data/{buildId}/*.json
- *   files for actual page file paths at build time — not for the rewritten
- *   source paths. As a result, /_next/data/{buildId}/zh-CN.json returned 404
- *   and the client-side router fell back to a full page reload on every
- *   internal navigation.
- *
- *   getServerSideProps SSRs at request time, so the JSON data endpoint is
- *   generated dynamically (no pre-built file lookup needed). The 404
- *   disappears and SPA navigation works correctly.
- *
- * Build-time side effects previously inside this module (robots.txt,
- * rss/*, sitemap.xml, redirect.json, algolia probe) have been extracted to
- * scripts/generate-static-assets.mjs and wired as a `prebuild` npm hook —
- * they still run before `next build`, just no longer inside the page module.
+ * ISR data fetching.
  */
-export async function getServerSideProps({ locale, res }) {
-  setPublicPageCache(res)
+export async function getStaticProps({ locale }) {
   const from = 'index'
   const props = await fetchGlobalAllData({ from, locale })
   if (process.env.NODE_ENV === 'development') {
@@ -51,7 +33,7 @@ export async function getServerSideProps({ locale, res }) {
     const finalTheme = siteConfig('THEME', BLOG.THEME, props?.NOTION_CONFIG)
     const source = notionTheme ? 'notion:config' : 'blog/env:config'
     console.log(
-      '[ThemeResolver][server-side-props]',
+      '[ThemeResolver][static-props]',
       JSON.stringify({
         route: '/',
         configTheme,
@@ -122,7 +104,10 @@ export async function getServerSideProps({ locale, res }) {
   props.latestPosts = cleanPostSummaries(props.latestPosts)
   delete props.allPages
 
-  return { props }
+  return {
+    props,
+    revalidate: getPublicContentRevalidateSeconds(props.NOTION_CONFIG)
+  }
 }
 
 export default Index
