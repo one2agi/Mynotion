@@ -5,6 +5,7 @@ import { isBrowser } from '@/lib/utils'
 import { formatDateFmt } from '@/lib/utils/formatDate'
 import { DynamicLayout } from '@/themes/theme'
 import { useEffect } from 'react'
+import { setPublicPageCache } from '@/lib/cache/publicPageCache'
 
 /**
  * 归档首页
@@ -36,7 +37,8 @@ const ArchiveIndex = props => {
 // generate data files for rewritten source paths — it only generates them for actual
 // page file paths. Converting to getServerSideProps skips that lookup and fixes the
 // client-side router's prefetch 404 (which previously forced full page reloads).
-export async function getServerSideProps({ locale }) {
+export async function getServerSideProps({ locale, res }) {
+  setPublicPageCache(res)
   const props = await fetchGlobalAllData({ from: 'archive-index', locale })
   // 处理分页
   props.posts = props.allPages?.filter(

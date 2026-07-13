@@ -4,6 +4,7 @@ import { fetchGlobalAllData, getPostBlocks } from '@/lib/db/SiteDataApi'
 import { formatNotionBlock } from '@/lib/db/notion/getPostBlocks'
 import { adapterNotionBlockMap } from '@/lib/utils/notion.util'
 import { DynamicLayout } from '@/themes/theme'
+import { setPublicPageCache } from '@/lib/cache/publicPageCache'
 
 /**
  * 文章列表分页
@@ -25,7 +26,8 @@ const Page = props => {
 // getStaticPaths is removed entirely (incompatible with getServerSideProps).
 // Invalid page numbers (non-numeric, <= 0, or beyond available pages) return
 // { notFound: true } so Next.js serves the 404 page instead of an empty list.
-export async function getServerSideProps({ params, locale }) {
+export async function getServerSideProps({ params, locale, res }) {
+  setPublicPageCache(res)
   const pageNum = parseInt(params.page, 10)
   if (Number.isNaN(pageNum) || pageNum < 2) {
     // page=1 is served by the home page; only page >= 2 is valid here

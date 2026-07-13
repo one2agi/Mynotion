@@ -9,6 +9,7 @@ import { formatNotionBlock } from '@/lib/db/notion/getPostBlocks'
 import { DynamicLayout } from '@/themes/theme'
 import pLimit from 'p-limit'
 import { adapterNotionBlockMap } from '@/lib/utils/notion.util'
+import { setPublicPageCache } from '@/lib/cache/publicPageCache'
 
 /**
  * 首页布局
@@ -40,7 +41,8 @@ const Index = props => {
  * scripts/generate-static-assets.mjs and wired as a `prebuild` npm hook —
  * they still run before `next build`, just no longer inside the page module.
  */
-export async function getServerSideProps({ locale }) {
+export async function getServerSideProps({ locale, res }) {
+  setPublicPageCache(res)
   const from = 'index'
   const props = await fetchGlobalAllData({ from, locale })
   if (process.env.NODE_ENV === 'development') {
