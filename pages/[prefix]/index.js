@@ -16,8 +16,12 @@ import md5 from 'js-md5'
 import { useRouter } from 'next/router'
 import PropTypes from 'prop-types'
 import { useEffect, useState } from 'react'
-import { getStaticPathsBase } from '@/lib/build/staticPaths'
+import { getSharedAllPages, getStaticPathsBase } from '@/lib/build/staticPaths'
 import { isExport } from '@/lib/utils/buildMode'
+import {
+  isLegacyNotionId,
+  resolveLegacyNotionRedirect
+} from '@/lib/utils/legacyNotionRedirect'
 
 const isStaticExport = process.env.EXPORT === 'true'
 
@@ -132,9 +136,23 @@ export async function getStaticPaths() {
 }
 
 export async function getStaticProps({ params: { prefix }, locale }) {
+  if (isLegacyNotionId(prefix)) {
+    const allPages = await getSharedAllPages({
+      locale,
+      from: 'legacy-notion-redirect'
+    })
+    const redirect = resolveLegacyNotionRedirect({
+      value: prefix,
+      allPages,
+      locale
+    })
+    if (redirect) return { redirect }
+    return { notFound: true }
+  }
+
   const props = await resolvePostProps({
     prefix,
-    locale,
+    locale
   })
 
   return {
