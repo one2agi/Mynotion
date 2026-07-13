@@ -8,5 +8,19 @@
       "destination": "$wwwhost",
       "statusCode": 301
     }
+  ],
+  "rewrites": [
+    {
+      "source": "/_next/data/:buildId/zh-CN.json",
+      "destination": "/_next/data/:buildId/index.json"
+    },
+    {
+      "source": "/_next/data/:buildId/zh-CN/archive.json",
+      "destination": "/_next/data/:buildId/archive.json"
+    },
+    {
+      "source": "/_next/data/:buildId/zh-CN/page/*.json",
+      "destination": "/_next/data/:buildId/page/:splat.json"
+    }
   ]
 }
