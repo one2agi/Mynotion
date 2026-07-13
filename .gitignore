@@ -75,6 +75,9 @@ PROJECT_INDEX.md
 # superpowers skill working dir (task briefs, progress ledger, workflow scripts)
 /.sdd/
 
+# local Codex desktop/MCP configuration
+/.codex/
+
 # 设计与计划文档（含敏感信息：API token 等），不入 git
 /docs/superpowers/
 
