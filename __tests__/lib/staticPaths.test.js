@@ -7,7 +7,6 @@ jest.mock('@/lib/db/SiteDataApi', () => ({
 }))
 
 jest.mock('@/lib/build/prefetch', () => ({
-  getPriorityPages: jest.fn(),
   prefetchAllBlockMaps: jest.fn()
 }))
 
@@ -17,7 +16,7 @@ jest.mock('@/lib/utils/buildMode', () => ({
 
 const { getOrSetDataWithCache } = require('@/lib/cache/cache_manager')
 const { fetchGlobalAllData } = require('@/lib/db/SiteDataApi')
-const { getPriorityPages, prefetchAllBlockMaps } = require('@/lib/build/prefetch')
+const { prefetchAllBlockMaps } = require('@/lib/build/prefetch')
 const { isExport } = require('@/lib/utils/buildMode')
 
 describe('staticPaths build helpers', () => {
@@ -32,7 +31,6 @@ describe('staticPaths build helpers', () => {
     fetchGlobalAllData.mockResolvedValue({
       allPages: [{ id: '1', slug: 'hello', type: 'Post', status: 'Published' }]
     })
-    getPriorityPages.mockReturnValue([])
 
     await jest.isolateModulesAsync(async () => {
       const { getSharedAllPages } = require('@/lib/build/staticPaths')
@@ -55,7 +53,6 @@ describe('staticPaths build helpers', () => {
           { id: '1', slug: 'hello', type: 'Post', status: 'Published' }
         ]
       })
-    getPriorityPages.mockReturnValue([])
 
     await jest.isolateModulesAsync(async () => {
       const { getSharedAllPages } = require('@/lib/build/staticPaths')
@@ -100,34 +97,32 @@ describe('staticPaths build helpers', () => {
     })
   })
 
-  it('uses priority pages in ISR mode', async () => {
+  it('returns every matching path with blocking fallback in ISR mode', async () => {
     isExport.mockReturnValue(false)
     fetchGlobalAllData.mockResolvedValue({
       allPages: [
         { id: '1', slug: 'about', type: 'Page', status: 'Published' },
-        { id: '2', slug: 'post/hello', type: 'Post', status: 'Published' }
+        { id: '2', slug: 'article/hello', type: 'Post', status: 'Published' },
+        { id: '3', slug: 'article/world', type: 'Post', status: 'Published' }
       ]
     })
-    getPriorityPages.mockReturnValue([
-      { id: '2', slug: 'post/hello', type: 'Post', status: 'Published' }
-    ])
 
     await jest.isolateModulesAsync(async () => {
       const { getStaticPathsBase } = require('@/lib/build/staticPaths')
-
       const result = await getStaticPathsBase({
-        filterFn: page => page.slug.includes('/'),
-        mapPageToParams: page => ({
-          params: {
-            prefix: page.slug.split('/')[0],
-            slug: page.slug.split('/')[1]
-          }
-        })
+        filterFn: page => page.slug.startsWith('article/'),
+        mapPageToParams: page => {
+          const [prefix, slug] = page.slug.split('/')
+          return { params: { prefix, slug } }
+        }
       })
 
       expect(prefetchAllBlockMaps).not.toHaveBeenCalled()
       expect(result).toEqual({
-        paths: [{ params: { prefix: 'post', slug: 'hello' } }],
+        paths: [
+          { params: { prefix: 'article', slug: 'hello' } },
+          { params: { prefix: 'article', slug: 'world' } }
+        ],
         fallback: 'blocking'
       })
     })
