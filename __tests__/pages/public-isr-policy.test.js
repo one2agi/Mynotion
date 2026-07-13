@@ -20,3 +20,34 @@ describe('public dynamic SSG routes', () => {
     expect(source).not.toMatch(/fallback:\s*true/)
   })
 })
+
+const allPublicIsrPages = [
+  'pages/index.js',
+  'pages/archive/index.js',
+  'pages/page/[page].js',
+  'pages/[prefix]/index.js',
+  'pages/[prefix]/[slug]/index.js',
+  'pages/[prefix]/[slug]/[...suffix].js',
+  'pages/tag/index.js',
+  'pages/tag/[tag]/index.js',
+  'pages/tag/[tag]/page/[page].js',
+  'pages/category/index.js',
+  'pages/category/[category]/index.js',
+  'pages/category/[category]/page/[page].js',
+  'pages/search/index.js',
+  'pages/search/[keyword]/index.js',
+  'pages/search/[keyword]/page/[page].js'
+]
+
+describe('one public ISR policy', () => {
+  test.each(allPublicIsrPages)('%s uses the shared resolver', file => {
+    const source = read(file)
+    expect(source).toMatch(
+      /import\s+\{\s*getPublicContentRevalidateSeconds\s*\}\s+from\s+['"]@\/lib\/cache\/publicContentCache['"]/
+    )
+    expect(source).toMatch(
+      /revalidate:\s*getPublicContentRevalidateSeconds\(props\.NOTION_CONFIG\)/
+    )
+    expect(source).not.toMatch(/siteConfig\(\s*['"]NEXT_REVALIDATE_SECOND['"]/)
+  })
+})

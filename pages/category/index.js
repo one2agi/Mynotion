@@ -1,6 +1,7 @@
 import BLOG from '@/blog.config'
 import { siteConfig } from '@/lib/config'
 import { fetchGlobalAllData } from '@/lib/db/SiteDataApi'
+import { getPublicContentRevalidateSeconds } from '@/lib/cache/publicContentCache'
 import { DynamicLayout } from '@/themes/theme'
 
 /**
@@ -20,12 +21,6 @@ export async function getStaticProps({ locale }) {
   delete props.allPages
   return {
     props,
-    revalidate: process.env.EXPORT
-      ? undefined
-      : siteConfig(
-          'NEXT_REVALIDATE_SECOND',
-          BLOG.NEXT_REVALIDATE_SECOND,
-          props.NOTION_CONFIG
-        )
+    revalidate: getPublicContentRevalidateSeconds(props.NOTION_CONFIG)
   }
 }

@@ -2,6 +2,7 @@ import BLOG from '@/blog.config'
 import { getDataFromCache } from '@/lib/cache/cache_manager'
 import { siteConfig } from '@/lib/config'
 import { fetchGlobalAllData } from '@/lib/db/SiteDataApi'
+import { getPublicContentRevalidateSeconds } from '@/lib/cache/publicContentCache'
 import { DynamicLayout } from '@/themes/theme'
 import { getPageBlockCacheKey } from '@/lib/db/notion/getPostBlocks'
 
@@ -41,13 +42,7 @@ export async function getStaticProps({ params: { keyword, page }, locale }) {
   delete props.allPages
   return {
     props,
-    revalidate: process.env.EXPORT
-      ? undefined
-      : siteConfig(
-          'NEXT_REVALIDATE_SECOND',
-          BLOG.NEXT_REVALIDATE_SECOND,
-          props.NOTION_CONFIG
-        )
+    revalidate: getPublicContentRevalidateSeconds(props.NOTION_CONFIG)
   }
 }
 

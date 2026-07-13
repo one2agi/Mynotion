@@ -3,10 +3,8 @@ import { siteConfig } from '@/lib/config'
 import { resolvePostProps } from '@/lib/db/SiteDataApi'
 import Slug from '..'
 import { getStaticPathsBase } from '@/lib/build/staticPaths'
-import { isExport } from '@/lib/utils/buildMode'
+import { getPublicContentRevalidateSeconds } from '@/lib/cache/publicContentCache'
 import { checkSlugHasOneSlash } from '@/lib/utils/post'
-
-const isStaticExport = process.env.EXPORT === 'true'
 
 /**
  * 根据notion的slug访问页面
@@ -40,13 +38,7 @@ export async function getStaticProps({ params: { prefix, slug }, locale }) {
 
   return {
     props,
-    revalidate: isStaticExport
-      ? undefined
-      : siteConfig(
-        'NEXT_REVALIDATE_SECOND',
-        BLOG.NEXT_REVALIDATE_SECOND,
-        props.NOTION_CONFIG
-      ),
+    revalidate: getPublicContentRevalidateSeconds(props.NOTION_CONFIG),
     notFound: !props.post
   }
 }
