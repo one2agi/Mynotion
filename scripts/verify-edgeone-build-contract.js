@@ -16,39 +16,86 @@ const REQUIRED_LOCALE_REWRITES = [
   }
 ]
 
+const REQUIRED_BLOCKING_DYNAMIC_ROUTES = [
+  '/search/[keyword]',
+  '/search/[keyword]/page/[page]',
+  '/[prefix]',
+  '/tag/[tag]/page/[page]',
+  '/category/[category]',
+  '/tag/[tag]',
+  '/category/[category]/page/[page]',
+  '/[prefix]/[slug]',
+  '/page/[page]',
+  '/[prefix]/[slug]/[...suffix]'
+]
+
 function sameRule(left, right) {
-  return left?.source === right.source && left?.destination === right.destination
+  return (
+    left?.source === right.source && left?.destination === right.destination
+  )
 }
 
 function verifyBuildContract({ buildId, manifest, edgeoneConfig, locale }) {
   if (!buildId) throw new Error('missing Next.js Build ID')
-  if (locale !== 'zh-CN') throw new Error(`unsupported contract locale: ${locale}`)
+  if (locale !== 'zh-CN')
+    throw new Error(`unsupported contract locale: ${locale}`)
 
   for (const rule of REQUIRED_LOCALE_REWRITES) {
-    if (!(edgeoneConfig.rewrites || []).some(candidate => sameRule(candidate, rule))) {
+    if (
+      !(edgeoneConfig.rewrites || []).some(candidate =>
+        sameRule(candidate, rule)
+      )
+    ) {
       throw new Error(`missing EdgeOne locale data rewrite: ${rule.source}`)
     }
   }
 
-  // Build routes use locale prefix (e.g. /zh-CN, /zh-CN/archive); data routes are stripped of locale
-  const localeRoutePrefix = 'zh-CN'
-  // Match pagination routes regardless of locale prefix (e.g. /page/2 or /zh-CN/page/2)
+  const localeRoutePrefix = `/${locale}`
+  const escapedLocale = locale.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const generalPaginationPattern = new RegExp(`^/${escapedLocale}/page/\\d+$`)
   const pagination = Object.keys(manifest.routes || {})
-    .filter(route => /\/page\/\d+$/.test(route))
+    .filter(route => generalPaginationPattern.test(route))
     .sort((a, b) => Number(a.split('/').pop()) - Number(b.split('/').pop()))
-  const checkedRoutes = [`/${localeRoutePrefix}`, `/${localeRoutePrefix}/archive`, ...pagination]
+  const checkedRoutes = [
+    localeRoutePrefix,
+    `${localeRoutePrefix}/archive`,
+    ...pagination
+  ]
 
   for (const route of checkedRoutes) {
     const entry = manifest.routes?.[route]
     if (!entry) throw new Error(`missing prerender route: ${route}`)
     if (entry.initialRevalidateSeconds !== 300) {
-      throw new Error(`route ${route} revalidates at ${entry.initialRevalidateSeconds}`)
+      throw new Error(
+        `route ${route} revalidates at ${entry.initialRevalidateSeconds}`
+      )
     }
-    // data route should be stripped of locale prefix; home page maps to index.json
-    const stripped = route.replace(`/${localeRoutePrefix}`, '')
-    const expectedDataRouteSuffix = stripped === '' ? 'index' : stripped
-    if (!entry.dataRoute?.endsWith(`${expectedDataRouteSuffix}.json`)) {
-      throw new Error(`route ${route} has invalid data route: ${entry.dataRoute}`)
+    const stripped = route.slice(localeRoutePrefix.length)
+    const expectedDataRoute = `/_next/data/${buildId}${
+      stripped === '' ? '/index' : stripped
+    }.json`
+    if (entry.dataRoute !== expectedDataRoute) {
+      throw new Error(
+        `route ${route} has invalid data route: ${entry.dataRoute}`
+      )
+    }
+  }
+
+  for (const [route, entry] of Object.entries(manifest.routes || {})) {
+    if (
+      entry.initialRevalidateSeconds !== false &&
+      entry.initialRevalidateSeconds !== 300
+    ) {
+      throw new Error(
+        `public route ${route} revalidates at ${entry.initialRevalidateSeconds}`
+      )
+    }
+  }
+
+  for (const route of REQUIRED_BLOCKING_DYNAMIC_ROUTES) {
+    const entry = manifest.dynamicRoutes?.[route]
+    if (!entry || entry.fallback !== null) {
+      throw new Error(`dynamic route ${route} is not blocking fallback`)
     }
   }
 
@@ -56,14 +103,21 @@ function verifyBuildContract({ buildId, manifest, edgeoneConfig, locale }) {
 }
 
 function verifyFromDisk(root = process.cwd()) {
-  const buildId = fs.readFileSync(path.join(root, '.next/BUILD_ID'), 'utf8').trim()
+  const buildId = fs
+    .readFileSync(path.join(root, '.next/BUILD_ID'), 'utf8')
+    .trim()
   const manifest = JSON.parse(
     fs.readFileSync(path.join(root, '.next/prerender-manifest.json'), 'utf8')
   )
   const edgeoneConfig = JSON.parse(
     fs.readFileSync(path.join(root, 'edgeone.json'), 'utf8')
   )
-  return verifyBuildContract({ buildId, manifest, edgeoneConfig, locale: 'zh-CN' })
+  return verifyBuildContract({
+    buildId,
+    manifest,
+    edgeoneConfig,
+    locale: 'zh-CN'
+  })
 }
 
 if (require.main === module) {
@@ -77,6 +131,7 @@ if (require.main === module) {
 }
 
 module.exports = {
+  REQUIRED_BLOCKING_DYNAMIC_ROUTES,
   REQUIRED_LOCALE_REWRITES,
   verifyBuildContract,
   verifyFromDisk

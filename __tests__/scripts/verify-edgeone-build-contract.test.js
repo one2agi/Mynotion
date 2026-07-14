@@ -1,11 +1,12 @@
 const {
+  REQUIRED_BLOCKING_DYNAMIC_ROUTES,
   REQUIRED_LOCALE_REWRITES,
   verifyBuildContract
 } = require('../../scripts/verify-edgeone-build-contract')
 
 describe('EdgeOne locale page-data contract', () => {
   const buildId = 'build-123'
-  // Next.js i18n builds store locale-prefixed routes in the prerender manifest
+  // This project pre-generates locale-prefixed routes through static paths.
   const manifest = {
     routes: {
       '/zh-CN': {
@@ -19,9 +20,15 @@ describe('EdgeOne locale page-data contract', () => {
       '/zh-CN/page/2': {
         dataRoute: '/_next/data/build-123/page/2.json',
         initialRevalidateSeconds: 300
+      },
+      '/zh-CN/search/NotionNext/page/1': {
+        dataRoute: '/_next/data/build-123/zh-CN/search/NotionNext/page/1.json',
+        initialRevalidateSeconds: 300
       }
     },
-    dynamicRoutes: {}
+    dynamicRoutes: Object.fromEntries(
+      REQUIRED_BLOCKING_DYNAMIC_ROUTES.map(route => [route, { fallback: null }])
+    )
   }
 
   test('accepts exact zh-CN static-data rewrites and 300-second routes', () => {
@@ -32,7 +39,10 @@ describe('EdgeOne locale page-data contract', () => {
         edgeoneConfig: { rewrites: REQUIRED_LOCALE_REWRITES },
         locale: 'zh-CN'
       })
-    ).toEqual({ buildId, checkedRoutes: ['/zh-CN', '/zh-CN/archive', '/zh-CN/page/2'] })
+    ).toEqual({
+      buildId,
+      checkedRoutes: ['/zh-CN', '/zh-CN/archive', '/zh-CN/page/2']
+    })
   })
 
   test('rejects a missing locale rewrite', () => {
@@ -57,5 +67,45 @@ describe('EdgeOne locale page-data contract', () => {
         locale: 'zh-CN'
       })
     ).toThrow('missing prerender route: /zh-CN/archive')
+  })
+
+  test('does not confuse taxonomy or search pagination with general pagination', () => {
+    expect(
+      verifyBuildContract({
+        buildId,
+        manifest,
+        edgeoneConfig: { rewrites: REQUIRED_LOCALE_REWRITES },
+        locale: 'zh-CN'
+      }).checkedRoutes
+    ).toEqual(['/zh-CN', '/zh-CN/archive', '/zh-CN/page/2'])
+  })
+
+  test('rejects a page data route from a different build', () => {
+    const broken = JSON.parse(JSON.stringify(manifest))
+    broken.routes['/zh-CN/archive'].dataRoute =
+      '/_next/data/stale-build/archive.json'
+
+    expect(() =>
+      verifyBuildContract({
+        buildId,
+        manifest: broken,
+        edgeoneConfig: { rewrites: REQUIRED_LOCALE_REWRITES },
+        locale: 'zh-CN'
+      })
+    ).toThrow('route /zh-CN/archive has invalid data route')
+  })
+
+  test('rejects non-blocking fallback for newly published articles', () => {
+    const broken = JSON.parse(JSON.stringify(manifest))
+    broken.dynamicRoutes['/[prefix]/[slug]'].fallback = '/[prefix]/[slug].html'
+
+    expect(() =>
+      verifyBuildContract({
+        buildId,
+        manifest: broken,
+        edgeoneConfig: { rewrites: REQUIRED_LOCALE_REWRITES },
+        locale: 'zh-CN'
+      })
+    ).toThrow('dynamic route /[prefix]/[slug] is not blocking fallback')
   })
 })

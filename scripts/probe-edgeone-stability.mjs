@@ -1,19 +1,66 @@
 export function extractCanonicalUrls(xml, baseUrl) {
   const found = [...xml.matchAll(/<loc>([^<]+)<\/loc>/g)]
     .map(match => new URL(match[1].trim(), baseUrl))
-    .filter(url => url.origin === baseUrl.origin)
-    .map(url => {
-      url.hash = ''
-      return url.href
+    .filter(url => !url.pathname.startsWith('/rss/'))
+    .map(sourceUrl => {
+      const targetUrl = new URL(
+        `${sourceUrl.pathname}${sourceUrl.search}`,
+        baseUrl
+      )
+      targetUrl.hash = ''
+      return targetUrl.href
     })
   return [...new Set(found)]
 }
 
+export function buildPageDataUrl({ pageUrl, baseUrl, buildId, locale }) {
+  const parsed = new URL(pageUrl, baseUrl)
+  const localePrefix = `/${locale}`
+  let routePath = parsed.pathname.replace(/\/$/, '')
+
+  if (routePath === localePrefix) {
+    routePath = ''
+  } else if (routePath.startsWith(`${localePrefix}/`)) {
+    routePath = routePath.slice(localePrefix.length)
+  }
+
+  const dataPath = routePath
+    ? `/_next/data/${buildId}/${locale}${routePath}.json`
+    : `/_next/data/${buildId}/${locale}.json`
+  return new URL(dataPath, baseUrl).href
+}
+
+export function buildProbeUrls({
+  canonicalUrls,
+  dataUrls,
+  staticAssetUrl,
+  count
+}) {
+  const pool = []
+  const pairCount = Math.max(canonicalUrls.length, dataUrls.length)
+
+  for (let index = 0; index < pairCount; index++) {
+    if (canonicalUrls[index]) pool.push(canonicalUrls[index])
+    if (dataUrls[index]) pool.push(dataUrls[index])
+  }
+  if (staticAssetUrl) pool.push(staticAssetUrl)
+
+  if (!Number.isInteger(count) || count <= 0) {
+    throw new TypeError('count must be a positive integer')
+  }
+  if (pool.length === 0) throw new Error('no canonical probe URLs found')
+
+  return Array.from({ length: count }, (_, index) => pool[index % pool.length])
+}
+
 export function summarize(records) {
   const statuses = {}
-  const durations = records.map(record => record.durationMs).sort((a, b) => a - b)
+  const durations = records
+    .map(record => record.durationMs)
+    .sort((a, b) => a - b)
   for (const record of records) {
-    if (record.status) statuses[record.status] = (statuses[record.status] || 0) + 1
+    if (record.status)
+      statuses[record.status] = (statuses[record.status] || 0) + 1
   }
   const p95Index = Math.max(0, Math.ceil(durations.length * 0.95) - 1)
   return {
@@ -22,6 +69,23 @@ export function summarize(records) {
     networkErrors: records.filter(record => record.networkError).length,
     p95Ms: durations[p95Index] || 0
   }
+}
+
+export function hasAcceptanceFailures(summary) {
+  if (summary.networkErrors > 0) return true
+  return Object.entries(summary.statuses).some(
+    ([status, count]) =>
+      count > 0 && (Number(status) < 200 || Number(status) >= 300)
+  )
+}
+
+async function fetchText(url, label) {
+  const response = await fetch(url)
+  const body = await response.text()
+  if (!response.ok) {
+    throw new Error(`${label} returned HTTP ${response.status}`)
+  }
+  return body
 }
 
 async function probeOne(url, mode) {
@@ -77,14 +141,19 @@ async function main(argv) {
   const outPath = args.out
 
   if (!baseUrl) {
-    console.error('usage: probe-edgeone --base-url=<url> --mode=warm|cold --count=<n> --out=<path>')
+    console.error(
+      'usage: probe-edgeone --base-url=<url> --mode=warm|cold --count=<n> --out=<path>'
+    )
     process.exit(1)
   }
 
   // Step 1: Fetch home page to get buildId and locale
-  const homeResponse = await fetch(baseUrl)
-  const homeText = await homeResponse.text()
-  const nextDataMatch = homeText.match(/<script id="__NEXT_DATA__"[^>]*>(.*?)<\/script>/)
+  const targetBaseUrl = new URL(baseUrl)
+  const homeUrl = new URL('/', targetBaseUrl)
+  const homeText = await fetchText(homeUrl, 'home page')
+  const nextDataMatch = homeText.match(
+    /<script id="__NEXT_DATA__"[^>]*>(.*?)<\/script>/
+  )
   if (!nextDataMatch) {
     console.error('Could not find __NEXT_DATA__ in home page')
     process.exit(1)
@@ -92,51 +161,39 @@ async function main(argv) {
   const nextData = JSON.parse(nextDataMatch[1])
   const buildId = nextData.buildId
   const locale = nextData.locale || 'zh-CN'
+  if (locale !== 'zh-CN') {
+    throw new Error(`unsupported production probe locale: ${locale}`)
+  }
 
   // Step 2: Fetch sitemap and extract canonical URLs
-  const sitemapResponse = await fetch(`${baseUrl}/sitemap.xml`)
-  const sitemapXml = await sitemapResponse.text()
-  const canonicalUrls = extractCanonicalUrls(sitemapXml, new URL(baseUrl))
+  const sitemapXml = await fetchText(
+    new URL('/sitemap.xml', targetBaseUrl),
+    'sitemap'
+  )
+  const canonicalUrls = extractCanonicalUrls(sitemapXml, targetBaseUrl)
 
   // Add /archive
-  const archiveUrl = new URL(`${baseUrl}/archive`)
-  canonicalUrls.push(archiveUrl.href)
+  canonicalUrls.push(new URL('/archive', targetBaseUrl).href)
+  const uniqueCanonicalUrls = [...new Set(canonicalUrls)]
 
   // Step 3: Build page-data URLs
-  const dataUrls = canonicalUrls.map(url => {
-    const parsed = new URL(url)
-    // For home page: /_next/data/{buildId}/{locale}.json
-    // For others: /_next/data/{buildId}/{locale}/path.json
-    const pathname = parsed.pathname
-    if (pathname === '/') {
-      return `/_next/data/${buildId}/${locale}.json`
-    } else {
-      const cleanPath = pathname.replace(/\/$/, '')
-      return `/_next/data/${buildId}/${locale}${cleanPath}.json`
-    }
-  })
+  const dataUrls = uniqueCanonicalUrls.map(pageUrl =>
+    buildPageDataUrl({ pageUrl, baseUrl: targetBaseUrl, buildId, locale })
+  )
 
   // Step 4: Discover a static asset from home HTML
   const staticAssetMatch = homeText.match(/"\/_next\/static\/([^"]+)"/)
   const staticAssetUrl = staticAssetMatch
-    ? `${baseUrl}/_next/static/${staticAssetMatch[1]}`
+    ? new URL(`/_next/static/${staticAssetMatch[1]}`, targetBaseUrl).href
     : null
 
-  // Step 5: Build request list - round-robin canonical HTML, page data, and static asset
-  const urlsToProbe = []
-  const staticAssets = staticAssetUrl ? [staticAssetUrl] : []
-
-  for (let i = 0; i < count; i++) {
-    const htmlIdx = i % canonicalUrls.length
-    const dataIdx = i % dataUrls.length
-    const staticIdx = i % staticAssets.length
-
-    urlsToProbe.push(canonicalUrls[htmlIdx])
-    urlsToProbe.push(dataUrls[dataIdx])
-    if (staticAssets.length > 0) {
-      urlsToProbe.push(staticAssets[staticIdx])
-    }
-  }
+  // Step 5: Build exactly count requests across HTML, page data, and a static asset
+  const urlsToProbe = buildProbeUrls({
+    canonicalUrls: uniqueCanonicalUrls,
+    dataUrls,
+    staticAssetUrl,
+    count
+  })
 
   // Step 6: Set concurrency
   const concurrency = mode === 'warm' ? 6 : 3
@@ -146,7 +203,7 @@ async function main(argv) {
   for (let i = 0; i < urlsToProbe.length; i += concurrency) {
     const batch = urlsToProbe.slice(i, i + concurrency)
     const batchResults = await Promise.all(
-      batch.map(url => probeOne(new URL(url, baseUrl).href, mode))
+      batch.map(url => probeOne(url, mode))
     )
     records.push(...batchResults)
   }
@@ -173,8 +230,8 @@ async function main(argv) {
     console.log(JSON.stringify(report, null, 2))
   }
 
-  // Step 10: Exit non-zero on 545 or network errors
-  if ((summary.statuses['545'] || 0) > 0 || summary.networkErrors > 0) {
+  // Step 10: Exit non-zero on any failed request
+  if (hasAcceptanceFailures(summary)) {
     process.exit(1)
   }
 }
