@@ -38,6 +38,24 @@ export const getInitializingPollDelay = attempt =>
 const isPublicGraph = value =>
   Array.isArray(value?.nodes) && Array.isArray(value?.edges)
 
+const resolveNodeTarget = (node, allLinkPages) => {
+  const nodeId = normalizePageId(node?.id)
+  const nodeUuid = nodeId ? idToUuid(nodeId) : null
+  const canonicalPage =
+    nodeId && Array.isArray(allLinkPages)
+      ? allLinkPages.find(
+          page =>
+            (normalizePageId(page?.id) === nodeId ||
+              (typeof page?.short_id === 'string' &&
+                nodeUuid.indexOf(page.short_id) === 14)) &&
+            typeof page?.href === 'string' &&
+            page.href
+        )
+      : null
+
+  return canonicalPage?.href || node?.href || node?.slug
+}
+
 const getInitialSettings = depth => {
   const loaded = loadGraphSettings()
 
@@ -73,6 +91,7 @@ const KnowledgeGraphDrawer = ({
   const [mode, setMode] = useState(hasCurrentPost ? 'local' : 'full')
   const [retryCount, setRetryCount] = useState(0)
   const [selectedNodeId, setSelectedNodeId] = useState('')
+  const [isNavigating, setIsNavigating] = useState(false)
   const [settings, setSettings] = useState(() => getInitialSettings(depth))
   const selectionInitializedRef = useRef(false)
   const localDepth = normalizeKnowledgeGraphDepth(settings.depth)
@@ -174,12 +193,35 @@ const KnowledgeGraphDrawer = ({
     () => fullGraph.nodes.find(node => node.id === selectedNodeId) || null,
     [fullGraph.nodes, selectedNodeId]
   )
-
   const relatedNodes = useMemo(() => {
     if (!selectedNodeId) return []
     const relatedIds = getOutboundNeighborIds(fullGraph, selectedNodeId)
     return fullGraph.nodes.filter(node => relatedIds.has(node.id))
   }, [fullGraph, selectedNodeId])
+  const prefetchTargets = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          [selectedNode, ...relatedNodes]
+            .map(node => resolveNodeTarget(node, allLinkPages))
+            .filter(
+              target =>
+                typeof target === 'string' &&
+                target.startsWith('/') &&
+                !target.startsWith('//')
+            )
+        )
+      ).slice(0, 6),
+    [allLinkPages, relatedNodes, selectedNode]
+  )
+
+  useEffect(() => {
+    if (!isOpen || typeof router.prefetch !== 'function') return
+
+    prefetchTargets.forEach(target => {
+      void router.prefetch(target).catch(() => {})
+    })
+  }, [isOpen, prefetchTargets, router])
 
   const updateSettings = nextSettings => {
     const normalized = normalizeGraphSettings(nextSettings)
@@ -191,22 +233,17 @@ const KnowledgeGraphDrawer = ({
     setSettings(resetGraphSettings())
   }
 
-  const navigateToNode = node => {
-    const nodeId = normalizePageId(node?.id)
-    const nodeUuid = nodeId ? idToUuid(nodeId) : null
-    const canonicalPage =
-      nodeId && Array.isArray(allLinkPages)
-        ? allLinkPages.find(
-            page =>
-              (normalizePageId(page?.id) === nodeId ||
-                (typeof page?.short_id === 'string' &&
-                  nodeUuid.indexOf(page.short_id) === 14)) &&
-              typeof page?.href === 'string' &&
-              page.href
-          )
-        : null
-    const target = canonicalPage?.href || node?.href || node?.slug
-    if (target) router.push(target)
+  const navigateToNode = async node => {
+    if (isNavigating) return
+    const target = resolveNodeTarget(node, allLinkPages)
+    if (!target) return
+
+    setIsNavigating(true)
+    try {
+      await router.push(target)
+    } finally {
+      setIsNavigating(false)
+    }
   }
 
   const navigateToSelectedNode = () => {
@@ -397,10 +434,13 @@ const KnowledgeGraphDrawer = ({
                       ))}
                     </select>
                     <button
-                      aria-label='打开所选文章'
+                      aria-label={
+                        isNavigating ? '正在打开所选文章' : '打开所选文章'
+                      }
                       className='flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-gray-500 transition hover:bg-gray-100 hover:text-gray-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 dark:hover:bg-gray-800 dark:hover:text-gray-100'
+                      disabled={isNavigating}
                       onClick={navigateToSelectedNode}
-                      title='打开所选文章'
+                      title={isNavigating ? '正在打开所选文章' : '打开所选文章'}
                       type='button'
                     >
                       <svg
@@ -428,6 +468,7 @@ const KnowledgeGraphDrawer = ({
                     />
                   </div>
                   <KnowledgeGraphNodeDetails
+                    isNavigating={isNavigating}
                     onFocusNode={setSelectedNodeId}
                     onOpenArticle={navigateToSelectedNode}
                     relatedNodes={relatedNodes}

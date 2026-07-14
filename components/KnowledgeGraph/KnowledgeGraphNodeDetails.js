@@ -1,4 +1,5 @@
 const KnowledgeGraphNodeDetails = ({
+  isNavigating,
   onFocusNode,
   onOpenArticle,
   relatedNodes,
@@ -34,11 +35,13 @@ const KnowledgeGraphNodeDetails = ({
         </p>
       )}
       <button
-        className='mt-3 h-8 rounded bg-sky-600 px-3 text-xs font-medium text-white hover:bg-sky-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-950'
+        aria-label={isNavigating ? '正在打开文章' : '打开文章'}
+        className='mt-3 h-8 rounded bg-sky-600 px-3 text-xs font-medium text-white hover:bg-sky-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-2 disabled:cursor-wait disabled:opacity-70 dark:focus-visible:ring-offset-gray-950'
+        disabled={isNavigating}
         onClick={onOpenArticle}
         type='button'
       >
-        打开文章
+        {isNavigating ? '正在打开…' : '打开文章'}
       </button>
     </section>
   )

@@ -207,6 +207,7 @@ const depthGraph = {
 }
 
 const router = {
+  prefetch: jest.fn(() => Promise.resolve()),
   push: jest.fn(),
   events: {
     on: jest.fn(),
@@ -225,6 +226,8 @@ const mockGraphResponse = (body = graph, status = 200) => {
 beforeEach(() => {
   localStorage.clear()
   window.PointerEvent ||= MouseEvent
+  router.prefetch.mockResolvedValue()
+  router.push.mockResolvedValue(true)
   useRouter.mockReturnValue(router)
   siteConfig.mockImplementation(key => key === 'CAN_COPY')
   mockGraphResponse()
@@ -492,6 +495,92 @@ test('shows settings and node details, then navigates only through the explicit 
 
   await user.click(screen.getByRole('button', { name: '关闭知识图谱' }))
   expect(onClose).toHaveBeenCalledTimes(1)
+})
+
+test('prefetches the selected graph article before the user opens it', async () => {
+  const user = userEvent.setup()
+  const currentId = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
+  const relatedId = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'
+  mockGraphResponse({
+    nodes: [
+      { ...graph.nodes[0], id: currentId },
+      { ...graph.nodes[1], id: relatedId }
+    ],
+    edges: [{ source: currentId, target: relatedId, origins: [currentId] }]
+  })
+  render(
+    <KnowledgeGraphDrawer
+      allLinkPages={[{ id: relatedId, href: '/canonical/related' }]}
+      isOpen={true}
+      onClose={jest.fn()}
+      post={{ id: currentId, slug: '/current' }}
+    />
+  )
+
+  await screen.findByRole('dialog')
+  const articleSelect = await screen.findByRole('combobox', {
+    name: '选择图谱文章'
+  })
+  router.prefetch.mockClear()
+  await user.selectOptions(articleSelect, relatedId)
+
+  await waitFor(() => {
+    expect(router.prefetch).toHaveBeenCalledWith('/canonical/related')
+  })
+})
+
+test('prefetches nearby graph articles while the user is viewing the graph', async () => {
+  const currentId = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
+  const relatedId = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'
+  mockGraphResponse({
+    nodes: [
+      { ...graph.nodes[0], id: currentId },
+      { ...graph.nodes[1], id: relatedId }
+    ],
+    edges: [{ source: currentId, target: relatedId, origins: [currentId] }]
+  })
+  render(
+    <KnowledgeGraphDrawer
+      allLinkPages={[{ id: relatedId, href: '/canonical/related' }]}
+      isOpen={true}
+      onClose={jest.fn()}
+      post={{ id: currentId, slug: '/current' }}
+    />
+  )
+
+  await screen.findByRole('combobox', { name: '选择图谱文章' })
+  await waitFor(() => {
+    expect(router.prefetch).toHaveBeenCalledWith('/canonical/related')
+  })
+})
+
+test('shows immediate feedback and prevents duplicate graph navigation', async () => {
+  const user = userEvent.setup()
+  let finishNavigation
+  router.push.mockReturnValue(
+    new Promise(resolve => {
+      finishNavigation = resolve
+    })
+  )
+  render(
+    <KnowledgeGraphDrawer
+      isOpen={true}
+      onClose={jest.fn()}
+      post={{ id: 'current', slug: '/current' }}
+    />
+  )
+
+  const openButton = await screen.findByRole('button', { name: '打开文章' })
+  const arrowButton = screen.getByRole('button', { name: '打开所选文章' })
+  await user.click(openButton)
+
+  expect(screen.getByRole('button', { name: '正在打开文章' })).toBeDisabled()
+  expect(arrowButton).toBeDisabled()
+  await user.click(arrowButton)
+  expect(router.push).toHaveBeenCalledTimes(1)
+
+  finishNavigation(true)
+  await waitFor(() => expect(openButton).not.toBeDisabled())
 })
 
 test('uses the full graph for outbound details beyond the displayed local depth', async () => {
