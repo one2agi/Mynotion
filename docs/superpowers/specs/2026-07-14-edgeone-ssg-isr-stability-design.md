@@ -207,12 +207,15 @@ contract for all affected paths before changing them back to SSG:
 - `/zh-CN/page/{n}`
 - Their `/_next/data/{buildId}/zh-CN/...json` equivalents.
 
-The fix may use build-time locale-aware paths and narrowly scoped
-`edgeone.json` rewrites, but it must be derived from the actual Next.js build
-manifest rather than assumed. It must not restore middleware. Tests must inspect
-the production build artifacts, and EdgeOne CLI requests must prove that both
-HTML and JSON return 200. The SSR workaround is removed only after this contract
-passes.
+The fix must use the build-time locale-aware paths emitted by Next.js native
+i18n and must reject `edgeone.json` rewrites that mask those paths. Production
+audit showed that EdgeOne static rewrites to Next internal data routes return
+fixed 404 responses even when local development appears healthy. The contract
+must be derived from the actual Next.js build manifest rather than assumed. It
+must not restore middleware. Tests must inspect
+the production build artifacts. EdgeOne CLI requests are a local gate, but the
+deployed HTML and JSON endpoints are the authoritative proof that both return
+200. The SSR workaround is removed only after this contract passes.
 
 ## Client Navigation Recovery
 

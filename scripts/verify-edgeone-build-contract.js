@@ -1,7 +1,7 @@
 const fs = require('node:fs')
 const path = require('node:path')
 
-const REQUIRED_LOCALE_REWRITES = [
+const CONFLICTING_LOCALE_REWRITES = [
   {
     source: '/_next/data/:buildId/zh-CN.json',
     destination: '/_next/data/:buildId/index.json'
@@ -29,24 +29,18 @@ const REQUIRED_BLOCKING_DYNAMIC_ROUTES = [
   '/[prefix]/[slug]/[...suffix]'
 ]
 
-function sameRule(left, right) {
-  return (
-    left?.source === right.source && left?.destination === right.destination
-  )
-}
-
 function verifyBuildContract({ buildId, manifest, edgeoneConfig, locale }) {
   if (!buildId) throw new Error('missing Next.js Build ID')
   if (locale !== 'zh-CN')
     throw new Error(`unsupported contract locale: ${locale}`)
 
-  for (const rule of REQUIRED_LOCALE_REWRITES) {
+  for (const rule of CONFLICTING_LOCALE_REWRITES) {
     if (
-      !(edgeoneConfig.rewrites || []).some(candidate =>
-        sameRule(candidate, rule)
+      (edgeoneConfig.rewrites || []).some(
+        candidate => candidate?.source === rule.source
       )
     ) {
-      throw new Error(`missing EdgeOne locale data rewrite: ${rule.source}`)
+      throw new Error(`conflicting EdgeOne locale data rewrite: ${rule.source}`)
     }
   }
 
@@ -131,8 +125,8 @@ if (require.main === module) {
 }
 
 module.exports = {
+  CONFLICTING_LOCALE_REWRITES,
   REQUIRED_BLOCKING_DYNAMIC_ROUTES,
-  REQUIRED_LOCALE_REWRITES,
   verifyBuildContract,
   verifyFromDisk
 }

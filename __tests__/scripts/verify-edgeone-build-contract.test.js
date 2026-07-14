@@ -1,6 +1,6 @@
 const {
+  CONFLICTING_LOCALE_REWRITES,
   REQUIRED_BLOCKING_DYNAMIC_ROUTES,
-  REQUIRED_LOCALE_REWRITES,
   verifyBuildContract
 } = require('../../scripts/verify-edgeone-build-contract')
 
@@ -31,12 +31,12 @@ describe('EdgeOne locale page-data contract', () => {
     )
   }
 
-  test('accepts exact zh-CN static-data rewrites and 300-second routes', () => {
+  test('accepts native i18n page data without conflicting EdgeOne rewrites', () => {
     expect(
       verifyBuildContract({
         buildId,
         manifest,
-        edgeoneConfig: { rewrites: REQUIRED_LOCALE_REWRITES },
+        edgeoneConfig: {},
         locale: 'zh-CN'
       })
     ).toEqual({
@@ -45,15 +45,15 @@ describe('EdgeOne locale page-data contract', () => {
     })
   })
 
-  test('rejects a missing locale rewrite', () => {
+  test('rejects a conflicting locale rewrite that masks Next i18n data', () => {
     expect(() =>
       verifyBuildContract({
         buildId,
         manifest,
-        edgeoneConfig: { rewrites: REQUIRED_LOCALE_REWRITES.slice(1) },
+        edgeoneConfig: { rewrites: [CONFLICTING_LOCALE_REWRITES[0]] },
         locale: 'zh-CN'
       })
-    ).toThrow('missing EdgeOne locale data rewrite')
+    ).toThrow('conflicting EdgeOne locale data rewrite')
   })
 
   test('rejects SSR or a conflicting revalidation value', () => {
@@ -63,7 +63,7 @@ describe('EdgeOne locale page-data contract', () => {
       verifyBuildContract({
         buildId,
         manifest: broken,
-        edgeoneConfig: { rewrites: REQUIRED_LOCALE_REWRITES },
+        edgeoneConfig: {},
         locale: 'zh-CN'
       })
     ).toThrow('missing prerender route: /zh-CN/archive')
@@ -74,7 +74,7 @@ describe('EdgeOne locale page-data contract', () => {
       verifyBuildContract({
         buildId,
         manifest,
-        edgeoneConfig: { rewrites: REQUIRED_LOCALE_REWRITES },
+        edgeoneConfig: {},
         locale: 'zh-CN'
       }).checkedRoutes
     ).toEqual(['/zh-CN', '/zh-CN/archive', '/zh-CN/page/2'])
@@ -89,7 +89,7 @@ describe('EdgeOne locale page-data contract', () => {
       verifyBuildContract({
         buildId,
         manifest: broken,
-        edgeoneConfig: { rewrites: REQUIRED_LOCALE_REWRITES },
+        edgeoneConfig: {},
         locale: 'zh-CN'
       })
     ).toThrow('route /zh-CN/archive has invalid data route')
@@ -103,7 +103,7 @@ describe('EdgeOne locale page-data contract', () => {
       verifyBuildContract({
         buildId,
         manifest: broken,
-        edgeoneConfig: { rewrites: REQUIRED_LOCALE_REWRITES },
+        edgeoneConfig: {},
         locale: 'zh-CN'
       })
     ).toThrow('dynamic route /[prefix]/[slug] is not blocking fallback')
