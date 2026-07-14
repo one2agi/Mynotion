@@ -79,8 +79,31 @@ export function hasAcceptanceFailures(summary) {
   )
 }
 
+async function fetchWithTimeout(
+  url,
+  options = {},
+  { fetchImpl = fetch, timeoutMs = 15_000 } = {}
+) {
+  const controller = new AbortController()
+  let timeoutId
+  try {
+    const timeout = new Promise((_, reject) => {
+      timeoutId = setTimeout(() => {
+        controller.abort()
+        reject(new Error(`request timeout after ${timeoutMs}ms`))
+      }, timeoutMs)
+    })
+    return await Promise.race([
+      fetchImpl(url, { ...options, signal: controller.signal }),
+      timeout
+    ])
+  } finally {
+    clearTimeout(timeoutId)
+  }
+}
+
 async function fetchText(url, label) {
-  const response = await fetch(url)
+  const response = await fetchWithTimeout(url)
   const body = await response.text()
   if (!response.ok) {
     throw new Error(`${label} returned HTTP ${response.status}`)
@@ -88,16 +111,24 @@ async function fetchText(url, label) {
   return body
 }
 
-async function probeOne(url, mode) {
+export async function probeOne(
+  url,
+  mode,
+  { fetchImpl = fetch, timeoutMs = 15_000 } = {}
+) {
   const started = performance.now()
   try {
-    const response = await fetch(url, {
-      redirect: 'follow',
-      headers:
-        mode === 'cold'
-          ? { 'cache-control': 'no-cache', pragma: 'no-cache' }
-          : undefined
-    })
+    const response = await fetchWithTimeout(
+      url,
+      {
+        redirect: 'follow',
+        headers:
+          mode === 'cold'
+            ? { 'cache-control': 'no-cache', pragma: 'no-cache' }
+            : undefined
+      },
+      { fetchImpl, timeoutMs }
+    )
     await response.arrayBuffer()
     return {
       url,

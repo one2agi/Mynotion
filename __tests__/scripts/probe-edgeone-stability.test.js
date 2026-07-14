@@ -127,4 +127,18 @@ describe('EdgeOne probe helpers', () => {
       ])
     )
   })
+
+  test('turns a hung edge request into a bounded network failure', async () => {
+    const { probeOne } =
+      await import('../../scripts/probe-edgeone-stability.mjs')
+
+    const result = await probeOne('https://www.one2agi.com/', 'warm', {
+      fetchImpl: () => new Promise(() => {}),
+      timeoutMs: 5
+    })
+
+    expect(result.status).toBeUndefined()
+    expect(result.networkError).toBe('request timeout after 5ms')
+    expect(result.durationMs).toBeGreaterThanOrEqual(5)
+  })
 })
