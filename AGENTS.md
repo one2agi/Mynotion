@@ -2,6 +2,15 @@
 
 This file provides guidance to Codex (Codex.ai/code) when working with code in this repository.
 
+## Development Environment
+
+This repository is developed and operated in **WSL (Linux)**. Use Bash and
+Linux-native commands by default. Do not invoke Windows PowerShell or Command
+Prompt unless a task explicitly requires interaction with Windows.
+
+If `rg` is unavailable or denied by the system, use Linux-native alternatives
+such as `grep`, `find`, or `git grep` for text and file searches.
+
 ## Project Overview
 
 NotionNext is a static blog system built on **Next.js** that uses **Notion as a CMS**. Content is fetched from Notion via `notion-client` / `react-notion-x` and rendered as a static site (or SSR on Vercel). The site supports 30+ swappable themes, multi-language, and various comment/analytics plugins.

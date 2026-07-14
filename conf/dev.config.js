@@ -18,7 +18,10 @@ module.exports = {
     process.env.npm_lifecycle_event === 'build' ||
     process.env.npm_lifecycle_event === 'export' ||
     process.env.NODE_ENV === 'development',
-  isProd: process.env.VERCEL_ENV === 'production' || process.env.EXPORT, // distinguish between development and production environment (ref: https://vercel.com/docs/environment-variables#system-environment-variables)
+  isProd:
+    process.env.VERCEL_ENV === 'production' ||
+    process.env.EXPORT ||
+    process.env.NODE_ENV === 'production', // distinguish between development and production environment (ref: https://vercel.com/docs/environment-variables#system-environment-variables) — 自建 Docker 部署需 NODE_ENV=production 识别
   BUNDLE_ANALYZER: process.env.ANALYZE === 'true' || false, // 是否展示编译依赖内容与大小
   VERSION: (() => {
     try {

@@ -1,4 +1,7 @@
 {
+  "buildCommand": "pnpm build",
+  "installCommand": "pnpm install",
+  "framework": null,
   "cleanUrls": true,
   "trailingSlash": false,
   "headers": []

@@ -18,7 +18,7 @@ export type KnowledgeGraphPublicationLabels = {
 export type KnowledgeGraphSourceOptions = {
   pageId: string
   locale?: string
-  notionIndex?: number
+  notionIndex?: number | undefined
   postUrlPrefix: string
   propertyNames: KnowledgeGraphPropertyNames
   publicationLabels?: KnowledgeGraphPublicationLabels

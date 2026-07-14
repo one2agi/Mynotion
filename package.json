@@ -140,7 +140,7 @@
     "webpack-bundle-analyzer": "^4.5.0",
     "zod": "^4.4.3"
   },
-  "resolutions": {
+  "overrides": {
     "axios": ">=0.21.1",
     "esbuild": "^0.25.0",
     "flatted": "^3.4.2",

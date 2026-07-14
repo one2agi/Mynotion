@@ -36,6 +36,8 @@ yarn-error.log*
 .env.test.local
 .env.production.local
 .env
+.env.production
+.vercel-existing.env
 
 # vercel
 .vercel
@@ -84,3 +86,4 @@ PROJECT_INDEX.md
 
 # 支付功能死信文件（失败订单兜底，运行时生成）
 /lib/orders-failed.json
+deploy/backups/
