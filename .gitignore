@@ -78,6 +78,9 @@ PROJECT_INDEX.md
 # superpowers skill working dir (task briefs, progress ledger, workflow scripts)
 /.sdd/
 
+# isolated feature worktrees
+/.worktrees/
+
 # local Codex desktop/MCP configuration
 /.codex/
 
