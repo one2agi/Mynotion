@@ -564,6 +564,64 @@ describe('pure Notion webhook route planner', () => {
     })
   })
 
+  test('redirects retained pending-public history to a newer cross-locale restore', () => {
+    const pending = snapshot({
+      locale: 'en',
+      href: '/article/old guide.html',
+      slug: 'article/old guide',
+      public: false,
+      status: 'Draft',
+      processedEventAt: 90,
+      pendingEventAt: 120
+    })
+    const restored = page({
+      locale: 'zh-CN',
+      href: '/docs/new guide.html',
+      slug: 'docs/new guide',
+      lastEditedDate: 130
+    })
+    const result = planRouteRevalidation(
+      input({
+        selectedQueueScore: 130,
+        oldSnapshot: pending,
+        newPage: restored,
+        publicDirectory: [...directory(3), restored]
+      })
+    )
+
+    expect(result.redirect).toEqual({
+      from: '/en/article/old%20guide.html',
+      to: '/docs/new%20guide.html',
+      permanent: true,
+      locale: 'en'
+    })
+  })
+
+  test('does not redirect from an acknowledged ordinary private snapshot', () => {
+    const acknowledgedPrivate = snapshot({
+      href: '/article/retired.html',
+      slug: 'article/retired',
+      public: false,
+      status: 'Draft',
+      processedEventAt: 120
+    })
+    const restored = page({
+      href: '/article/restored.html',
+      slug: 'article/restored',
+      lastEditedDate: 130
+    })
+    const result = planRouteRevalidation(
+      input({
+        selectedQueueScore: 130,
+        oldSnapshot: acknowledgedPrivate,
+        newPage: restored,
+        publicDirectory: [...directory(3), restored]
+      })
+    )
+
+    expect(result.redirect).toBeNull()
+  })
+
   test('normalizes and deduplicates paths and never enumerates keyword searches', () => {
     const result = planRouteRevalidation(
       input({

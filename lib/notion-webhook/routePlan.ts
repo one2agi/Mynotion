@@ -353,7 +353,7 @@ export function planRouteRevalidation(input: RoutePlanInput): RoutePlan {
   let redirect: RouteRedirect | null = null
   let refreshGraph = becamePublic || becamePrivate
 
-  if (input.oldSnapshot?.public && newIsPublic && input.newPage) {
+  if (oldWasPublic && newIsPublic && input.oldSnapshot && input.newPage) {
     const oldArticlePath = articlePath(input.oldSnapshot, input.defaultLocale)
     const newArticlePath = articlePath(input.newPage, input.defaultLocale)
     const slugChanged = oldArticlePath !== newArticlePath
