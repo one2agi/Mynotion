@@ -28,6 +28,12 @@ readonly SERVICE=$DEPLOY_DIR/systemd/notionnext-notion-refresh.service
 readonly TIMER=$DEPLOY_DIR/systemd/notionnext-notion-refresh.timer
 
 install_assets() {
+  ssh "$SERVER" 'sudo bash -s' <<'REMOTE'
+set -euo pipefail
+command -v python3 >/dev/null || { echo "python3 is required" >&2; exit 1; }
+command -v curl >/dev/null || { echo "curl is required" >&2; exit 1; }
+command -v flock >/dev/null || { echo "flock is required" >&2; exit 1; }
+REMOTE
   ssh "$SERVER" 'sudo install -o root -g root -m 755 /dev/stdin /usr/local/sbin/run-notion-refresh' < "$RUNNER"
   ssh "$SERVER" 'sudo install -o root -g root -m 644 /dev/stdin /etc/systemd/system/notionnext-notion-refresh.service' < "$SERVICE"
   ssh "$SERVER" 'sudo install -o root -g root -m 644 /dev/stdin /etc/systemd/system/notionnext-notion-refresh.timer' < "$TIMER"

@@ -68,7 +68,38 @@ trap 'rm -f "$RESPONSE_FILE"' EXIT
   --output "$RESPONSE_FILE" \
   --config -
 
-if ! grep -Eq '"ok"[[:space:]]*:[[:space:]]*true' "$RESPONSE_FILE"; then
+if ! python3 - "$RESPONSE_FILE" <<'PY'
+import json
+import sys
+
+
+def reject_constant(value):
+    raise ValueError(f"invalid JSON constant: {value}")
+
+
+def reject_duplicate_keys(pairs):
+    result = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError(f"duplicate JSON key: {key}")
+        result[key] = value
+    return result
+
+
+try:
+    with open(sys.argv[1], encoding="utf-8") as response:
+        payload = json.load(
+            response,
+            parse_constant=reject_constant,
+            object_pairs_hook=reject_duplicate_keys,
+        )
+except (OSError, UnicodeError, ValueError):
+    raise SystemExit(1)
+
+if not isinstance(payload, dict) or payload.get("ok") is not True:
+    raise SystemExit(1)
+PY
+then
   echo "Notion dirty refresh did not return ok=true" >&2
   exit 1
 fi

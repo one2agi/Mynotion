@@ -1,5 +1,7 @@
 const fs = require('node:fs')
+const os = require('node:os')
 const path = require('node:path')
+const { spawnSync } = require('node:child_process')
 
 const read = file => fs.readFileSync(path.resolve(process.cwd(), file), 'utf8')
 
@@ -7,6 +9,25 @@ const scripts = [
   'deploy/scripts/run-notion-refresh.sh',
   'deploy/scripts/configure-notion-webhook-vps.sh'
 ]
+
+const runResponseValidator = body => {
+  const source = read('deploy/scripts/run-notion-refresh.sh')
+  const match = source.match(
+    /python3 - "\$RESPONSE_FILE" <<'PY'\n([\s\S]*?)\nPY/
+  )
+  if (!match) throw new Error('embedded response validator not found')
+
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'notion-refresh-'))
+  const responseFile = path.join(tempDir, 'response.json')
+  fs.writeFileSync(responseFile, body, { mode: 0o600 })
+  try {
+    return spawnSync('python3', ['-c', match[1], responseFile], {
+      encoding: 'utf8'
+    })
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true })
+  }
+}
 
 describe('Notion webhook VPS deployment assets', () => {
   test.each(scripts)(
@@ -33,6 +54,31 @@ describe('Notion webhook VPS deployment assets', () => {
     expect(source).toContain('flock --nonblock')
     expect(source).toContain('/run/notionnext-notion-refresh')
     expect(source).not.toContain('/run/lock/notionnext-notion-refresh.lock')
+  })
+
+  test.each([
+    ['forged plain text', 'not-json "ok":true'],
+    ['string true', '{"ok":"true"}'],
+    ['nested true', '{"result":{"ok":true}}'],
+    ['invalid JSON', '{"ok":true'],
+    ['array root', '[{"ok":true}]']
+  ])('runner rejects %s responses', (_label, body) => {
+    expect(runResponseValidator(body).status).not.toBe(0)
+  })
+
+  test('runner accepts only a top-level boolean ok=true response', () => {
+    expect(
+      runResponseValidator('{"ok":true,"status":"processed"}').status
+    ).toBe(0)
+  })
+
+  test('install explicitly verifies host-side response parser dependencies', () => {
+    const source = read('deploy/scripts/configure-notion-webhook-vps.sh')
+    const install = source.match(/install_assets\(\) \{[\s\S]*?^\}/m)[0]
+
+    expect(install).toContain('command -v python3')
+    expect(install).toContain('command -v curl')
+    expect(install).toContain('command -v flock')
   })
 
   test.each(scripts)('%s rejects unsafe environment-file references', file => {
