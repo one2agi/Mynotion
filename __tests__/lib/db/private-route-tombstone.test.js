@@ -84,12 +84,14 @@ jest.mock('@/lib/notion-webhook/routeState', () => ({
 
 import { resolvePostProps } from '@/lib/db/SiteDataApi'
 import { fetchNotionPageBlocks } from '@/lib/db/notion/getPostBlocks'
+import { fetchPageFromNotion } from '@/lib/db/notion/getNotionPost'
 import { isExplicitlyPrivate } from '@/lib/notion-webhook/routeState'
 
 describe('private route tombstone enforcement', () => {
   beforeEach(() => {
     isExplicitlyPrivate.mockReset()
     fetchNotionPageBlocks.mockClear()
+    fetchPageFromNotion.mockClear()
   })
 
   test('rejects a stale published article when its route snapshot is private', async () => {
@@ -140,5 +142,39 @@ describe('private route tombstone enforcement', () => {
       publishedPageId,
       expect.any(Error)
     )
+  })
+
+  test('checks a UUID tombstone before the direct Notion body fallback', async () => {
+    isExplicitlyPrivate.mockResolvedValue(true)
+
+    const props = await resolvePostProps({
+      prefix: 'article',
+      slug: publishedPageId,
+      locale: 'zh-CN'
+    })
+
+    expect(props.post).toBeNull()
+    expect(isExplicitlyPrivate).toHaveBeenCalledWith(publishedPageId)
+    expect(fetchPageFromNotion).not.toHaveBeenCalled()
+    expect(fetchNotionPageBlocks).not.toHaveBeenCalled()
+  })
+
+  test('keeps an active UUID compatibility route readable', async () => {
+    isExplicitlyPrivate.mockResolvedValue(false)
+    fetchPageFromNotion.mockResolvedValue({
+      id: publishedPageId,
+      title: 'Active direct page',
+      blockMap: { block: {} }
+    })
+
+    const props = await resolvePostProps({
+      prefix: 'article',
+      slug: publishedPageId,
+      locale: 'zh-CN'
+    })
+
+    expect(props.post).toMatchObject({ id: publishedPageId })
+    expect(fetchPageFromNotion).toHaveBeenCalledWith(publishedPageId)
+    expect(isExplicitlyPrivate).toHaveBeenCalledTimes(1)
   })
 })
