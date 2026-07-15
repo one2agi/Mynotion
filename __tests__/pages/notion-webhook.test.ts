@@ -1,4 +1,5 @@
 import { createHmac } from 'node:crypto'
+import { writeFile } from 'node:fs/promises'
 import { Readable } from 'node:stream'
 import type { NextApiRequest, NextApiResponse } from 'next'
 import { afterAll, beforeEach, describe, expect, it } from '@jest/globals'
@@ -8,6 +9,7 @@ import pageCreated from '../fixtures/notion-webhook/page-created.json'
 import pageDeleted from '../fixtures/notion-webhook/page-deleted.json'
 import pagePropertiesUpdated from '../fixtures/notion-webhook/page-properties-updated.json'
 import pageUndeleted from '../fixtures/notion-webhook/page-undeleted.json'
+import verificationFixture from '../fixtures/notion-webhook/verification.json'
 import handler, { config } from '@/pages/api/notion-webhook'
 import { enqueueDirtyPage } from '@/lib/notion-webhook/queue'
 
@@ -16,8 +18,12 @@ declare const jest: typeof import('@jest/globals').jest
 jest.mock('@/lib/notion-webhook/queue', () => ({
   enqueueDirtyPage: jest.fn()
 }))
+jest.mock('node:fs/promises', () => ({
+  writeFile: jest.fn()
+}))
 
 const mockedEnqueueDirtyPage = jest.mocked(enqueueDirtyPage)
+const mockedWriteFile = jest.mocked(writeFile)
 const TOKEN = 'fixture-verification-token'
 
 function sign(rawBody: Buffer | string, token = TOKEN): string {
@@ -61,10 +67,13 @@ async function invoke(request = createRequest()) {
 
 describe('Notion webhook receiver', () => {
   const originalToken = process.env.NOTION_WEBHOOK_VERIFICATION_TOKEN
+  const originalSetupMode = process.env.NOTION_WEBHOOK_SETUP_MODE
 
   beforeEach(() => {
     process.env.NOTION_WEBHOOK_VERIFICATION_TOKEN = TOKEN
+    delete process.env.NOTION_WEBHOOK_SETUP_MODE
     mockedEnqueueDirtyPage.mockResolvedValue(undefined)
+    mockedWriteFile.mockResolvedValue(undefined)
     jest.spyOn(console, 'info').mockImplementation(() => undefined)
   })
 
@@ -73,6 +82,11 @@ describe('Notion webhook receiver', () => {
       delete process.env.NOTION_WEBHOOK_VERIFICATION_TOKEN
     } else {
       process.env.NOTION_WEBHOOK_VERIFICATION_TOKEN = originalToken
+    }
+    if (originalSetupMode === undefined) {
+      delete process.env.NOTION_WEBHOOK_SETUP_MODE
+    } else {
+      process.env.NOTION_WEBHOOK_SETUP_MODE = originalSetupMode
     }
   })
 
@@ -191,35 +205,122 @@ describe('Notion webhook receiver', () => {
     }
   )
 
-  it('rejects the one-time verification payload in the permanent receiver', async () => {
+  it('captures only the real verification token during explicit setup mode', async () => {
     const logMethods = [
       jest.spyOn(console, 'log').mockImplementation(() => undefined),
       jest.spyOn(console, 'warn').mockImplementation(() => undefined),
       jest.spyOn(console, 'error').mockImplementation(() => undefined)
     ]
-    const verification = {
-      verification_token: 'must-not-be-written',
-      type: 'url_verification'
-    }
-    const { status, end } = await invoke(
-      createRequest({ body: JSON.stringify(verification) })
+    process.env.NOTION_WEBHOOK_SETUP_MODE = 'true'
+    delete process.env.NOTION_WEBHOOK_VERIFICATION_TOKEN
+
+    const { status, json } = await invoke(
+      createRequest({
+        body: JSON.stringify(verificationFixture),
+        headers: {}
+      })
     )
 
-    expect(status).toHaveBeenCalledWith(400)
-    expect(end).toHaveBeenCalledWith()
+    expect(mockedWriteFile).toHaveBeenCalledWith(
+      '/tmp/notion-webhook-verification-token',
+      verificationFixture.verification_token,
+      { mode: 0o600, flag: 'wx' }
+    )
+    expect(status).toHaveBeenCalledWith(200)
+    expect(json).toHaveBeenCalledWith({ ok: true })
     expect(mockedEnqueueDirtyPage).not.toHaveBeenCalled()
     expect(jest.mocked(console.info)).not.toHaveBeenCalled()
     for (const method of logMethods) expect(method).not.toHaveBeenCalled()
+    expect(JSON.stringify(json.mock.calls)).not.toContain(
+      verificationFixture.verification_token
+    )
   })
 
-  it('rejects signed but unsupported events', async () => {
-    const payload = { ...pageContentUpdated, type: 'comment.created' }
+  it.each([
+    ['extra event field', { ...verificationFixture, type: 'page.created' }],
+    ['empty token', { verification_token: '' }],
+    ['blank token', { verification_token: '   ' }],
+    ['array body', [verificationFixture]]
+  ])('rejects invalid setup payload with %s', async (_name, payload) => {
+    process.env.NOTION_WEBHOOK_SETUP_MODE = 'true'
     const { status, end } = await invoke(
-      createRequest({ body: JSON.stringify(payload) })
+      createRequest({ body: JSON.stringify(payload), headers: {} })
     )
 
     expect(status).toHaveBeenCalledWith(400)
     expect(end).toHaveBeenCalledWith()
+    expect(mockedWriteFile).not.toHaveBeenCalled()
+    expect(mockedEnqueueDirtyPage).not.toHaveBeenCalled()
+  })
+
+  it('returns 409 when the one-time setup token file already exists', async () => {
+    process.env.NOTION_WEBHOOK_SETUP_MODE = 'true'
+    mockedWriteFile.mockRejectedValueOnce(
+      Object.assign(new Error('exists'), { code: 'EEXIST' })
+    )
+
+    const { status, end } = await invoke(
+      createRequest({
+        body: JSON.stringify(verificationFixture),
+        headers: {}
+      })
+    )
+
+    expect(status).toHaveBeenCalledWith(409)
+    expect(end).toHaveBeenCalledWith()
+  })
+
+  it('returns 503 without logging when setup token persistence fails', async () => {
+    process.env.NOTION_WEBHOOK_SETUP_MODE = 'true'
+    mockedWriteFile.mockRejectedValueOnce(new Error('private token in error'))
+    const errorLog = jest
+      .spyOn(console, 'error')
+      .mockImplementation(() => undefined)
+
+    const { status, end } = await invoke(
+      createRequest({
+        body: JSON.stringify(verificationFixture),
+        headers: {}
+      })
+    )
+
+    expect(status).toHaveBeenCalledWith(503)
+    expect(end).toHaveBeenCalledWith()
+    expect(errorLog).not.toHaveBeenCalled()
+    expect(jest.mocked(console.info)).not.toHaveBeenCalled()
+  })
+
+  it('authenticates then ignores a verification payload outside setup mode', async () => {
+    const rawBody = JSON.stringify(verificationFixture)
+    const { status, json } = await invoke(createRequest({ body: rawBody }))
+
+    expect(status).toHaveBeenCalledWith(200)
+    expect(json).toHaveBeenCalledWith({ ok: true, ignored: true })
+    expect(mockedWriteFile).not.toHaveBeenCalled()
+    expect(mockedEnqueueDirtyPage).not.toHaveBeenCalled()
+  })
+
+  it('does not accept an unsigned verification payload outside setup mode', async () => {
+    const { status, end } = await invoke(
+      createRequest({
+        body: JSON.stringify(verificationFixture),
+        headers: {}
+      })
+    )
+
+    expect(status).toHaveBeenCalledWith(401)
+    expect(end).toHaveBeenCalledWith()
+    expect(mockedWriteFile).not.toHaveBeenCalled()
+  })
+
+  it('acknowledges signed but unsupported events without enqueueing', async () => {
+    const payload = { ...pageContentUpdated, type: 'comment.created' }
+    const { status, json } = await invoke(
+      createRequest({ body: JSON.stringify(payload) })
+    )
+
+    expect(status).toHaveBeenCalledWith(200)
+    expect(json).toHaveBeenCalledWith({ ok: true, ignored: true })
     expect(mockedEnqueueDirtyPage).not.toHaveBeenCalled()
   })
 

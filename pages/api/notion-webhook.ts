@@ -1,3 +1,4 @@
+import { writeFile } from 'node:fs/promises'
 import type { NextApiRequest, NextApiResponse } from 'next'
 
 import { normalizePageId } from '@/lib/knowledge-graph/normalizePageId'
@@ -12,6 +13,7 @@ export const config = {
 }
 
 const MAX_BODY_BYTES = 64 * 1024
+const VERIFICATION_TOKEN_PATH = '/tmp/notion-webhook-verification-token'
 const SUPPORTED_PAGE_EVENTS = new Set([
   'page.content_updated',
   'page.properties_updated',
@@ -42,6 +44,25 @@ type WebhookPayload = {
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value)
+
+const parseSetupToken = (value: unknown): string | null => {
+  if (!isRecord(value) || Object.keys(value).length !== 1) return null
+  const token = value.verification_token
+  return typeof token === 'string' && token.trim().length > 0 ? token : null
+}
+
+const isFileExistsError = (error: unknown): boolean =>
+  isRecord(error) && error.code === 'EEXIST'
+
+const decodeRawBody = (
+  rawBody: Buffer
+): { ok: true; value: unknown } | { ok: false } => {
+  try {
+    return { ok: true, value: JSON.parse(rawBody.toString('utf8')) }
+  } catch {
+    return { ok: false }
+  }
+}
 
 const isUuid = (value: unknown): value is string =>
   typeof value === 'string' && UUID_PATTERN.test(value)
@@ -104,8 +125,9 @@ export default async function handler(
     return end(res, 405)
   }
 
+  const setupMode = process.env.NOTION_WEBHOOK_SETUP_MODE === 'true'
   const verificationToken = process.env.NOTION_WEBHOOK_VERIFICATION_TOKEN
-  if (!verificationToken) return end(res, 503)
+  if (!setupMode && !verificationToken) return end(res, 503)
 
   let rawBody: Buffer
   try {
@@ -114,6 +136,23 @@ export default async function handler(
     return end(res, error instanceof RangeError ? 413 : 400)
   }
 
+  if (setupMode) {
+    const decoded = decodeRawBody(rawBody)
+    if (!decoded.ok) return end(res, 400)
+    const setupToken = parseSetupToken(decoded.value)
+    if (setupToken === null) return end(res, 400)
+    try {
+      await writeFile(VERIFICATION_TOKEN_PATH, setupToken, {
+        mode: 0o600,
+        flag: 'wx'
+      })
+    } catch (error) {
+      return end(res, isFileExistsError(error) ? 409 : 503)
+    }
+    return res.status(200).json({ ok: true })
+  }
+
+  if (!verificationToken) return end(res, 503)
   if (
     !verifyNotionSignature(
       rawBody,
@@ -124,14 +163,21 @@ export default async function handler(
     return end(res, 401)
   }
 
-  let decoded: unknown
-  try {
-    decoded = JSON.parse(rawBody.toString('utf8'))
-  } catch {
-    return end(res, 400)
+  const decoded = decodeRawBody(rawBody)
+  if (!decoded.ok) return end(res, 400)
+
+  if (parseSetupToken(decoded.value) !== null) {
+    return res.status(200).json({ ok: true, ignored: true })
+  }
+  if (
+    isRecord(decoded.value) &&
+    typeof decoded.value.type === 'string' &&
+    !SUPPORTED_PAGE_EVENTS.has(decoded.value.type)
+  ) {
+    return res.status(200).json({ ok: true, ignored: true })
   }
 
-  const event = parsePageEvent(decoded)
+  const event = parsePageEvent(decoded.value)
   if (event === null) return end(res, 400)
 
   const pageId = normalizePageId(event.entity.id)
