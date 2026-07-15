@@ -1,0 +1,11 @@
+[Unit]
+Description=Process queued Notion page refreshes every minute
+
+[Timer]
+OnCalendar=*-*-* *:*:00
+Persistent=true
+AccuracySec=1s
+Unit=notionnext-notion-refresh.service
+
+[Install]
+WantedBy=timers.target
