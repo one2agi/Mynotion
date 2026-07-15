@@ -61,7 +61,7 @@ runIntegration('Notion webhook queue on Redis 7', () => {
     await expect(redis.zscore(DIRTY_KEY, pageA)).resolves.toBeNull()
   })
 
-  test('consumer locking is exclusive and release never deletes another owner', async () => {
+  test('consumer locking is exclusive and rejects after ownership replacement', async () => {
     await redis.set(LOCK_KEY, 'existing-owner', 'EX', 240)
     await expect(withDirtyConsumerLock(async () => 'not-run')).resolves.toEqual(
       {
@@ -75,7 +75,7 @@ runIntegration('Notion webhook queue on Redis 7', () => {
         await redis.set(LOCK_KEY, 'replacement-owner', 'EX', 240)
         return 'processed'
       })
-    ).resolves.toEqual({ status: 'acquired', result: 'processed' })
+    ).rejects.toThrow('consumer lock lease')
     await expect(redis.get(LOCK_KEY)).resolves.toBe('replacement-owner')
 
     await redis.del(LOCK_KEY)

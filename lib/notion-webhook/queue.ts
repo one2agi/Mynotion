@@ -308,7 +308,15 @@ export async function withDirtyConsumerLock<T>(
         CONSUMER_LOCK_KEY,
         ownerToken
       )
-      decodeMutationResult(releaseResult, 'consumer-lock release')
+      const released = decodeMutationResult(
+        releaseResult,
+        'consumer-lock release'
+      )
+      if (!released) {
+        const lostLease = new Error('Notion consumer lock lease was lost')
+        if (primaryError === undefined) primaryError = lostLease
+        else attachReleaseError(primaryError, lostLease)
+      }
     } catch (releaseError) {
       if (primaryError === undefined) primaryError = releaseError
       else attachReleaseError(primaryError, releaseError)

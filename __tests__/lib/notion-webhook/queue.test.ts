@@ -249,7 +249,7 @@ describe('Notion webhook dirty queue', () => {
     expect(redis.eval).not.toHaveBeenCalled()
   })
 
-  test('returns the task result and releases only its own lock token', async () => {
+  test('returns the task result and rejects if ownership changed before release', async () => {
     await expect(
       withDirtyConsumerLock(async () => ({ consumed: 2 }))
     ).resolves.toEqual({ status: 'acquired', result: { consumed: 2 } })
@@ -261,10 +261,9 @@ describe('Notion webhook dirty queue', () => {
         return 0
       }
     )
-    await expect(withDirtyConsumerLock(async () => 'done')).resolves.toEqual({
-      status: 'acquired',
-      result: 'done'
-    })
+    await expect(withDirtyConsumerLock(async () => 'done')).rejects.toThrow(
+      'consumer lock lease'
+    )
     expect(strings.get(LOCK_KEY)).toBe('replacement-owner')
   })
 

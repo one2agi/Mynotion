@@ -18,13 +18,9 @@ export type ServerRefreshOptions = {
   claimWindowMs?: number
 }
 
-export function logServerKnowledgeGraphError(error: unknown): void {
-  // Keep server logs useful without serializing request data or secrets.
-  const err = error as { message?: string; stack?: string }
-  console.error(
-    `[knowledge-graph] ${err?.message || 'unknown error'}`,
-    err?.stack ? `\n${err.stack}` : ''
-  )
+export function logServerKnowledgeGraphError(_error: unknown): void {
+  // External errors can contain request data or credentials. Keep this static.
+  console.error('[knowledge-graph] refresh failed')
 }
 
 export function createServerKnowledgeGraphStore() {

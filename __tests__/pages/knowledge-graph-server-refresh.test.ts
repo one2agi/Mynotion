@@ -23,7 +23,10 @@ import {
 } from '@/lib/knowledge-graph/notionFetch'
 import { fetchKnowledgeGraphSiteData } from '@/lib/knowledge-graph/notionSource'
 import { createRedisGraphStore } from '@/lib/knowledge-graph/redisStore'
-import { refreshServerKnowledgeGraph } from '@/lib/knowledge-graph/serverRefresh'
+import {
+  logServerKnowledgeGraphError,
+  refreshServerKnowledgeGraph
+} from '@/lib/knowledge-graph/serverRefresh'
 import handler from '@/pages/api/knowledge-graph'
 
 class MemoryBlobStore {
@@ -157,4 +160,14 @@ test('keeps the normal server API on the default ten-minute claim window', async
   expect(fetchKnowledgeGraphSiteData).toHaveBeenCalledWith(
     expect.objectContaining({ locale: 'en' })
   )
+})
+
+test('does not serialize external error details into server logs', async () => {
+  const error = jest.spyOn(console, 'error').mockImplementation(() => undefined)
+
+  logServerKnowledgeGraphError(
+    new Error('secret_token request body and private article data')
+  )
+
+  expect(error).toHaveBeenCalledWith('[knowledge-graph] refresh failed')
 })

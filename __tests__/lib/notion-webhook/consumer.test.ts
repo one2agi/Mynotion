@@ -401,6 +401,34 @@ describe('Notion webhook dirty consumer', () => {
     expect(ackDirtyPage).toHaveBeenCalledWith(pageB, 101)
   })
 
+  test('retains graph-dependent pages when refresh reports stale page fallback', async () => {
+    jest.mocked(planRouteRevalidation).mockReturnValue({
+      paths: ['/article/a'],
+      nextSnapshot: { ...snapshot(pageA), processedEventAt: 100 },
+      redirect: null,
+      refreshGraph: true,
+      becamePrivate: false
+    })
+    jest.mocked(refreshServerKnowledgeGraph).mockResolvedValue({
+      status: 'refreshed',
+      graph: { nodes: [], edges: [] },
+      incomplete: true
+    } as never)
+    jest.mocked(createServerKnowledgeGraphStore).mockReturnValue({
+      getState: jest.fn().mockResolvedValue({
+        status: 'success',
+        refreshedAt: 1_000,
+        pageIds: [pageA]
+      })
+    } as never)
+
+    await expect(
+      consumeDirtyPages({ revalidate: jest.fn(), now: () => 1_000 })
+    ).resolves.toMatchObject({ acknowledged: 0, retained: 1 })
+    expect(putRouteSnapshot).not.toHaveBeenCalled()
+    expect(ackDirtyPage).not.toHaveBeenCalled()
+  })
+
   test('accepts a skipped graph only when persisted graph state covers each event score', async () => {
     jest.mocked(planRouteRevalidation).mockReturnValue({
       paths: ['/article/a'],

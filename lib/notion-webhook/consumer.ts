@@ -174,7 +174,7 @@ export async function consumeDirtyPages({
         })
         lease.assertOwned()
         if (graphResult.status === 'refreshed') {
-          graphCompleted = true
+          graphCompleted = graphResult.incomplete !== true
         } else {
           const state =
             await createServerKnowledgeGraphStore().getState<RefreshState>()

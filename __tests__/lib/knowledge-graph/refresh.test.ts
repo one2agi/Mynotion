@@ -333,6 +333,7 @@ test('keeps the prior snapshot when one changed page fails', async () => {
   expect(context.store.putPageSnapshot).not.toHaveBeenCalled()
   expect(result).toMatchObject({
     status: 'refreshed',
+    incomplete: true,
     graph: { edges: [{ source: A, target: B }] }
   })
   expect(context.store.putGraph).toHaveBeenCalledWith(
@@ -342,6 +343,7 @@ test('keeps the prior snapshot when one changed page fails', async () => {
     'generation-one',
     1_200_000
   )
+  expect(context.store.putState).not.toHaveBeenCalled()
 })
 
 test('rejects the real global fallback before changing stored graph data', async () => {
