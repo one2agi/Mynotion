@@ -65,9 +65,21 @@ function Banner(props) {
   const router = useRouter()
   const { allNavPages } = props
   /**
-   * 随机跳转文章
+   * 优先读配置的固定链接(绝对 URL 走新窗口,相对路径走内部路由)
+   * 未配置则保留原随机文章行为
    */
   function handleClickBanner() {
+    const bannerLink = siteConfig('HEO_HERO_BANNER_LINK', null, CONFIG)
+    if (bannerLink) {
+      if (/^https?:\/\//i.test(bannerLink)) {
+        window.open(bannerLink, '_blank', 'noopener,noreferrer')
+      } else {
+        router.push(bannerLink)
+      }
+      return
+    }
+    // 未配置则保留原随机文章行为(不破坏现有访客体验)
+    if (!allNavPages?.length) return
     const randomIndex = Math.floor(Math.random() * allNavPages.length)
     const randomPost = allNavPages[randomIndex]
     router.push(`${siteConfig('SUB_PATH', '')}/${randomPost?.slug}`)
