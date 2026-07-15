@@ -22,7 +22,6 @@ import {
   isLegacyNotionId,
   resolveLegacyNotionRedirect
 } from '@/lib/utils/legacyNotionRedirect'
-import { getStoredRedirect } from '@/lib/notion-webhook/routeState'
 
 const normalizeLocalRedirect = value => {
   if (
@@ -44,7 +43,8 @@ export async function resolveStoredSlugResult({
   props,
   segments,
   locale,
-  revalidate
+  revalidate,
+  readStoredRedirect
 }) {
   if (props.post) {
     return { props, revalidate }
@@ -60,7 +60,10 @@ export async function resolveStoredSlugResult({
 
   let destination
   try {
-    destination = await getStoredRedirect(storedLocale, requestedPath)
+    if (typeof readStoredRedirect !== 'function') {
+      throw new TypeError('route-state redirect reader is required')
+    }
+    destination = await readStoredRedirect(storedLocale, requestedPath)
   } catch (error) {
     console.error('[stored-slug-redirect] route state unavailable:', error)
     return { notFound: true }
@@ -189,7 +192,17 @@ export async function getStaticPaths() {
   })
 }
 
-export async function getStaticProps({ params: { prefix }, locale }) {
+export async function getStaticProps({
+  params: { prefix },
+  locale,
+  revalidateReason
+}) {
+  // This import must stay directly inside the page data hook. routeState uses
+  // ioredis and must never be traversed by the browser webpack compilation.
+  const { getStoredRedirect, isExplicitlyPrivate } = await import(
+    '@/lib/notion-webhook/routeState'
+  )
+
   if (isLegacyNotionId(prefix)) {
     const allPages = await getSharedAllPages({
       locale,
@@ -206,14 +219,17 @@ export async function getStaticProps({ params: { prefix }, locale }) {
 
   const props = await resolvePostProps({
     prefix,
-    locale
+    locale,
+    isPageExplicitlyPrivate: isExplicitlyPrivate,
+    allowSourceConfirmedWithoutRouteState: revalidateReason === 'build'
   })
 
   return resolveStoredSlugResult({
     props,
     segments: [prefix],
     locale,
-    revalidate: getPublicContentRevalidateSeconds(props.NOTION_CONFIG)
+    revalidate: getPublicContentRevalidateSeconds(props.NOTION_CONFIG),
+    readStoredRedirect: getStoredRedirect
   })
 }
 

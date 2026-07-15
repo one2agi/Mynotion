@@ -100,7 +100,8 @@ describe('private route tombstone enforcement', () => {
     const props = await resolvePostProps({
       prefix: 'article',
       slug: 'stale-post',
-      locale: 'zh-CN'
+      locale: 'zh-CN',
+      isPageExplicitlyPrivate: isExplicitlyPrivate
     })
 
     expect(props.post).toBeNull()
@@ -114,7 +115,8 @@ describe('private route tombstone enforcement', () => {
     const props = await resolvePostProps({
       prefix: 'article',
       slug: 'stale-post',
-      locale: 'zh-CN'
+      locale: 'zh-CN',
+      isPageExplicitlyPrivate: isExplicitlyPrivate
     })
 
     expect(props.post).toMatchObject({ id: publishedPageId })
@@ -132,10 +134,56 @@ describe('private route tombstone enforcement', () => {
     const props = await resolvePostProps({
       prefix: 'article',
       slug: 'stale-post',
-      locale: 'zh-CN'
+      locale: 'zh-CN',
+      isPageExplicitlyPrivate: isExplicitlyPrivate
     })
 
     expect(props.post).toBeNull()
+    expect(fetchNotionPageBlocks).not.toHaveBeenCalled()
+    expect(errorSpy).toHaveBeenCalledWith(
+      expect.stringContaining('route state unavailable'),
+      publishedPageId,
+      expect.any(Error)
+    )
+  })
+
+  test('allows a source-listed public article only during the initial build', async () => {
+    const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {})
+    isExplicitlyPrivate.mockRejectedValue(new Error('redis unavailable'))
+
+    const props = await resolvePostProps({
+      prefix: 'article',
+      slug: 'stale-post',
+      locale: 'zh-CN',
+      isPageExplicitlyPrivate: isExplicitlyPrivate,
+      allowSourceConfirmedWithoutRouteState: true
+    })
+
+    expect(props.post).toMatchObject({ id: publishedPageId })
+    expect(fetchNotionPageBlocks).toHaveBeenCalledWith(
+      publishedPageId,
+      expect.stringContaining('article/stale-post'),
+      { cacheVersion: 100 }
+    )
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining('source-confirmed build fallback')
+    )
+  })
+
+  test('keeps a UUID body fallback closed during a build without route state', async () => {
+    const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {})
+    isExplicitlyPrivate.mockRejectedValue(new Error('redis unavailable'))
+
+    const props = await resolvePostProps({
+      prefix: 'article',
+      slug: publishedPageId,
+      locale: 'zh-CN',
+      isPageExplicitlyPrivate: isExplicitlyPrivate,
+      allowSourceConfirmedWithoutRouteState: true
+    })
+
+    expect(props.post).toBeNull()
+    expect(fetchPageFromNotion).not.toHaveBeenCalled()
     expect(fetchNotionPageBlocks).not.toHaveBeenCalled()
     expect(errorSpy).toHaveBeenCalledWith(
       expect.stringContaining('route state unavailable'),
@@ -150,7 +198,8 @@ describe('private route tombstone enforcement', () => {
     const props = await resolvePostProps({
       prefix: 'article',
       slug: publishedPageId,
-      locale: 'zh-CN'
+      locale: 'zh-CN',
+      isPageExplicitlyPrivate: isExplicitlyPrivate
     })
 
     expect(props.post).toBeNull()
@@ -170,7 +219,8 @@ describe('private route tombstone enforcement', () => {
     const props = await resolvePostProps({
       prefix: 'article',
       slug: publishedPageId,
-      locale: 'zh-CN'
+      locale: 'zh-CN',
+      isPageExplicitlyPrivate: isExplicitlyPrivate
     })
 
     expect(props.post).toMatchObject({ id: publishedPageId })

@@ -29,18 +29,28 @@ export async function getStaticPaths() {
   })
 }
 
-export async function getStaticProps({ params: { prefix, slug }, locale }) {
+export async function getStaticProps({
+  params: { prefix, slug },
+  locale,
+  revalidateReason
+}) {
+  const { getStoredRedirect, isExplicitlyPrivate } = await import(
+    '@/lib/notion-webhook/routeState'
+  )
   const props = await resolvePostProps({
     prefix,
     slug,
-    locale
+    locale,
+    isPageExplicitlyPrivate: isExplicitlyPrivate,
+    allowSourceConfirmedWithoutRouteState: revalidateReason === 'build'
   })
 
   return resolveStoredSlugResult({
     props,
     segments: [prefix, slug],
     locale,
-    revalidate: getPublicContentRevalidateSeconds(props.NOTION_CONFIG)
+    revalidate: getPublicContentRevalidateSeconds(props.NOTION_CONFIG),
+    readStoredRedirect: getStoredRedirect
   })
 }
 
