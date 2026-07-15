@@ -51,7 +51,8 @@ export function createRedisGraphStore(): GraphBlobStore {
       const value = await client.get(key)
       if (value == null) return null
       try {
-        return JSON.parse(value)
+        const parsed: unknown = JSON.parse(value)
+        return parsed
       } catch {
         // 兼容旧数据:原样返回 string
         return value
@@ -66,13 +67,13 @@ export function createRedisGraphStore(): GraphBlobStore {
       const blobs: Array<{ key: string }> = []
       let cursor = '0'
       do {
-        const result = (await client.scan(
+        const result = await client.scan(
           cursor,
           'MATCH',
           `${prefix}*`,
           'COUNT',
           '200'
-        )) as [string, string[]]
+        )
         const next = result[0]
         const keys = result[1] || []
         cursor = next
