@@ -84,4 +84,28 @@ runIntegration('Notion webhook queue on Redis 7', () => {
     ).resolves.toEqual({ status: 'acquired', result: 'released' })
     await expect(redis.get(LOCK_KEY)).resolves.toBeNull()
   })
+
+  test('renews the owner lease on Redis 7 and cannot renew a replacement owner', async () => {
+    let release!: () => void
+    const pending = new Promise<void>(resolve => {
+      release = resolve
+    })
+    const held = withDirtyConsumerLock(
+      async lease => {
+        await pending
+        lease.assertOwned()
+        return 'renewed'
+      },
+      { lockSeconds: 2, renewEveryMs: 500 }
+    )
+
+    await new Promise(resolve => setTimeout(resolve, 700))
+    await expect(redis.pttl(LOCK_KEY)).resolves.toBeGreaterThan(1_500)
+
+    await redis.set(LOCK_KEY, 'replacement-owner', 'EX', 20)
+    await new Promise(resolve => setTimeout(resolve, 700))
+    release()
+    await expect(held).rejects.toThrow('consumer lock lease')
+    await expect(redis.get(LOCK_KEY)).resolves.toBe('replacement-owner')
+  })
 })

@@ -13,6 +13,7 @@ jest.mock('@/lib/cache/redis_cache', () => ({
   redisClient: {
     zadd: jest.fn(),
     zrangebyscore: jest.fn(),
+    zcard: jest.fn(),
     eval: jest.fn(),
     set: jest.fn()
   }
@@ -22,6 +23,7 @@ import { redisClient } from '@/lib/cache/redis_cache'
 import {
   ackDirtyPage,
   enqueueDirtyPage,
+  getDirtyQueueDepth,
   listQuietDirtyPages,
   withDirtyConsumerLock
 } from '@/lib/notion-webhook/queue'
@@ -37,6 +39,9 @@ describe('Notion webhook dirty queue', () => {
     zsets.clear()
     strings.clear()
     jest.clearAllMocks()
+    redis.zcard.mockImplementation(async (key: string) => {
+      return (zsets.get(key) ?? new Map()).size
+    })
 
     redis.zadd.mockImplementation(
       async (key: string, mode: string, score: number, member: string) => {
@@ -80,7 +85,12 @@ describe('Notion webhook dirty queue', () => {
         ex: string,
         ttl: number
       ) => {
-        if (nx !== 'NX' || ex !== 'EX' || ttl !== 240) {
+        if (
+          nx !== 'NX' ||
+          ex !== 'EX' ||
+          !Number.isSafeInteger(ttl) ||
+          ttl < 1
+        ) {
           throw new Error('unexpected lock arguments')
         }
         if (strings.has(key)) return null
@@ -106,8 +116,9 @@ describe('Notion webhook dirty queue', () => {
           return 0
         }
 
-        const [ownerToken] = args
+        const [ownerToken, ttl] = args
         if (strings.get(key) === ownerToken) {
+          if (ttl !== undefined) return 1
           strings.delete(key)
           return 1
         }
@@ -214,6 +225,12 @@ describe('Notion webhook dirty queue', () => {
     )
   })
 
+  test('reports the strict Redis dirty queue depth', async () => {
+    redis.zcard.mockResolvedValueOnce(3)
+    await expect(getDirtyQueueDepth()).resolves.toBe(3)
+    expect(redis.zcard).toHaveBeenCalledWith(DIRTY_KEY)
+  })
+
   test('returns busy without running the consumer when the lock is held', async () => {
     strings.set(LOCK_KEY, 'other-owner')
     const task = jest.fn(async () => 'not-run')
@@ -249,6 +266,62 @@ describe('Notion webhook dirty queue', () => {
       result: 'done'
     })
     expect(strings.get(LOCK_KEY)).toBe('replacement-owner')
+  })
+
+  test('renews only its own lock while work remains active', async () => {
+    jest.useFakeTimers()
+    let finish!: () => void
+    const pending = new Promise<void>(resolve => {
+      finish = resolve
+    })
+
+    const result = withDirtyConsumerLock(
+      async lease => {
+        await pending
+        lease.assertOwned()
+        return 'done'
+      },
+      { lockSeconds: 2, renewEveryMs: 500 }
+    )
+    await jest.advanceTimersByTimeAsync(500)
+
+    expect(redis.eval).toHaveBeenCalledWith(
+      expect.stringContaining("redis.call('EXPIRE'"),
+      1,
+      LOCK_KEY,
+      expect.any(String),
+      '2'
+    )
+    finish()
+    await expect(result).resolves.toEqual({
+      status: 'acquired',
+      result: 'done'
+    })
+    jest.useRealTimers()
+  })
+
+  test('fails safely after lease renewal loses ownership', async () => {
+    jest.useFakeTimers()
+    let continueWork!: () => void
+    const checkpoint = new Promise<void>(resolve => {
+      continueWork = resolve
+    })
+    const result = withDirtyConsumerLock(
+      async lease => {
+        await checkpoint
+        lease.assertOwned()
+        return 'must-not-complete'
+      },
+      { lockSeconds: 2, renewEveryMs: 500 }
+    )
+    const assertion = expect(result).rejects.toThrow('consumer lock lease')
+    strings.set(LOCK_KEY, 'replacement-owner')
+    await jest.advanceTimersByTimeAsync(500)
+    continueWork()
+
+    await assertion
+    expect(strings.get(LOCK_KEY)).toBe('replacement-owner')
+    jest.useRealTimers()
   })
 
   test('propagates task errors and does not let release errors mask them', async () => {

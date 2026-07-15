@@ -34,6 +34,7 @@ type StrictRedisClient = {
     ex: 'EX',
     seconds: number
   ): Promise<'OK' | null>
+  zcard(key: string): Promise<number>
 }
 
 export type DirtyPage = {
@@ -45,13 +46,23 @@ export type DirtyConsumerLockResult<T> =
   | { status: 'busy' }
   | { status: 'acquired'; result: T }
 
+export type DirtyConsumerLease = {
+  assertOwned(): void
+}
+
+type DirtyConsumerLockOptions = {
+  lockSeconds?: number
+  renewEveryMs?: number
+}
+
 const strictRedis = (): StrictRedisClient => {
   const client = redisClient as Partial<StrictRedisClient>
   if (
     typeof client.zadd !== 'function' ||
     typeof client.zrangebyscore !== 'function' ||
     typeof client.eval !== 'function' ||
-    typeof client.set !== 'function'
+    typeof client.set !== 'function' ||
+    typeof client.zcard !== 'function'
   ) {
     throw new Error(
       'Notion webhook queue requires an initialized ioredis client. Check REDIS_URL.'
@@ -135,6 +146,14 @@ end
 return 0
 `
 
+const RENEW_CONSUMER_LOCK_SCRIPT = `
+local current = redis.call('GET', KEYS[1])
+if current and current == ARGV[1] then
+  return redis.call('EXPIRE', KEYS[1], ARGV[2])
+end
+return 0
+`
+
 const decodeMutationResult = (value: unknown, operation: string): boolean => {
   if (value !== 0 && value !== 1) {
     throw new Error(`Invalid Redis ${operation} result`)
@@ -201,31 +220,87 @@ export async function ackDirtyPage(
   return decodeMutationResult(result, 'dirty-page acknowledgement')
 }
 
+export async function getDirtyQueueDepth(): Promise<number> {
+  const depth = await strictRedis().zcard(DIRTY_KEY)
+  if (!isSafeNonnegativeInteger(depth)) {
+    throw new Error('Invalid Redis dirty queue depth')
+  }
+  return depth
+}
+
 export async function withDirtyConsumerLock<T>(
-  task: () => Promise<T>
+  task: (lease: DirtyConsumerLease) => Promise<T>,
+  options: DirtyConsumerLockOptions = {}
 ): Promise<DirtyConsumerLockResult<T>> {
   const client = strictRedis()
+  const lockSeconds = options.lockSeconds ?? CONSUMER_LOCK_SECONDS
+  const renewEveryMs = options.renewEveryMs ?? 60_000
+  if (!Number.isSafeInteger(lockSeconds) || lockSeconds < 1) {
+    throw new Error('Invalid consumer lock duration')
+  }
+  if (
+    !Number.isSafeInteger(renewEveryMs) ||
+    renewEveryMs < 1 ||
+    renewEveryMs >= lockSeconds * 1_000
+  ) {
+    throw new Error('Invalid consumer lock renewal interval')
+  }
   const ownerToken = randomUUID()
   const acquired = await client.set(
     CONSUMER_LOCK_KEY,
     ownerToken,
     'NX',
     'EX',
-    CONSUMER_LOCK_SECONDS
+    lockSeconds
   )
   if (acquired === null) return { status: 'busy' }
   if (acquired !== 'OK') throw new Error('Invalid Redis consumer-lock result')
 
-  let completed = false
+  let leaseError: Error | null = null
+  const renewalState: { inFlight: Promise<void> | null } = { inFlight: null }
+  const renew = async () => {
+    try {
+      const renewed = await client.eval(
+        RENEW_CONSUMER_LOCK_SCRIPT,
+        1,
+        CONSUMER_LOCK_KEY,
+        ownerToken,
+        String(lockSeconds)
+      )
+      if (!decodeMutationResult(renewed, 'consumer-lock renewal')) {
+        throw new Error('owner token no longer matches')
+      }
+    } catch (error) {
+      leaseError = new Error('Notion consumer lock lease was lost', {
+        cause: error
+      })
+    }
+  }
+  const timer = setInterval(() => {
+    if (renewalState.inFlight || leaseError) return
+    renewalState.inFlight = renew().finally(() => {
+      renewalState.inFlight = null
+    })
+  }, renewEveryMs)
+  timer.unref?.()
+
+  const lease: DirtyConsumerLease = {
+    assertOwned() {
+      if (leaseError) throw leaseError
+    }
+  }
+
+  let result: T | undefined
   let primaryError: unknown
   try {
-    const result = await task()
-    completed = true
-    return { status: 'acquired', result }
+    result = await task(lease)
+    lease.assertOwned()
   } catch (error) {
     primaryError = error
-    throw error
   } finally {
+    clearInterval(timer)
+    if (renewalState.inFlight !== null) await renewalState.inFlight
+    if (primaryError === undefined && leaseError) primaryError = leaseError
     try {
       const releaseResult = await client.eval(
         RELEASE_CONSUMER_LOCK_SCRIPT,
@@ -235,8 +310,11 @@ export async function withDirtyConsumerLock<T>(
       )
       decodeMutationResult(releaseResult, 'consumer-lock release')
     } catch (releaseError) {
-      if (completed) throw releaseError
-      attachReleaseError(primaryError, releaseError)
+      if (primaryError === undefined) primaryError = releaseError
+      else attachReleaseError(primaryError, releaseError)
     }
   }
+
+  if (primaryError !== undefined) throw primaryError
+  return { status: 'acquired', result: result as T }
 }
