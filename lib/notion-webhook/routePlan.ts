@@ -101,6 +101,14 @@ const articlePath = (record: RouteRecord, defaultLocale: string): string => {
   return withLocale(`/${encodedSegments(record.slug)}`, locale, defaultLocale)
 }
 
+const canonicalHrefPath = (
+  record: RouteRecord,
+  defaultLocale: string
+): string => {
+  const locale = recordLocale(record, defaultLocale)
+  return withLocale(`/${encodedSegments(record.href)}`, locale, defaultLocale)
+}
+
 const addHomePaths = (context: PlannerContext, postCount: number): void => {
   const { paths, locale, defaultLocale, postsPerPage } = context
   paths.add(withLocale('/', locale, defaultLocale))
@@ -127,8 +135,10 @@ const addTaxonomyPaths = (
   const base = `/${kind}/${encodeURIComponent(value)}`
   paths.add(withLocale(base, locale, defaultLocale))
   const totalPages = Math.ceil(postCount / postsPerPage)
-  for (let page = 2; page <= totalPages; page += 1) {
-    paths.add(withLocale(`${base}/page/${page}`, locale, defaultLocale))
+  if (totalPages > 1) {
+    for (let page = 1; page <= totalPages; page += 1) {
+      paths.add(withLocale(`${base}/page/${page}`, locale, defaultLocale))
+    }
   }
 }
 
@@ -149,6 +159,22 @@ const directoryPosts = (
   }
   return Array.from(unique.values())
 }
+
+const createContext = (
+  input: RoutePlanInput,
+  paths: Set<string>,
+  locale: string
+): PlannerContext => ({
+  paths,
+  locale,
+  defaultLocale: input.defaultLocale,
+  postsPerPage: input.postsPerPage,
+  publicPosts: directoryPosts(
+    input.publicDirectory,
+    locale,
+    input.defaultLocale
+  )
+})
 
 const knownCount = (
   freshCount: number,
@@ -251,41 +277,39 @@ export function planRouteRevalidation(input: RoutePlanInput): RoutePlan {
     }
   }
 
-  const retryPendingPrivate = Boolean(
+  const pendingPrivate = Boolean(
     input.oldSnapshot &&
     !input.oldSnapshot.public &&
-    input.oldSnapshot.pendingEventAt === input.selectedQueueScore &&
+    input.oldSnapshot.pendingEventAt !== undefined &&
+    input.oldSnapshot.pendingEventAt <= input.selectedQueueScore &&
     input.oldSnapshot.processedEventAt < input.selectedQueueScore
   )
   if (
     input.oldSnapshot &&
     input.oldSnapshot.processedEventAt >= input.selectedQueueScore &&
-    !retryPendingPrivate
+    !pendingPrivate
   ) {
     return emptyPlan(input.oldSnapshot)
   }
 
-  const oldWasPublic = Boolean(input.oldSnapshot?.public || retryPendingPrivate)
+  const oldWasPublic = Boolean(input.oldSnapshot?.public || pendingPrivate)
   const newIsPublic = Boolean(input.newPage?.public)
   if (!oldWasPublic && !newIsPublic) return emptyPlan(null)
 
-  const reference = input.newPage || input.oldSnapshot!
-  const locale = recordLocale(reference, input.defaultLocale)
+  const oldLocale = input.oldSnapshot
+    ? recordLocale(input.oldSnapshot, input.defaultLocale)
+    : null
+  const newLocale = input.newPage
+    ? recordLocale(input.newPage, input.defaultLocale)
+    : null
+  const locale = newLocale || oldLocale!
   const paths = new Set<string>()
-  const publicPosts = directoryPosts(
-    input.publicDirectory,
-    locale,
-    input.defaultLocale
-  )
-  const context: PlannerContext = {
-    paths,
-    locale,
-    defaultLocale: input.defaultLocale,
-    postsPerPage: input.postsPerPage,
-    publicPosts
-  }
+  const context = createContext(input, paths, locale)
   const becamePrivate = oldWasPublic && !newIsPublic
-  const becamePublic = !oldWasPublic && newIsPublic
+  const becamePublic = !input.oldSnapshot?.public && newIsPublic
+  const localeChanged = Boolean(
+    oldWasPublic && newIsPublic && oldLocale !== newLocale
+  )
 
   if (oldWasPublic && input.oldSnapshot) {
     paths.add(articlePath(input.oldSnapshot, input.defaultLocale))
@@ -294,8 +318,27 @@ export function planRouteRevalidation(input: RoutePlanInput): RoutePlan {
     paths.add(articlePath(input.newPage, input.defaultLocale))
   }
 
-  if (becamePublic || becamePrivate) {
-    const freshCount = publicPosts.length
+  if (localeChanged) {
+    const oldContext = createContext(input, paths, oldLocale!)
+    const newContext = createContext(input, paths, newLocale!)
+    addListPaths(oldContext, oldContext.publicPosts.length + 1)
+    addAffectedTaxonomies({
+      context: oldContext,
+      oldRecord: input.oldSnapshot,
+      newRecord: null,
+      oldWasPublic: true,
+      newIsPublic: false
+    })
+    addListPaths(newContext, newContext.publicPosts.length)
+    addAffectedTaxonomies({
+      context: newContext,
+      oldRecord: null,
+      newRecord: input.newPage,
+      oldWasPublic: false,
+      newIsPublic: true
+    })
+  } else if (becamePublic || becamePrivate) {
+    const freshCount = context.publicPosts.length
     const oldCount = freshCount + Number(becamePrivate) - Number(becamePublic)
     addListPaths(context, Math.max(freshCount, oldCount))
     addAffectedTaxonomies({
@@ -310,7 +353,7 @@ export function planRouteRevalidation(input: RoutePlanInput): RoutePlan {
   let redirect: RouteRedirect | null = null
   let refreshGraph = becamePublic || becamePrivate
 
-  if (oldWasPublic && newIsPublic && input.oldSnapshot && input.newPage) {
+  if (input.oldSnapshot?.public && newIsPublic && input.newPage) {
     const oldArticlePath = articlePath(input.oldSnapshot, input.defaultLocale)
     const newArticlePath = articlePath(input.newPage, input.defaultLocale)
     const slugChanged = oldArticlePath !== newArticlePath
@@ -321,10 +364,10 @@ export function planRouteRevalidation(input: RoutePlanInput): RoutePlan {
       !sameValues(input.oldSnapshot.categories, input.newPage.categories) ||
       !sameValues(input.oldSnapshot.tags, input.newPage.tags)
 
-    if (titleOrSummaryChanged || slugChanged) {
-      addListPaths(context, publicPosts.length)
+    if (!localeChanged && (titleOrSummaryChanged || slugChanged)) {
+      addListPaths(context, context.publicPosts.length)
     }
-    if (taxonomyChanged) {
+    if (!localeChanged && taxonomyChanged) {
       addAffectedTaxonomies({
         context,
         oldRecord: input.oldSnapshot,
@@ -336,8 +379,8 @@ export function planRouteRevalidation(input: RoutePlanInput): RoutePlan {
     if (slugChanged) {
       const oldLocale = recordLocale(input.oldSnapshot, input.defaultLocale)
       redirect = {
-        from: oldArticlePath,
-        to: newArticlePath,
+        from: canonicalHrefPath(input.oldSnapshot, input.defaultLocale),
+        to: canonicalHrefPath(input.newPage, input.defaultLocale),
         permanent: true,
         ...(oldLocale === input.defaultLocale ? {} : { locale: oldLocale })
       }

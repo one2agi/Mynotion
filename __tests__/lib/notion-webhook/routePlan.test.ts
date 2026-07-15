@@ -117,15 +117,19 @@ describe('pure Notion webhook route planner', () => {
       expectedPaths: [
         '/article/guides/notion',
         '/category/%E4%BA%A7%E5%93%81%20%E8%AE%BE%E8%AE%A1',
+        '/category/%E4%BA%A7%E5%93%81%20%E8%AE%BE%E8%AE%A1/page/1',
         '/category/%E4%BA%A7%E5%93%81%20%E8%AE%BE%E8%AE%A1/page/2',
         '/category/%E4%BA%A7%E5%93%81%20%E8%AE%BE%E8%AE%A1/page/3',
         '/category/%E5%B7%A5%E7%A8%8B',
+        '/category/%E5%B7%A5%E7%A8%8B/page/1',
         '/category/%E5%B7%A5%E7%A8%8B/page/2',
         '/category/%E5%B7%A5%E7%A8%8B/page/3',
         '/tag/%E5%85%A5%E9%97%A8',
+        '/tag/%E5%85%A5%E9%97%A8/page/1',
         '/tag/%E5%85%A5%E9%97%A8/page/2',
         '/tag/%E5%85%A5%E9%97%A8/page/3',
         '/tag/%E8%BF%9B%E9%98%B6',
+        '/tag/%E8%BF%9B%E9%98%B6/page/1',
         '/tag/%E8%BF%9B%E9%98%B6/page/2',
         '/tag/%E8%BF%9B%E9%98%B6/page/3'
       ],
@@ -176,12 +180,14 @@ describe('pure Notion webhook route planner', () => {
         '/archive',
         '/article/guides/notion',
         '/category/%E4%BA%A7%E5%93%81',
+        '/category/%E4%BA%A7%E5%93%81/page/1',
         '/category/%E4%BA%A7%E5%93%81/page/2',
         '/category/%E4%BA%A7%E5%93%81/page/3',
         '/page/2',
         '/page/3',
         '/search',
         '/tag/%E6%96%B0%E6%96%87%E7%AB%A0',
+        '/tag/%E6%96%B0%E6%96%87%E7%AB%A0/page/1',
         '/tag/%E6%96%B0%E6%96%87%E7%AB%A0/page/2',
         '/tag/%E6%96%B0%E6%96%87%E7%AB%A0/page/3'
       ],
@@ -269,8 +275,12 @@ describe('pure Notion webhook route planner', () => {
   test('omits the redirect locale key for the default locale', () => {
     const result = planRouteRevalidation(
       input({
-        oldSnapshot: snapshot({ slug: 'article/old' }),
-        newPage: page({ slug: 'article/new', lastEditedDate: 110 })
+        oldSnapshot: snapshot({ href: '/article/old', slug: 'article/old' }),
+        newPage: page({
+          href: '/article/new',
+          slug: 'article/new',
+          lastEditedDate: 110
+        })
       })
     )
 
@@ -341,6 +351,217 @@ describe('pure Notion webhook route planner', () => {
     expect(result.nextSnapshot).toEqual(pending)
     expect(result.becamePrivate).toBe(true)
     expect(result.refreshGraph).toBe(true)
+  })
+
+  test('replans a pending private tombstone when the queue score advances', () => {
+    const pending = snapshot({
+      public: false,
+      status: 'Draft',
+      processedEventAt: 90,
+      pendingEventAt: 120
+    })
+    const result = planRouteRevalidation(
+      input({
+        selectedQueueScore: 130,
+        oldSnapshot: pending,
+        newPage: null,
+        publicDirectory: directory(4)
+      })
+    )
+
+    expect(result.paths).toEqual(
+      [
+        '/',
+        '/archive',
+        '/article/guides/notion',
+        '/category/%E4%BA%A7%E5%93%81',
+        '/page/2',
+        '/page/3',
+        '/search',
+        '/tag/Notion'
+      ].sort()
+    )
+    expect(result.nextSnapshot).toEqual({
+      ...pending,
+      pendingEventAt: 130
+    })
+    expect(result.becamePrivate).toBe(true)
+    expect(result.refreshGraph).toBe(true)
+  })
+
+  test('restores all list and graph work when a newer public event follows a pending unpublish', () => {
+    const pending = snapshot({
+      public: false,
+      status: 'Draft',
+      processedEventAt: 90,
+      pendingEventAt: 120
+    })
+    const restored = page({ lastEditedDate: 130 })
+    const result = planRouteRevalidation(
+      input({
+        selectedQueueScore: 130,
+        oldSnapshot: pending,
+        newPage: restored,
+        publicDirectory: [...directory(3), restored]
+      })
+    )
+
+    expect(result.paths).toEqual(
+      [
+        '/',
+        '/archive',
+        '/article/guides/notion',
+        '/category/%E4%BA%A7%E5%93%81',
+        '/page/2',
+        '/search',
+        '/tag/Notion'
+      ].sort()
+    )
+    expect(result.nextSnapshot).toEqual({
+      ...restored,
+      processedEventAt: 130
+    })
+    expect(result.becamePrivate).toBe(false)
+    expect(result.refreshGraph).toBe(true)
+  })
+
+  test('includes explicit taxonomy page 1 through every known numbered page', () => {
+    const changed = page({
+      categories: ['工程'],
+      tags: [],
+      lastEditedDate: 110
+    })
+    const result = planRouteRevalidation(
+      input({
+        oldSnapshot: snapshot({ categories: ['产品'], tags: [] }),
+        newPage: changed,
+        publicDirectory: [...directory(2, { categories: ['工程'] }), changed]
+      })
+    )
+
+    expect(result.paths).toEqual(
+      [
+        '/article/guides/notion',
+        '/category/%E4%BA%A7%E5%93%81',
+        '/category/%E5%B7%A5%E7%A8%8B',
+        '/category/%E5%B7%A5%E7%A8%8B/page/1',
+        '/category/%E5%B7%A5%E7%A8%8B/page/2'
+      ].sort()
+    )
+  })
+
+  test('invalidates old and new locale scopes with per-locale pagination on a locale transition', () => {
+    const moved = page({
+      locale: 'zh-CN',
+      href: '/article/new',
+      slug: 'article/new',
+      categories: ['新分类'],
+      tags: ['新标签'],
+      lastEditedDate: 130
+    })
+    const result = planRouteRevalidation(
+      input({
+        selectedQueueScore: 130,
+        oldSnapshot: snapshot({
+          locale: 'en',
+          href: '/article/old',
+          slug: 'article/old',
+          categories: ['Old Category'],
+          tags: ['Old Tag']
+        }),
+        newPage: moved,
+        publicDirectory: [
+          ...directory(
+            4,
+            {
+              locale: 'en',
+              categories: ['Old Category'],
+              tags: ['Old Tag']
+            },
+            10
+          ),
+          ...directory(
+            4,
+            {
+              locale: 'zh-CN',
+              categories: ['新分类'],
+              tags: ['新标签']
+            },
+            20
+          ),
+          moved
+        ]
+      })
+    )
+
+    expect(result.paths).toEqual(
+      [
+        '/',
+        '/archive',
+        '/article/new',
+        '/category/%E6%96%B0%E5%88%86%E7%B1%BB',
+        '/category/%E6%96%B0%E5%88%86%E7%B1%BB/page/1',
+        '/category/%E6%96%B0%E5%88%86%E7%B1%BB/page/2',
+        '/category/%E6%96%B0%E5%88%86%E7%B1%BB/page/3',
+        '/en',
+        '/en/archive',
+        '/en/article/old',
+        '/en/category/Old%20Category',
+        '/en/category/Old%20Category/page/1',
+        '/en/category/Old%20Category/page/2',
+        '/en/category/Old%20Category/page/3',
+        '/en/page/2',
+        '/en/page/3',
+        '/en/search',
+        '/en/tag/Old%20Tag',
+        '/en/tag/Old%20Tag/page/1',
+        '/en/tag/Old%20Tag/page/2',
+        '/en/tag/Old%20Tag/page/3',
+        '/page/2',
+        '/page/3',
+        '/search',
+        '/tag/%E6%96%B0%E6%A0%87%E7%AD%BE',
+        '/tag/%E6%96%B0%E6%A0%87%E7%AD%BE/page/1',
+        '/tag/%E6%96%B0%E6%A0%87%E7%AD%BE/page/2',
+        '/tag/%E6%96%B0%E6%A0%87%E7%AD%BE/page/3'
+      ].sort()
+    )
+    expect(result.redirect).toEqual({
+      from: '/en/article/old',
+      to: '/article/new',
+      permanent: true,
+      locale: 'en'
+    })
+    expect(result.refreshGraph).toBe(true)
+  })
+
+  test('uses raw slug routes for ISR and canonical pseudo-static hrefs for redirects', () => {
+    const result = planRouteRevalidation(
+      input({
+        oldSnapshot: snapshot({
+          locale: 'en',
+          href: '/article/old guide.html',
+          slug: 'article/old guide'
+        }),
+        newPage: page({
+          locale: 'en',
+          href: '/docs/new guide.html',
+          slug: 'docs/new guide',
+          lastEditedDate: 130
+        }),
+        publicDirectory: directory(3, { locale: 'en' })
+      })
+    )
+
+    expect(result.paths).toContain('/en/article/old%20guide')
+    expect(result.paths).toContain('/en/docs/new%20guide')
+    expect(result.paths.every(path => !path.endsWith('.html'))).toBe(true)
+    expect(result.redirect).toEqual({
+      from: '/en/article/old%20guide.html',
+      to: '/en/docs/new%20guide.html',
+      permanent: true,
+      locale: 'en'
+    })
   })
 
   test('normalizes and deduplicates paths and never enumerates keyword searches', () => {
