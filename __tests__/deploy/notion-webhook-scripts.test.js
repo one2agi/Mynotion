@@ -61,7 +61,10 @@ describe('Notion webhook VPS deployment assets', () => {
     ['string true', '{"ok":"true"}'],
     ['nested true', '{"result":{"ok":true}}'],
     ['invalid JSON', '{"ok":true'],
-    ['array root', '[{"ok":true}]']
+    ['array root', '[{"ok":true}]'],
+    ['duplicate key', '{"ok":false,"ok":true}'],
+    ['NaN constant', '{"ok":true,"value":NaN}'],
+    ['Infinity constant', '{"ok":true,"value":Infinity}']
   ])('runner rejects %s responses', (_label, body) => {
     expect(runResponseValidator(body).status).not.toBe(0)
   })
@@ -79,6 +82,19 @@ describe('Notion webhook VPS deployment assets', () => {
     expect(install).toContain('command -v python3')
     expect(install).toContain('command -v curl')
     expect(install).toContain('command -v flock')
+  })
+
+  test('finish uses the same strict validator for the bootstrap response', () => {
+    const source = read('deploy/scripts/configure-notion-webhook-vps.sh')
+    const finish = source.slice(
+      source.indexOf('finish_setup() {'),
+      source.indexOf('\nshow_status() {')
+    )
+
+    expect(finish).toContain(
+      '/usr/local/sbin/run-notion-refresh --validate-response "$BOOTSTRAP_RESPONSE"'
+    )
+    expect(finish).not.toMatch(/grep[^\n]*BOOTSTRAP_RESPONSE/)
   })
 
   test.each(scripts)('%s rejects unsafe environment-file references', file => {

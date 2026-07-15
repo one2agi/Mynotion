@@ -6,11 +6,55 @@ readonly ENV_FILE=/opt/notionnext/.env.production
 readonly RUNTIME_DIR=/run/notionnext-notion-refresh
 readonly LOCK_FILE=$RUNTIME_DIR/refresh.lock
 
+validate_response() {
+  local RESPONSE_FILE=$1
+  python3 - "$RESPONSE_FILE" <<'PY'
+import json
+import sys
+
+
+def reject_constant(value):
+    raise ValueError(f"invalid JSON constant: {value}")
+
+
+def reject_duplicate_keys(pairs):
+    result = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError(f"duplicate JSON key: {key}")
+        result[key] = value
+    return result
+
+
+try:
+    with open(sys.argv[1], encoding="utf-8") as response:
+        payload = json.load(
+            response,
+            parse_constant=reject_constant,
+            object_pairs_hook=reject_duplicate_keys,
+        )
+except (OSError, UnicodeError, ValueError):
+    raise SystemExit(1)
+
+if not isinstance(payload, dict) or payload.get("ok") is not True:
+    raise SystemExit(1)
+PY
+}
+
 if [ "$(id -u)" -ne 0 ]; then
   echo "Notion refresh runner must run as root" >&2
   exit 1
 fi
 umask 077
+
+if [ "$#" -eq 2 ] && [ "$1" = --validate-response ]; then
+  validate_response "$2"
+  exit
+fi
+if [ "$#" -ne 0 ]; then
+  echo "Usage: run-notion-refresh [--validate-response <response-file>]" >&2
+  exit 2
+fi
 
 if [ ! -e "$RUNTIME_DIR" ]; then
   install -d -o root -g root -m 700 -- "$RUNTIME_DIR"
@@ -68,38 +112,7 @@ trap 'rm -f "$RESPONSE_FILE"' EXIT
   --output "$RESPONSE_FILE" \
   --config -
 
-if ! python3 - "$RESPONSE_FILE" <<'PY'
-import json
-import sys
-
-
-def reject_constant(value):
-    raise ValueError(f"invalid JSON constant: {value}")
-
-
-def reject_duplicate_keys(pairs):
-    result = {}
-    for key, value in pairs:
-        if key in result:
-            raise ValueError(f"duplicate JSON key: {key}")
-        result[key] = value
-    return result
-
-
-try:
-    with open(sys.argv[1], encoding="utf-8") as response:
-        payload = json.load(
-            response,
-            parse_constant=reject_constant,
-            object_pairs_hook=reject_duplicate_keys,
-        )
-except (OSError, UnicodeError, ValueError):
-    raise SystemExit(1)
-
-if not isinstance(payload, dict) or payload.get("ok") is not True:
-    raise SystemExit(1)
-PY
-then
+if ! validate_response "$RESPONSE_FILE"; then
   echo "Notion dirty refresh did not return ok=true" >&2
   exit 1
 fi

@@ -207,7 +207,7 @@ fi
   --output "$BOOTSTRAP_RESPONSE" \
   --config -
 
-if ! grep -Eq '"ok"[[:space:]]*:[[:space:]]*true' "$BOOTSTRAP_RESPONSE"; then
+if ! /usr/local/sbin/run-notion-refresh --validate-response "$BOOTSTRAP_RESPONSE"; then
   echo "Bootstrap did not return ok=true; timer remains disabled" >&2
   exit 1
 fi
