@@ -42,7 +42,8 @@ export async function getStaticProps({
     slug,
     locale,
     isPageExplicitlyPrivate: isExplicitlyPrivate,
-    allowSourceConfirmedWithoutRouteState: revalidateReason === 'build'
+    allowSourceConfirmedWithoutRouteState:
+      revalidateReason === 'build' && !BLOG.REDIS_URL
   })
 
   return resolveStoredSlugResult({

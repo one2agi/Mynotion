@@ -1,4 +1,5 @@
 const publishedPageId = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'
+let listedStatus = 'Published'
 
 const staleSiteData = () => ({
   allPages: [
@@ -8,7 +9,7 @@ const staleSiteData = () => ({
       href: '/article/stale-post',
       title: 'Stale published post',
       type: 'Post',
-      status: 'Published',
+      status: listedStatus,
       tags: [],
       tagItems: [],
       category: [],
@@ -89,6 +90,7 @@ import { isExplicitlyPrivate } from '@/lib/notion-webhook/routeState'
 
 describe('private route tombstone enforcement', () => {
   beforeEach(() => {
+    listedStatus = 'Published'
     isExplicitlyPrivate.mockReset()
     fetchNotionPageBlocks.mockClear()
     fetchPageFromNotion.mockClear()
@@ -166,7 +168,29 @@ describe('private route tombstone enforcement', () => {
       { cacheVersion: 100 }
     )
     expect(warnSpy).toHaveBeenCalledWith(
-      expect.stringContaining('source-confirmed build fallback')
+      expect.stringContaining('published build fallback')
+    )
+  })
+
+  test('does not publish a source-listed invisible article during the initial build', async () => {
+    const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {})
+    listedStatus = 'Invisible'
+    isExplicitlyPrivate.mockRejectedValue(new Error('redis unavailable'))
+
+    const props = await resolvePostProps({
+      prefix: 'article',
+      slug: 'stale-post',
+      locale: 'zh-CN',
+      isPageExplicitlyPrivate: isExplicitlyPrivate,
+      allowSourceConfirmedWithoutRouteState: true
+    })
+
+    expect(props.post).toBeNull()
+    expect(fetchNotionPageBlocks).not.toHaveBeenCalled()
+    expect(errorSpy).toHaveBeenCalledWith(
+      expect.stringContaining('route state unavailable'),
+      publishedPageId,
+      expect.any(Error)
     )
   })
 
