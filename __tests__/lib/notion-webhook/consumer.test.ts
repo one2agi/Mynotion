@@ -200,12 +200,32 @@ describe('Notion webhook dirty consumer', () => {
     expect(fetchFreshConfiguredGlobalData).not.toHaveBeenCalled()
   })
 
-  test('returns busy without selecting or reading Notion', async () => {
+  test('returns busy with the real constant-time queue depth without reading Notion', async () => {
     jest.mocked(withDirtyConsumerLock).mockResolvedValue({ status: 'busy' })
+    jest.mocked(getDirtyQueueDepth).mockResolvedValue(7)
 
     await expect(
       consumeDirtyPages({ revalidate: jest.fn(), now: () => 1_000 })
-    ).resolves.toMatchObject({ status: 'busy', selected: 0 })
+    ).resolves.toMatchObject({
+      status: 'busy',
+      selected: 0,
+      queueDepth: 7
+    })
+    expect(getDirtyQueueDepth).toHaveBeenCalledTimes(1)
+    expect(listQuietDirtyPages).not.toHaveBeenCalled()
+    expect(fetchFreshConfiguredGlobalData).not.toHaveBeenCalled()
+  })
+
+  test('fails closed when busy queue depth cannot be read', async () => {
+    jest.mocked(withDirtyConsumerLock).mockResolvedValue({ status: 'busy' })
+    jest
+      .mocked(getDirtyQueueDepth)
+      .mockRejectedValue(new Error('redis://user:secret@example.invalid'))
+
+    await expect(
+      consumeDirtyPages({ revalidate: jest.fn(), now: () => 1_000 })
+    ).rejects.toThrow('secret')
+    expect(getDirtyQueueDepth).toHaveBeenCalledTimes(1)
     expect(listQuietDirtyPages).not.toHaveBeenCalled()
     expect(fetchFreshConfiguredGlobalData).not.toHaveBeenCalled()
   })

@@ -136,7 +136,9 @@ describe('/api/revalidate dirty compatibility', () => {
   test('reports unavailable Redis/consumer work as 503', async () => {
     jest
       .mocked(consumeDirtyPages)
-      .mockRejectedValue(new Error('Redis unavailable'))
+      .mockRejectedValue(
+        new Error('redis://user:secret@example.invalid queue depth failed')
+      )
     const res = response()
     await handler(request({ dirty: true }) as never, res as never)
 
@@ -144,6 +146,7 @@ describe('/api/revalidate dirty compatibility', () => {
       statusCode: 503,
       body: { ok: false, message: 'Dirty revalidation unavailable' }
     })
+    expect(JSON.stringify(res.read().body)).not.toContain('secret')
   })
 
   test('preserves existing single, multi and all response shapes', async () => {

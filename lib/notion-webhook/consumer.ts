@@ -225,11 +225,14 @@ export async function consumeDirtyPages({
   })
 
   if (lockResult.status === 'busy') {
+    // ZCARD is O(1); keep the operational response accurate without scanning
+    // or selecting queue members while another consumer owns the lease.
+    const queueDepth = await getDirtyQueueDepth()
     return result({
       status: 'busy',
       selected: 0,
       acknowledged: 0,
-      queueDepth: 0,
+      queueDepth,
       paths: [],
       startedAt,
       now
