@@ -39,6 +39,12 @@ begin_setup() {
   ssh "$SERVER" 'sudo bash -s' <<'REMOTE'
 set -euo pipefail
 ENV_FILE=/opt/notionnext/.env.production
+if [ ! -f "$ENV_FILE" ] || [ -L "$ENV_FILE" ] || \
+  [ "$(stat -c %u:%g "$ENV_FILE")" != 0:0 ] || \
+  [ "$(stat -c %a "$ENV_FILE")" != 600 ]; then
+  echo "Environment file must be a root-owned mode 0600 regular file" >&2
+  exit 1
+fi
 ENV_TMP=$(mktemp "${ENV_FILE}.tmp.XXXXXX")
 trap 'rm -f "$ENV_TMP"' EXIT
 
@@ -50,8 +56,8 @@ chmod 600 "$ENV_TMP"
 mv -f "$ENV_TMP" "$ENV_FILE"
 trap - EXIT
 
-systemctl disable --now notionnext-notion-refresh.timer >/dev/null 2>&1 || true
-systemctl stop notionnext-notion-refresh.service >/dev/null 2>&1 || true
+systemctl disable --now notionnext-notion-refresh.timer >/dev/null
+systemctl stop notionnext-notion-refresh.service >/dev/null
 
 cd /opt/notionnext
 CURRENT_IMAGE=$(docker inspect --format='{{.Config.Image}}' notionnext-app)
@@ -61,7 +67,7 @@ if [ -z "$IMAGE_TAG" ] || [ "$IMAGE_TAG" = "$CURRENT_IMAGE" ]; then
   exit 1
 fi
 export IMAGE_TAG
-docker compose up -d --no-deps --force-recreate app
+docker compose --env-file "$ENV_FILE" up -d --no-deps --force-recreate app
 
 for attempt in $(seq 1 48); do
   if curl -fsS --max-time 5 http://127.0.0.1:3030/api/health | grep -q '"ok":true'; then
@@ -72,7 +78,7 @@ for attempt in $(seq 1 48); do
 done
 
 echo "Application health check failed in webhook setup mode" >&2
-docker compose logs --tail 80 app >&2
+docker compose --env-file "$ENV_FILE" logs --tail 80 app >&2
 exit 1
 REMOTE
 }
@@ -98,6 +104,12 @@ set -euo pipefail
 umask 077
 
 ENV_FILE=/opt/notionnext/.env.production
+if [ ! -f "$ENV_FILE" ] || [ -L "$ENV_FILE" ] || \
+  [ "$(stat -c %u:%g "$ENV_FILE")" != 0:0 ] || \
+  [ "$(stat -c %a "$ENV_FILE")" != 600 ]; then
+  echo "Environment file must be a root-owned mode 0600 regular file" >&2
+  exit 1
+fi
 TOKEN_PATH=/tmp/notion-webhook-verification-token
 TOKEN_FILE=$(mktemp /tmp/notion-webhook-verification-token.XXXXXX)
 ENV_TMP=
@@ -105,8 +117,8 @@ BOOTSTRAP_RESPONSE=$(mktemp /tmp/notion-webhook-bootstrap-response.XXXXXX)
 trap 'rm -f "$TOKEN_FILE" "$BOOTSTRAP_RESPONSE" ${ENV_TMP:-}' EXIT
 chmod 600 "$TOKEN_FILE" "$BOOTSTRAP_RESPONSE"
 
-systemctl disable --now notionnext-notion-refresh.timer >/dev/null 2>&1 || true
-systemctl stop notionnext-notion-refresh.service >/dev/null 2>&1 || true
+systemctl disable --now notionnext-notion-refresh.timer >/dev/null
+systemctl stop notionnext-notion-refresh.service >/dev/null
 
 if docker exec notionnext-app sh -eu -c '
   TOKEN_PATH=/tmp/notion-webhook-verification-token
@@ -148,7 +160,7 @@ if [ -z "$IMAGE_TAG" ] || [ "$IMAGE_TAG" = "$CURRENT_IMAGE" ]; then
   exit 1
 fi
 export IMAGE_TAG
-docker compose up -d --no-deps --force-recreate app
+docker compose --env-file "$ENV_FILE" up -d --no-deps --force-recreate app
 
 HEALTHY=false
 for attempt in $(seq 1 48); do
@@ -160,7 +172,7 @@ for attempt in $(seq 1 48); do
 done
 if [ "$HEALTHY" != true ]; then
   echo "Application health check failed after webhook setup" >&2
-  docker compose logs --tail 80 app >&2
+  docker compose --env-file "$ENV_FILE" logs --tail 80 app >&2
   exit 1
 fi
 
@@ -224,8 +236,8 @@ REMOTE
 disable_scheduler() {
   ssh "$SERVER" 'sudo bash -s' <<'REMOTE'
 set -euo pipefail
-systemctl disable --now notionnext-notion-refresh.timer >/dev/null 2>&1 || true
-systemctl stop notionnext-notion-refresh.service >/dev/null 2>&1 || true
+systemctl disable --now notionnext-notion-refresh.timer >/dev/null
+systemctl stop notionnext-notion-refresh.service >/dev/null
 echo "Notion webhook timer disabled; Redis and application caches were not changed"
 REMOTE
 }

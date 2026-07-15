@@ -3,15 +3,32 @@
 set -euo pipefail
 
 readonly ENV_FILE=/opt/notionnext/.env.production
-readonly LOCK_FILE=/run/lock/notionnext-notion-refresh.lock
+readonly RUNTIME_DIR=/run/notionnext-notion-refresh
+readonly LOCK_FILE=$RUNTIME_DIR/refresh.lock
 
 if [ "$(id -u)" -ne 0 ]; then
   echo "Notion refresh runner must run as root" >&2
   exit 1
 fi
+umask 077
 
-if [ ! -f "$ENV_FILE" ]; then
-  echo "Notion refresh environment file is missing" >&2
+if [ ! -e "$RUNTIME_DIR" ]; then
+  install -d -o root -g root -m 700 -- "$RUNTIME_DIR"
+fi
+if [ ! -d "$RUNTIME_DIR" ] || [ -L "$RUNTIME_DIR" ] || \
+  [ "$(stat -c %u:%g "$RUNTIME_DIR")" != 0:0 ] || \
+  [ "$(stat -c %a "$RUNTIME_DIR")" != 700 ]; then
+  echo "Notion refresh runtime directory must be root-owned mode 0700" >&2
+  exit 1
+fi
+
+if [ ! -f "$ENV_FILE" ] || [ -L "$ENV_FILE" ]; then
+  echo "Notion refresh environment file is missing or unsafe" >&2
+  exit 1
+fi
+if [ "$(stat -c %u:%g "$ENV_FILE")" != 0:0 ] || \
+  [ "$(stat -c %a "$ENV_FILE")" != 600 ]; then
+  echo "Notion refresh environment file must be a root-owned mode 0600 regular file" >&2
   exit 1
 fi
 
@@ -34,7 +51,6 @@ if ! flock --nonblock 9; then
   exit 0
 fi
 
-umask 077
 RESPONSE_FILE=$(mktemp /tmp/notionnext-refresh-response.XXXXXX)
 trap 'rm -f "$RESPONSE_FILE"' EXIT
 

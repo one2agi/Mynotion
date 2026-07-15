@@ -31,6 +31,16 @@ describe('Notion webhook VPS deployment assets', () => {
     expect(source).not.toMatch(/curl[^\n]*Authorization:/)
     expect(source).not.toMatch(/curl[^\n]*\$REVALIDATION_TOKEN/)
     expect(source).toContain('flock --nonblock')
+    expect(source).toContain('/run/notionnext-notion-refresh')
+    expect(source).not.toContain('/run/lock/notionnext-notion-refresh.lock')
+  })
+
+  test.each(scripts)('%s rejects unsafe environment-file references', file => {
+    const source = read(file)
+
+    expect(source).toContain('[ -L "$ENV_FILE" ]')
+    expect(source).toContain('stat -c %u:%g "$ENV_FILE"')
+    expect(source).toContain('stat -c %a "$ENV_FILE"')
   })
 
   test('systemd runs a bounded non-overlapping job every minute', () => {
@@ -39,6 +49,8 @@ describe('Notion webhook VPS deployment assets', () => {
 
     expect(service).toMatch(/^Type=oneshot$/m)
     expect(service).toMatch(/^TimeoutStartSec=250$/m)
+    expect(service).toMatch(/^RuntimeDirectory=notionnext-notion-refresh$/m)
+    expect(service).toMatch(/^RuntimeDirectoryMode=0700$/m)
     expect(service).toMatch(
       /^ExecStart=\/usr\/local\/sbin\/run-notion-refresh$/m
     )
@@ -72,9 +84,11 @@ describe('Notion webhook VPS deployment assets', () => {
     expect(source).toMatch(/chmod 600 "\$TOKEN_FILE"/)
     expect(source).toMatch(/chmod 600 "\$ENV_TMP"/)
     expect(source).toContain('mv -f "$ENV_TMP" "$ENV_FILE"')
-    expect(source).toContain(
-      'docker compose up -d --no-deps --force-recreate app'
-    )
+    expect(
+      source.match(
+        /docker compose --env-file "\$ENV_FILE" up -d --no-deps --force-recreate app/g
+      ) || []
+    ).toHaveLength(2)
     expect(source).toContain('NOTION_WEBHOOK_SETUP_MODE=true')
     expect(source).toContain('NOTION_WEBHOOK_VERIFICATION_TOKEN')
     expect(source).toMatch(
@@ -103,6 +117,8 @@ describe('Notion webhook VPS deployment assets', () => {
     expect(disable).toContain(
       'systemctl disable --now notionnext-notion-refresh.timer'
     )
+    expect(disable).not.toMatch(/systemctl disable[^\n]*\|\| true/)
+    expect(disable).not.toMatch(/systemctl stop[^\n]*\|\| true/)
     expect(disable).not.toMatch(/docker compose down/)
     expect(disable).not.toMatch(/redis-cli|FLUSH|down -v|volume rm/i)
   })
