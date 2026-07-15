@@ -36,11 +36,11 @@ function clearProxyEnv() {
 }
 
 function loadApi() {
-  let module
+  let loadedModule
   jest.isolateModules(() => {
-    module = require('@/lib/db/notion/getNotionAPI')
+    loadedModule = require('@/lib/db/notion/getNotionAPI')
   })
-  return module.default
+  return loadedModule.default
 }
 
 describe('getNotionAPI Worker integration', () => {
@@ -55,7 +55,7 @@ describe('getNotionAPI Worker integration', () => {
   })
 
   test('uses the direct Notion client when proxy configuration is absent', async () => {
-    const getPage = jest.fn(async () => ({ source: 'direct' }))
+    const getPage = jest.fn(() => Promise.resolve({ source: 'direct' }))
     notionClientFactory.mockImplementation(options => ({ getPage, options }))
 
     const api = loadApi()
@@ -77,7 +77,7 @@ describe('getNotionAPI Worker integration', () => {
     process.env.NOTION_API_PROXY_CIRCUIT_MS = '90000'
 
     notionClientFactory.mockImplementation(options => ({
-      getPage: jest.fn(async () => ({ source: options.apiBaseUrl }))
+      getPage: jest.fn(() => Promise.resolve({ source: options.apiBaseUrl }))
     }))
 
     const api = loadApi()
@@ -108,11 +108,11 @@ describe('getNotionAPI Worker integration', () => {
     process.env.NOTION_API_PROXY_TOKEN = 'fixture-proxy-token'
 
     notionClientFactory.mockImplementation(options => ({
-      getPage: jest.fn(async () => {
+      getPage: jest.fn(() => {
         if (options.apiBaseUrl.includes('worker')) {
-          throw new TypeError('fetch failed')
+          return Promise.reject(new TypeError('fetch failed'))
         }
-        return { source: 'direct-fallback' }
+        return Promise.resolve({ source: 'direct-fallback' })
       })
     }))
 

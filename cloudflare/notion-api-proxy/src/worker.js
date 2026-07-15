@@ -92,8 +92,10 @@ export async function handleRequest(
   }
 }
 
-export default {
+const worker = {
   fetch(request, env, executionCtx) {
     return handleRequest(request, env, executionCtx)
   }
 }
+
+export default worker

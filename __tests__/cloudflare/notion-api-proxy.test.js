@@ -77,12 +77,14 @@ describe('Cloudflare Notion API proxy', () => {
       }
     }
     let forwardedRequest
-    const fetchImpl = jest.fn(async request => {
+    const fetchImpl = jest.fn(request => {
       forwardedRequest = request
-      return new Response(JSON.stringify(upstreamFixture), {
-        status: 200,
-        headers: { 'content-type': 'application/json' }
-      })
+      return Promise.resolve(
+        new Response(JSON.stringify(upstreamFixture), {
+          status: 200,
+          headers: { 'content-type': 'application/json' }
+        })
+      )
     })
     const request = proxyRequest('/api/v3/loadPageChunk?src=initial_load')
 
@@ -109,9 +111,9 @@ describe('Cloudflare Notion API proxy', () => {
   })
 
   test('marks an upstream network exception as a generic channel failure', async () => {
-    const fetchImpl = jest.fn(async () => {
-      throw new Error('sensitive upstream detail')
-    })
+    const fetchImpl = jest.fn(() =>
+      Promise.reject(new Error('sensitive upstream detail'))
+    )
 
     const response = await handleRequest(proxyRequest(), ENV, {}, fetchImpl)
     const body = await response.text()

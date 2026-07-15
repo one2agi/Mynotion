@@ -18,8 +18,8 @@ function responseError(status, headers = {}) {
 
 describe('Notion Worker/direct transport', () => {
   test('uses direct mode when proxy configuration is disabled', async () => {
-    const proxyClient = client(async () => ({ source: 'worker' }))
-    const directClient = client(async () => ({ source: 'direct' }))
+    const proxyClient = client(() => Promise.resolve({ source: 'worker' }))
+    const directClient = client(() => Promise.resolve({ source: 'direct' }))
     const transport = createNotionTransport({
       proxyClient,
       directClient,
@@ -35,8 +35,8 @@ describe('Notion Worker/direct transport', () => {
   })
 
   test('returns Worker success without touching direct Notion', async () => {
-    const proxyClient = client(async () => ({ source: 'worker' }))
-    const directClient = client(async () => ({ source: 'direct' }))
+    const proxyClient = client(() => Promise.resolve({ source: 'worker' }))
+    const directClient = client(() => Promise.resolve({ source: 'direct' }))
     const transport = createNotionTransport({
       proxyClient,
       directClient,
@@ -54,10 +54,12 @@ describe('Notion Worker/direct transport', () => {
 
   test('falls back once and opens the circuit after a network failure', async () => {
     let now = 1_000
-    const proxyClient = client(async () => {
-      throw new TypeError('fetch failed')
-    })
-    const directClient = client(async () => ({ source: 'direct-fallback' }))
+    const proxyClient = client(() =>
+      Promise.reject(new TypeError('fetch failed'))
+    )
+    const directClient = client(() =>
+      Promise.resolve({ source: 'direct-fallback' })
+    )
     const transport = createNotionTransport({
       proxyClient,
       directClient,
@@ -84,11 +86,11 @@ describe('Notion Worker/direct transport', () => {
   test('probes Worker after the circuit expires and closes on success', async () => {
     let now = 10_000
     let shouldFail = true
-    const proxyClient = client(async () => {
-      if (shouldFail) throw responseError(502)
-      return { source: 'worker-recovered' }
+    const proxyClient = client(() => {
+      if (shouldFail) return Promise.reject(responseError(502))
+      return Promise.resolve({ source: 'worker-recovered' })
     })
-    const directClient = client(async () => ({ source: 'direct' }))
+    const directClient = client(() => Promise.resolve({ source: 'direct' }))
     const transport = createNotionTransport({
       proxyClient,
       directClient,
@@ -115,10 +117,8 @@ describe('Notion Worker/direct transport', () => {
       const upstreamError = responseError(status, {
         'x-notion-proxy-upstream': 'notion'
       })
-      const proxyClient = client(async () => {
-        throw upstreamError
-      })
-      const directClient = client(async () => ({ source: 'direct' }))
+      const proxyClient = client(() => Promise.reject(upstreamError))
+      const directClient = client(() => Promise.resolve({ source: 'direct' }))
       const transport = createNotionTransport({
         proxyClient,
         directClient,
