@@ -20,6 +20,13 @@ const SUPPORTED_PAGE_EVENTS = new Set([
   'page.undeleted',
   'page.moved'
 ])
+const SUPPORTED_API_VERSIONS = new Set([
+  '2022-06-28',
+  '2025-09-03',
+  '2026-03-11'
+])
+const UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 type WebhookPayload = {
   id: string
@@ -37,7 +44,7 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value)
 
 const isUuid = (value: unknown): value is string =>
-  normalizePageId(value) !== null
+  typeof value === 'string' && UUID_PATTERN.test(value)
 
 const isValidTimestamp = (value: unknown): value is string => {
   if (
@@ -50,16 +57,16 @@ const isValidTimestamp = (value: unknown): value is string => {
   const canonicalValue = value.includes('.')
     ? value
     : value.replace('Z', '.000Z')
-  return !Number.isNaN(date.valueOf()) && date.toISOString() === canonicalValue
+  const timestampMs = date.valueOf()
+  return (
+    Number.isSafeInteger(timestampMs) &&
+    timestampMs >= 0 &&
+    date.toISOString() === canonicalValue
+  )
 }
 
-const isValidApiVersion = (value: unknown): value is string => {
-  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
-    return false
-  }
-  const date = new Date(`${value}T00:00:00.000Z`)
-  return !Number.isNaN(date.valueOf()) && date.toISOString().startsWith(value)
-}
+const isValidApiVersion = (value: unknown): value is string =>
+  typeof value === 'string' && SUPPORTED_API_VERSIONS.has(value)
 
 const parsePageEvent = (value: unknown): WebhookPayload | null => {
   if (!isRecord(value) || !isRecord(value.entity)) return null
@@ -74,7 +81,8 @@ const parsePageEvent = (value: unknown): WebhookPayload | null => {
   if (!isValidTimestamp(value.timestamp)) return null
   if (
     !Number.isSafeInteger(value.attempt_number) ||
-    Number(value.attempt_number) < 1
+    Number(value.attempt_number) < 1 ||
+    Number(value.attempt_number) > 8
   ) {
     return null
   }

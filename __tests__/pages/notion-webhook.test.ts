@@ -127,6 +127,21 @@ describe('Notion webhook receiver', () => {
     expect(JSON.stringify(infoLog.mock.calls)).not.toContain('Fixture Workspace')
   })
 
+  it('preserves the webhook timestamp at millisecond precision', async () => {
+    const timestamp = '2024-12-05T23:55:34.285Z'
+    const payload = { ...pageContentUpdated, timestamp }
+
+    const { status } = await invoke(
+      createRequest({ body: JSON.stringify(payload) })
+    )
+
+    expect(status).toHaveBeenCalledWith(200)
+    expect(mockedEnqueueDirtyPage).toHaveBeenCalledWith({
+      pageId: '50000000000040008000000000000001',
+      eventTimestampMs: Date.parse(timestamp)
+    })
+  })
+
   it.each([
     ['page.content_updated', pageContentUpdated],
     ['page.properties_updated', pagePropertiesUpdated],
@@ -211,11 +226,24 @@ describe('Notion webhook receiver', () => {
   it.each([
     ['entity type', { entity: { ...pageContentUpdated.entity, type: 'block' } }],
     ['entity id', { entity: { ...pageContentUpdated.entity, id: 'not-a-uuid' } }],
+    [
+      'unhyphenated entity id',
+      {
+        entity: {
+          ...pageContentUpdated.entity,
+          id: pageContentUpdated.entity.id.replaceAll('-', '')
+        }
+      }
+    ],
     ['event id', { id: 'not-a-uuid' }],
+    ['unhyphenated event id', { id: pageContentUpdated.id.replaceAll('-', '') }],
     ['timestamp', { timestamp: 'not-a-timestamp' }],
     ['calendar timestamp', { timestamp: '2026-02-31T03:05:05.000Z' }],
+    ['pre-epoch timestamp', { timestamp: '1969-12-31T23:59:59.999Z' }],
     ['attempt number', { attempt_number: 0 }],
-    ['api version', { api_version: 'latest' }]
+    ['attempt number above retry limit', { attempt_number: 9 }],
+    ['api version', { api_version: 'latest' }],
+    ['unknown dated api version', { api_version: '2024-01-01' }]
   ])('returns 400 for invalid %s', async (_name, replacement) => {
     const payload = { ...pageContentUpdated, ...replacement }
     const { status, end } = await invoke(
