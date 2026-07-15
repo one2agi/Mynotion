@@ -22,6 +22,7 @@ describe('Notion Worker deployment scripts', () => {
     expect(source).toContain('/health')
     expect(source).toMatch(/for attempt in \$\(seq 1 12\)/)
     expect(source).toContain('sleep 5')
+    expect(source.match(/curl --noproxy '\*'/g)).toHaveLength(2)
   })
 
   test('VPS configuration transfers secrets on stdin and supports rollback', () => {

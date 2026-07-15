@@ -35,9 +35,9 @@ echo "==> 4/4 Verify Worker contract"
 HEALTH_STATUS=000
 UNAUTH_STATUS=000
 for attempt in $(seq 1 12); do
-  HEALTH_STATUS=$(curl -sS -o /dev/null -w '%{http_code}' \
+  HEALTH_STATUS=$(curl --noproxy '*' -sS -o /dev/null -w '%{http_code}' \
     "$PROXY_ORIGIN/health") || HEALTH_STATUS=000
-  UNAUTH_STATUS=$(curl -sS -o /dev/null -w '%{http_code}' \
+  UNAUTH_STATUS=$(curl --noproxy '*' -sS -o /dev/null -w '%{http_code}' \
     -X POST -H 'content-type: application/json' --data '{}' \
     "$PROXY_API_URL/loadPageChunk") || UNAUTH_STATUS=000
   if [ "$HEALTH_STATUS" = "200" ] && [ "$UNAUTH_STATUS" = "401" ]; then
