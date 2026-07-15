@@ -4,7 +4,7 @@ import { resolvePostProps } from '@/lib/db/SiteDataApi'
 import { getStaticPathsBase } from '@/lib/build/staticPaths'
 import { getPublicContentRevalidateSeconds } from '@/lib/cache/publicContentCache'
 import { checkSlugHasMorThanTwoSlash } from '@/lib/utils/post'
-import Slug from '..'
+import Slug, { resolveStoredSlugResult } from '..'
 
 /**
  * 根据notion的slug访问页面
@@ -15,7 +15,6 @@ import Slug from '..'
 const PrefixSlug = props => {
   return <Slug {...props} />
 }
-
 
 export async function getStaticPaths() {
   return getStaticPathsBase({
@@ -40,19 +39,19 @@ export async function getStaticProps({
   params: { prefix, slug, suffix },
   locale
 }) {
-
   const props = await resolvePostProps({
     prefix,
     slug,
     suffix,
-    locale,
+    locale
   })
 
-  return {
+  return resolveStoredSlugResult({
     props,
-    revalidate: getPublicContentRevalidateSeconds(props.NOTION_CONFIG),
-    notFound: !props.post
-  }
+    segments: [prefix, slug, ...suffix],
+    locale,
+    revalidate: getPublicContentRevalidateSeconds(props.NOTION_CONFIG)
+  })
 }
 
 export default PrefixSlug

@@ -1,7 +1,7 @@
 import BLOG from '@/blog.config'
 import { siteConfig } from '@/lib/config'
 import { resolvePostProps } from '@/lib/db/SiteDataApi'
-import Slug from '..'
+import Slug, { resolveStoredSlugResult } from '..'
 import { getStaticPathsBase } from '@/lib/build/staticPaths'
 import { getPublicContentRevalidateSeconds } from '@/lib/cache/publicContentCache'
 import { checkSlugHasOneSlash } from '@/lib/utils/post'
@@ -33,14 +33,15 @@ export async function getStaticProps({ params: { prefix, slug }, locale }) {
   const props = await resolvePostProps({
     prefix,
     slug,
-    locale,
+    locale
   })
 
-  return {
+  return resolveStoredSlugResult({
     props,
-    revalidate: getPublicContentRevalidateSeconds(props.NOTION_CONFIG),
-    notFound: !props.post
-  }
+    segments: [prefix, slug],
+    locale,
+    revalidate: getPublicContentRevalidateSeconds(props.NOTION_CONFIG)
+  })
 }
 
 export default PrefixSlug

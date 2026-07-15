@@ -22,6 +22,62 @@ import {
   isLegacyNotionId,
   resolveLegacyNotionRedirect
 } from '@/lib/utils/legacyNotionRedirect'
+import { getStoredRedirect } from '@/lib/notion-webhook/routeState'
+
+const normalizeLocalRedirect = value => {
+  if (
+    typeof value !== 'string' ||
+    !value.startsWith('/') ||
+    value.startsWith('//') ||
+    value.includes('//') ||
+    value.includes('\\') ||
+    value.includes('?') ||
+    value.includes('#') ||
+    /[\u0000-\u001f\u007f]/.test(value)
+  ) {
+    return null
+  }
+  return value.length > 1 ? value.replace(/\/+$/, '') : value
+}
+
+export async function resolveStoredSlugResult({
+  props,
+  segments,
+  locale,
+  revalidate
+}) {
+  if (props.post) {
+    return { props, revalidate }
+  }
+
+  const storedLocale = locale && locale !== BLOG.LANG ? locale : undefined
+  const requestedPath = `/${[
+    ...(storedLocale ? [storedLocale] : []),
+    ...segments
+  ]
+    .map(segment => encodeURIComponent(String(segment)))
+    .join('/')}`
+
+  let destination
+  try {
+    destination = await getStoredRedirect(storedLocale, requestedPath)
+  } catch (error) {
+    console.error('[stored-slug-redirect] route state unavailable:', error)
+    return { notFound: true }
+  }
+
+  const safeDestination = normalizeLocalRedirect(destination)
+  if (
+    safeDestination === null ||
+    safeDestination === normalizeLocalRedirect(requestedPath)
+  ) {
+    return { notFound: true }
+  }
+
+  return {
+    redirect: { destination: safeDestination, permanent: true }
+  }
+}
 
 /**
  * 根据notion的slug访问页面
@@ -153,11 +209,12 @@ export async function getStaticProps({ params: { prefix }, locale }) {
     locale
   })
 
-  return {
+  return resolveStoredSlugResult({
     props,
-    revalidate: getPublicContentRevalidateSeconds(props.NOTION_CONFIG),
-    notFound: !props.post
-  }
+    segments: [prefix],
+    locale,
+    revalidate: getPublicContentRevalidateSeconds(props.NOTION_CONFIG)
+  })
 }
 
 export default Slug
