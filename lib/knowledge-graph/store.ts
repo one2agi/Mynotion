@@ -199,9 +199,16 @@ export function createGraphStore(
       await blobStore.delete(pageSnapshotKey(id))
     },
 
-    async acquireRefreshClaim(owner: string): Promise<RefreshClaim | null> {
-      const windowStart =
-        Math.floor(clock() / REFRESH_CLAIM_WINDOW_MS) * REFRESH_CLAIM_WINDOW_MS
+    async acquireRefreshClaim(
+      owner: string,
+      windowMs = REFRESH_CLAIM_WINDOW_MS
+    ): Promise<RefreshClaim | null> {
+      if (!Number.isSafeInteger(windowMs) || windowMs < 1) {
+        throw new TypeError(
+          'Refresh claim window must be a positive safe integer'
+        )
+      }
+      const windowStart = Math.floor(clock() / windowMs) * windowMs
       const claim: RefreshClaim = { owner, windowStart }
 
       try {

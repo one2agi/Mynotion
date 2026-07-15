@@ -382,6 +382,17 @@ test('leaves the current publication untouched when the claim is denied', async 
   expect(context.store.putState).not.toHaveBeenCalled()
 })
 
+test('passes a configured dirty claim window to the existing graph store', async () => {
+  const context = setup({ claim: null })
+
+  await refreshKnowledgeGraph({ ...context.deps, claimWindowMs: 60_000 })
+
+  expect(context.store.acquireRefreshClaim).toHaveBeenCalledWith(
+    'generation-one',
+    60_000
+  )
+})
+
 test('publishes immutable graph and marker before successful state and cleanup', async () => {
   const context = setup({
     pages: [page(A, 10)],

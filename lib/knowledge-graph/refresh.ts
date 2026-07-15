@@ -26,7 +26,10 @@ interface RefreshStore {
   getPageSnapshot(id: string): Promise<PageSnapshot | null>
   putPageSnapshot(id: string, snapshot: PageSnapshot): Promise<void>
   deletePageSnapshot(id: string): Promise<void>
-  acquireRefreshClaim(owner: string): Promise<RefreshClaim | null>
+  acquireRefreshClaim(
+    owner: string,
+    windowMs?: number
+  ): Promise<RefreshClaim | null>
   putGraph(
     graph: PublicGraph,
     generationId: string,
@@ -66,11 +69,13 @@ export interface RefreshDependencies {
   ): Promise<PageRecordMap | null>
   clock(): number
   createId(): string
+  claimWindowMs?: number
   logError?: (error: unknown) => void
 }
 
 export type RefreshResult =
-  { status: 'refreshed'; graph: PublicGraph } | { status: 'skipped' }
+  | { status: 'refreshed'; graph: PublicGraph }
+  | { status: 'skipped' }
 
 type RefreshPage = PublishedPage & {
   lastEditedDate: number
@@ -80,7 +85,10 @@ type RefreshPage = PublishedPage & {
 export async function refreshKnowledgeGraph(
   deps: RefreshDependencies
 ): Promise<RefreshResult> {
-  const claim = await deps.store.acquireRefreshClaim(deps.createId())
+  const claim = await deps.store.acquireRefreshClaim(
+    deps.createId(),
+    deps.claimWindowMs
+  )
   if (!claim) return { status: 'skipped' }
 
   const globalData = await deps.fetchGlobalAllData()
