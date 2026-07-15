@@ -10,19 +10,27 @@ jest.mock('@/blog.config', () => ({
 }))
 
 jest.mock('@/lib/cache/cache_manager', () => {
+  const actual = jest.requireActual('@/lib/cache/cache_manager')
   const setDataToCache = jest.fn()
+  const setDataToCacheStrict = jest.fn()
   return {
+    ...actual,
     getOrSetDataWithCache: jest.fn((_key, load) => load()),
     setDataToCache,
-    isUsableCacheValue: jest.fn(
-      data => Array.isArray(data?.allPages) && data.allPages.length > 0
-    ),
-    __mockSetDataToCache: setDataToCache
+    setDataToCacheStrict,
+    __mockSetDataToCache: setDataToCache,
+    __mockSetDataToCacheStrict: setDataToCacheStrict
   }
 })
 jest.mock('@/lib/cache/redis_fallback', () => {
   const saveFallback = jest.fn()
-  return { saveFallback, __mockSaveFallback: saveFallback }
+  const saveFallbackStrict = jest.fn()
+  return {
+    saveFallback,
+    saveFallbackStrict,
+    __mockSaveFallback: saveFallback,
+    __mockSaveFallbackStrict: saveFallbackStrict
+  }
 })
 jest.mock('@/lib/db/notion/getPostBlocks', () => {
   const fetchNotionPageBlocks = jest.fn()
@@ -93,7 +101,9 @@ import * as fallbackMock from '@/lib/cache/redis_fallback'
 
 const fetchNotionPageBlocks = blocksMock.__mockFetchNotionPageBlocks
 const setDataToCache = cacheManagerMock.__mockSetDataToCache
+const setDataToCacheStrict = cacheManagerMock.__mockSetDataToCacheStrict
 const saveFallback = fallbackMock.__mockSaveFallback
+const saveFallbackStrict = fallbackMock.__mockSaveFallbackStrict
 
 function sourceMapFor(pageId) {
   const collectionId = `collection-${pageId}`
@@ -129,7 +139,9 @@ describe('fetchFreshConfiguredGlobalData', () => {
     BLOG.NOTION_PAGE_ID = 'database-one'
     fetchNotionPageBlocks.mockReset()
     setDataToCache.mockReset()
+    setDataToCacheStrict.mockReset()
     saveFallback.mockReset()
+    saveFallbackStrict.mockReset()
     fetchNotionPageBlocks.mockImplementation(pageId =>
       Promise.resolve(sourceMapFor(pageId))
     )
@@ -155,10 +167,13 @@ describe('fetchFreshConfiguredGlobalData', () => {
       pageId: BLOG.NOTION_PAGE_ID,
       locale: undefined
     })
-    expect(setDataToCache).toHaveBeenCalledWith(siteKey, expect.any(Object))
-    expect(setDataToCache).toHaveBeenCalledWith(globalKey, result[0].data)
-    expect(saveFallback).toHaveBeenCalledWith(siteKey, expect.any(Object))
-    expect(saveFallback).toHaveBeenCalledWith(globalKey, result[0].data)
+    expect(setDataToCacheStrict).toHaveBeenCalledWith(
+      siteKey,
+      expect.any(Object)
+    )
+    expect(setDataToCacheStrict).toHaveBeenCalledWith(globalKey, result[0].data)
+    expect(saveFallbackStrict).toHaveBeenCalledWith(siteKey, expect.any(Object))
+    expect(saveFallbackStrict).toHaveBeenCalledWith(globalKey, result[0].data)
   })
 
   test('refreshes configured locales in declaration order', async () => {
@@ -176,14 +191,74 @@ describe('fetchFreshConfiguredGlobalData', () => {
       'database-zh',
       'database-en'
     ])
-    expect(setDataToCache).toHaveBeenCalledWith(
+    expect(setDataToCacheStrict).toHaveBeenCalledWith(
       getGlobalDataCacheKey({ pageId: BLOG.NOTION_PAGE_ID, locale: 'zh' }),
       result[0].data
     )
-    expect(setDataToCache).toHaveBeenCalledWith(
+    expect(setDataToCacheStrict).toHaveBeenCalledWith(
       getGlobalDataCacheKey({ pageId: BLOG.NOTION_PAGE_ID, locale: 'en' }),
       result[1].data
     )
+  })
+
+  test('keeps default and locale cache keys aligned with mixed declaration selection', async () => {
+    BLOG.NOTION_PAGE_ID = 'en:database-en,database-secondary'
+
+    const result = await fetchFreshConfiguredGlobalData()
+
+    const defaultKey = getGlobalDataCacheKey({
+      pageId: BLOG.NOTION_PAGE_ID,
+      locale: undefined
+    })
+    const enKey = getGlobalDataCacheKey({
+      pageId: BLOG.NOTION_PAGE_ID,
+      locale: 'en'
+    })
+    expect(setDataToCacheStrict).toHaveBeenCalledWith(
+      defaultKey,
+      result[0].data
+    )
+    expect(setDataToCacheStrict).toHaveBeenCalledWith(enKey, result[0].data)
+    expect(setDataToCacheStrict).not.toHaveBeenCalledWith(
+      defaultKey,
+      result[1].data
+    )
+  })
+
+  test('keeps an unprefixed first declaration as default and caches later locales separately', async () => {
+    BLOG.NOTION_PAGE_ID = 'database-default,en:database-en'
+
+    const result = await fetchFreshConfiguredGlobalData()
+
+    const defaultKey = getGlobalDataCacheKey({
+      pageId: BLOG.NOTION_PAGE_ID,
+      locale: undefined
+    })
+    const enKey = getGlobalDataCacheKey({
+      pageId: BLOG.NOTION_PAGE_ID,
+      locale: 'en'
+    })
+    expect(setDataToCacheStrict).toHaveBeenCalledWith(
+      defaultKey,
+      result[0].data
+    )
+    expect(setDataToCacheStrict).toHaveBeenCalledWith(enKey, result[1].data)
+    expect(setDataToCacheStrict).not.toHaveBeenCalledWith(
+      defaultKey,
+      result[1].data
+    )
+  })
+
+  test('rejects ambiguous multiple unprefixed databases before reading source', async () => {
+    BLOG.NOTION_PAGE_ID = 'database-one,database-two'
+
+    await expect(fetchFreshConfiguredGlobalData()).rejects.toThrow(
+      'multiple unprefixed databases'
+    )
+
+    expect(fetchNotionPageBlocks).not.toHaveBeenCalled()
+    expect(setDataToCacheStrict).not.toHaveBeenCalled()
+    expect(saveFallbackStrict).not.toHaveBeenCalled()
   })
 
   test('leaves normal multilingual locale selection and cached block reads unchanged', async () => {
@@ -219,6 +294,9 @@ describe('fetchFreshConfiguredGlobalData', () => {
 
     expect(setDataToCache).not.toHaveBeenCalled()
     expect(saveFallback).not.toHaveBeenCalled()
+    expect(setDataToCacheStrict).not.toHaveBeenCalled()
+    expect(saveFallbackStrict).not.toHaveBeenCalled()
+    expect(fetchNotionPageBlocks).toHaveBeenCalledTimes(2)
   })
 
   test('fails closed for empty or unusable source data without overwriting fallbacks', async () => {
@@ -228,5 +306,17 @@ describe('fetchFreshConfiguredGlobalData', () => {
 
     expect(setDataToCache).not.toHaveBeenCalled()
     expect(saveFallback).not.toHaveBeenCalled()
+    expect(setDataToCacheStrict).not.toHaveBeenCalled()
+    expect(saveFallbackStrict).not.toHaveBeenCalled()
+  })
+
+  test('rejects when a required cache layer cannot persist', async () => {
+    setDataToCacheStrict.mockRejectedValueOnce(new Error('Redis write failed'))
+
+    await expect(fetchFreshConfiguredGlobalData()).rejects.toThrow(
+      'Redis write failed'
+    )
+
+    expect(saveFallbackStrict).not.toHaveBeenCalled()
   })
 })

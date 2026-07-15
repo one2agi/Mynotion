@@ -23,7 +23,11 @@ jest.mock('@/lib/cache/redis_cache', () => {
   }
 })
 
-import { saveFallback, loadFallback } from '@/lib/cache/redis_fallback'
+import {
+  saveFallback,
+  saveFallbackStrict,
+  loadFallback
+} from '@/lib/cache/redis_fallback'
 import * as redisCacheMock from '@/lib/cache/redis_cache'
 
 describe('redis_fallback', () => {
@@ -49,10 +53,24 @@ describe('redis_fallback', () => {
     })
 
     test('Redis set 抛错时不传播(降级为 no-op)', async () => {
-      redisCacheMock.__mockSet.mockRejectedValue(new Error('redis connection lost'))
+      redisCacheMock.__mockSet.mockRejectedValue(
+        new Error('redis connection lost')
+      )
 
       // 不应 throw
-      await expect(saveFallback('test:key', { foo: 1 })).resolves.toBeUndefined()
+      await expect(
+        saveFallback('test:key', { foo: 1 })
+      ).resolves.toBeUndefined()
+    })
+
+    test('严格写入传播 Redis 失败', async () => {
+      redisCacheMock.__mockSet.mockRejectedValue(
+        new Error('strict redis connection lost')
+      )
+
+      await expect(saveFallbackStrict('test:key', { foo: 1 })).rejects.toThrow(
+        'strict redis connection lost'
+      )
     })
   })
 
