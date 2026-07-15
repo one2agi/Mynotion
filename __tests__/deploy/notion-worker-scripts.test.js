@@ -48,4 +48,18 @@ describe('Notion Worker deployment scripts', () => {
       'bash deploy/scripts/deploy-notion-worker.sh'
     )
   })
+
+  test('Worker uses the account-owned custom domain instead of workers.dev', () => {
+    const config = JSON.parse(
+      read('cloudflare/notion-api-proxy/wrangler.jsonc')
+    )
+    const source = read('deploy/scripts/deploy-notion-worker.sh')
+
+    expect(config.routes).toEqual([
+      { pattern: 'notion-api.faiz-world.com', custom_domain: true }
+    ])
+    expect(source).toContain(
+      'https://notion-api.faiz-world.com/api/v3'
+    )
+  })
 })

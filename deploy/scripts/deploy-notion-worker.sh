@@ -11,7 +11,6 @@ export CI=1
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 CONFIG="$PROJECT_DIR/cloudflare/notion-api-proxy/wrangler.jsonc"
-WORKER_NAME="notionnext-notion-api-proxy"
 WRANGLER=(pnpm dlx wrangler@4.110.0)
 
 cd "$PROJECT_DIR"
@@ -23,25 +22,9 @@ echo "==> 2/4 Store encrypted Worker secret"
 printf '%s' "$NOTION_API_PROXY_TOKEN" | \
   "${WRANGLER[@]}" secret put NOTION_PROXY_TOKEN --config "$CONFIG"
 
-if [ -n "${NOTION_API_PROXY_URL:-}" ]; then
-  PROXY_API_URL="${NOTION_API_PROXY_URL%/}"
-else
-  echo "==> 3/4 Resolve workers.dev hostname"
-  SUBDOMAIN_RESPONSE=$(
-    printf 'header = "Authorization: Bearer %s"\nurl = "https://api.cloudflare.com/client/v4/accounts/%s/workers/subdomain"\n' \
-      "$CLOUDFLARE_API_TOKEN" "$CLOUDFLARE_ACCOUNT_ID" | curl -fsS --config -
-  )
-  SUBDOMAIN=$(printf '%s' "$SUBDOMAIN_RESPONSE" | node -e '
-    let body = ""
-    process.stdin.on("data", chunk => { body += chunk })
-    process.stdin.on("end", () => {
-      const parsed = JSON.parse(body)
-      if (!parsed.success || !parsed.result?.subdomain) process.exit(1)
-      process.stdout.write(parsed.result.subdomain)
-    })
-  ')
-  PROXY_API_URL="https://${WORKER_NAME}.${SUBDOMAIN}.workers.dev/api/v3"
-fi
+echo "==> 3/4 Select custom Worker domain"
+PROXY_API_URL="${NOTION_API_PROXY_URL:-https://notion-api.faiz-world.com/api/v3}"
+PROXY_API_URL="${PROXY_API_URL%/}"
 
 PROXY_ORIGIN="${PROXY_API_URL%/api/v3}"
 mkdir -p "$PROJECT_DIR/.artifacts"
