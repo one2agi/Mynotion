@@ -61,6 +61,8 @@
     "smoke:knowledge-graph": "node scripts/smoke-knowledge-graph.mjs",
     "verify:edgeone-build": "node scripts/verify-edgeone-build-contract.js",
     "probe:edgeone": "node scripts/probe-edgeone-stability.mjs",
+    "test:notion-worker": "jest __tests__/cloudflare/notion-api-proxy.test.js __tests__/lib/db/notion/notionTransport.test.js __tests__/lib/db/notion/getNotionAPI.test.js __tests__/deploy/notion-worker-scripts.test.js --runInBand",
+    "deploy:notion-worker": "bash deploy/scripts/deploy-notion-worker.sh",
     "translate": "node scripts/translate/index.js",
     "translate:all": "node scripts/translate/index.js --batch",
     "translate:check": "node scripts/translate/index.js --check-drift",

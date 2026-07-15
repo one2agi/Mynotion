@@ -122,3 +122,50 @@ DEPLOY_TAG=v1.0.0 ./deploy/scripts/deploy.sh tencent-vps
 ```
 
 自动完成:build → save → scp → load → up → 冒烟测试 → 清理旧镜像(只清本项目)。
+
+## Notion API Cloudflare Worker 主通道
+
+Notion 内容 API (`www.notion.so/api/v3`) 默认通过专用 Cloudflare Worker
+访问。Worker 只做鉴权和透明转发，不缓存 POST 响应；Worker 通道发生网络、
+路由或部署故障时，应用会熔断 60 秒并回退到 Notion 直连。现有 5 分钟 ISR、
+Redis 7 天 fallback 和 stale 缓存顺序不变。
+
+### 部署 Worker
+
+```bash
+export CLOUDFLARE_ACCOUNT_ID='<account-id>'
+export CLOUDFLARE_API_TOKEN='<deployment-token>'
+export NOTION_API_PROXY_TOKEN='<long-random-shared-secret>'
+./deploy/scripts/deploy-notion-worker.sh
+```
+
+脚本把 Worker URL 写入忽略目录 `.artifacts/notion-worker-url`。Cloudflare API
+Token 只作为 Wrangler 进程环境变量使用；共享密钥通过标准输入写入 Worker
+Secret，二者都不能提交到 Git。
+
+### 在 VPS 启用
+
+```bash
+export NOTION_API_PROXY_URL="$(cat .artifacts/notion-worker-url)"
+export NOTION_API_PROXY_TOKEN='<same-shared-secret>'
+./deploy/scripts/configure-notion-proxy-vps.sh tencent-vps
+```
+
+检查通道：
+
+```bash
+ssh tencent-vps "cd /opt/notionnext && sudo docker compose logs --since=10m app | grep NotionTransport"
+```
+
+日志只能包含 `worker`、`direct-fallback`、`direct-circuit-open`、耗时和状态类别，
+不得出现共享密钥、Notion Cookie 或响应正文。
+
+### 回滚到 Notion 直连
+
+```bash
+./deploy/scripts/configure-notion-proxy-vps.sh tencent-vps --disable
+```
+
+该命令只删除四个 `NOTION_API_PROXY_*` 运行时变量并重建 app 容器，不删除
+Redis、Docker volumes 或最后成功缓存。部署完成后轮换用于 Wrangler 部署的
+Cloudflare API Token；轮换不会影响已经保存的 Worker Secret。
