@@ -19,6 +19,8 @@ describe('Notion Worker deployment scripts', () => {
     )
     expect(source).not.toMatch(/--(?:token|api-token)[= ]/)
     expect(source).toContain('/health')
+    expect(source).toMatch(/for attempt in \$\(seq 1 12\)/)
+    expect(source).toContain('sleep 5')
   })
 
   test('VPS configuration transfers secrets on stdin and supports rollback', () => {

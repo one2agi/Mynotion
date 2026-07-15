@@ -48,10 +48,19 @@ umask 077
 printf '%s\n' "$PROXY_API_URL" > "$PROJECT_DIR/.artifacts/notion-worker-url"
 
 echo "==> 4/4 Verify Worker contract"
-HEALTH_STATUS=$(curl -fsS -o /dev/null -w '%{http_code}' "$PROXY_ORIGIN/health")
-UNAUTH_STATUS=$(curl -sS -o /dev/null -w '%{http_code}' \
-  -X POST -H 'content-type: application/json' --data '{}' \
-  "$PROXY_API_URL/loadPageChunk")
+HEALTH_STATUS=000
+UNAUTH_STATUS=000
+for attempt in $(seq 1 12); do
+  HEALTH_STATUS=$(curl -sS -o /dev/null -w '%{http_code}' \
+    "$PROXY_ORIGIN/health") || HEALTH_STATUS=000
+  UNAUTH_STATUS=$(curl -sS -o /dev/null -w '%{http_code}' \
+    -X POST -H 'content-type: application/json' --data '{}' \
+    "$PROXY_API_URL/loadPageChunk") || UNAUTH_STATUS=000
+  if [ "$HEALTH_STATUS" = "200" ] && [ "$UNAUTH_STATUS" = "401" ]; then
+    break
+  fi
+  [ "$attempt" -lt 12 ] && sleep 5
+done
 
 if [ "$HEALTH_STATUS" != "200" ] || [ "$UNAUTH_STATUS" != "401" ]; then
   echo "Worker verification failed: health=$HEALTH_STATUS unauthenticated_api=$UNAUTH_STATUS" >&2
