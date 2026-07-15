@@ -10,6 +10,7 @@ describe('Notion Worker deployment scripts', () => {
 
     expect(source).toMatch(/^set -euo pipefail$/m)
     expect(source).not.toMatch(/set -x/)
+    expect(source).toMatch(/^export CI=1$/m)
     expect(source).toContain('CLOUDFLARE_API_TOKEN')
     expect(source).toContain('CLOUDFLARE_ACCOUNT_ID')
     expect(source).toContain('NOTION_API_PROXY_TOKEN')

@@ -2,6 +2,7 @@
 # Deploy the authenticated Notion /api/v3 transport Worker.
 # Secrets are accepted only through environment variables and stdin.
 set -euo pipefail
+export CI=1
 
 : "${CLOUDFLARE_API_TOKEN:?CLOUDFLARE_API_TOKEN is required}"
 : "${CLOUDFLARE_ACCOUNT_ID:?CLOUDFLARE_ACCOUNT_ID is required}"
