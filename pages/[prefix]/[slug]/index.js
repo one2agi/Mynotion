@@ -1,7 +1,7 @@
 import BLOG from '@/blog.config'
 import { siteConfig } from '@/lib/config'
 import { resolvePostProps } from '@/lib/db/SiteDataApi'
-import Slug from '..'
+import Slug, { resolveStoredSlugResult } from '..'
 import { getStaticPathsBase } from '@/lib/build/staticPaths'
 import { getPublicContentRevalidateSeconds } from '@/lib/cache/publicContentCache'
 import { checkSlugHasOneSlash } from '@/lib/utils/post'
@@ -29,18 +29,30 @@ export async function getStaticPaths() {
   })
 }
 
-export async function getStaticProps({ params: { prefix, slug }, locale }) {
+export async function getStaticProps({
+  params: { prefix, slug },
+  locale,
+  revalidateReason
+}) {
+  const { getStoredRedirect, isExplicitlyPrivate } = await import(
+    '@/lib/notion-webhook/routeState'
+  )
   const props = await resolvePostProps({
     prefix,
     slug,
     locale,
+    isPageExplicitlyPrivate: isExplicitlyPrivate,
+    allowSourceConfirmedWithoutRouteState:
+      revalidateReason === 'build' && !BLOG.REDIS_URL
   })
 
-  return {
+  return resolveStoredSlugResult({
     props,
+    segments: [prefix, slug],
+    locale,
     revalidate: getPublicContentRevalidateSeconds(props.NOTION_CONFIG),
-    notFound: !props.post
-  }
+    readStoredRedirect: getStoredRedirect
+  })
 }
 
 export default PrefixSlug

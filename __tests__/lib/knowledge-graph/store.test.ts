@@ -258,6 +258,39 @@ test('allows a new immutable refresh claim in an adjacent window', async () => {
   expect(blob.deleteCalls).toEqual([])
 })
 
+test('uses the ten-minute claim window by default and a configured one-minute dirty window', async () => {
+  const blob = new MemoryBlobStore()
+  let now = Date.UTC(2026, 6, 15, 12, 3, 15)
+  const store = createGraphStore(blob, () => now)
+
+  expect(await store.acquireRefreshClaim('normal')).toEqual({
+    owner: 'normal',
+    windowStart: Date.UTC(2026, 6, 15, 12, 0)
+  })
+  expect(await store.acquireRefreshClaim('dirty', 60_000)).toEqual({
+    owner: 'dirty',
+    windowStart: Date.UTC(2026, 6, 15, 12, 3)
+  })
+  expect(await store.acquireRefreshClaim('dirty-again', 60_000)).toBeNull()
+
+  now = Date.UTC(2026, 6, 15, 12, 4)
+
+  expect(await store.acquireRefreshClaim('dirty-next-minute', 60_000)).toEqual({
+    owner: 'dirty-next-minute',
+    windowStart: Date.UTC(2026, 6, 15, 12, 4)
+  })
+})
+
+test('rejects invalid configured refresh claim windows', async () => {
+  const store = createGraphStore(new MemoryBlobStore(), () => 1_000)
+
+  for (const windowMs of [0, -1, 1.5, Number.MAX_SAFE_INTEGER + 1]) {
+    await expect(store.acquireRefreshClaim('worker', windowMs)).rejects.toThrow(
+      'Refresh claim window must be a positive safe integer'
+    )
+  }
+})
+
 test('keeps the newer publication when an older adjacent window finishes last', async () => {
   const blob = new MemoryBlobStore()
   const store = createGraphStore(blob, () => 1_000)

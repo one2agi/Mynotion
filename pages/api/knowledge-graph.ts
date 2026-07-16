@@ -1,17 +1,11 @@
 import type { NextApiRequest, NextApiResponse } from 'next'
-import { randomUUID } from 'node:crypto'
 import BLOG from '@/blog.config'
-import { fetchKnowledgeGraphSiteData } from '@/lib/knowledge-graph/notionSource'
 import {
-  fetchKnowledgeGraphPageBlocks,
-  fetchKnowledgeGraphPageValues
-} from '@/lib/knowledge-graph/notionFetch'
-import {
-  refreshKnowledgeGraph,
-  type RefreshState
-} from '@/lib/knowledge-graph/refresh'
-import { createGraphStore } from '@/lib/knowledge-graph/store'
-import { createRedisGraphStore } from '@/lib/knowledge-graph/redisStore'
+  createServerKnowledgeGraphStore,
+  logServerKnowledgeGraphError,
+  refreshServerKnowledgeGraph
+} from '@/lib/knowledge-graph/serverRefresh'
+import type { RefreshState } from '@/lib/knowledge-graph/refresh'
 
 const DEFAULT_REFRESH_MINUTES = 10
 
@@ -32,15 +26,6 @@ const isStale = (
 ): boolean => {
   if (!state) return true
   return now - state.refreshedAt > refreshAfterMs
-}
-
-const logServerError = (error: unknown) => {
-  // 不要打印 secrets,只记 message + stack
-  const err = error as { message?: string; stack?: string }
-  console.error(
-    `[knowledge-graph] ${err?.message || 'unknown error'}`,
-    err?.stack ? `\n${err.stack}` : ''
-  )
 }
 
 /**
@@ -65,9 +50,7 @@ export default async function handler(
 ) {
   if (req.method !== 'GET') {
     res.setHeader('Allow', 'GET')
-    return res
-      .status(405)
-      .json({ error: 'Method Not Allowed. Use GET.' })
+    return res.status(405).json({ error: 'Method Not Allowed. Use GET.' })
   }
 
   if (!BLOG.REDIS_URL) {
@@ -79,10 +62,9 @@ export default async function handler(
 
   let store
   try {
-    const blobStore = createRedisGraphStore()
-    store = createGraphStore(blobStore, () => Date.now())
+    store = createServerKnowledgeGraphStore()
   } catch (e) {
-    logServerError(e)
+    logServerKnowledgeGraphError(e)
     return res.status(503).json({
       error: 'Knowledge graph storage unavailable',
       detail: (e as Error).message
@@ -96,39 +78,6 @@ export default async function handler(
     return 'zh-CN'
   })()
 
-  const buildRefreshDeps = () => ({
-    store,
-    fetchGlobalAllData: () =>
-      fetchKnowledgeGraphSiteData({
-        pageId: BLOG.NOTION_PAGE_ID,
-        notionIndex: Number(BLOG.NOTION_INDEX) || undefined,
-        postUrlPrefix: BLOG.POST_URL_PREFIX,
-        propertyNames: {
-          title: BLOG.NOTION_PROPERTY_NAME?.title,
-          slug: BLOG.NOTION_PROPERTY_NAME?.slug,
-          type: BLOG.NOTION_PROPERTY_NAME?.type,
-          status: BLOG.NOTION_PROPERTY_NAME?.status
-        },
-        publicationLabels: {
-          typePost: BLOG.NOTION_PROPERTY_NAME?.type_post,
-          typePage: BLOG.NOTION_PROPERTY_NAME?.type_page,
-          statusPublish: BLOG.NOTION_PROPERTY_NAME?.status_publish
-        },
-        fetchDatabase: (id: string, from: string) =>
-          fetchKnowledgeGraphPageBlocks(id, from),
-        fetchPageValues: fetchKnowledgeGraphPageValues,
-        locale: lang
-      }),
-    fetchNotionPageBlocks: (
-      id: string,
-      from?: string,
-      options?: { cacheVersion?: string | number | Date }
-    ) => fetchKnowledgeGraphPageBlocks(id, from, options),
-    clock: () => Date.now(),
-    createId: () => randomUUID(),
-    logError: logServerError
-  })
-
   try {
     // 1) 尝试拿最新发布版本
     const graph = await store.getGraph()
@@ -140,14 +89,16 @@ export default async function handler(
     if (stale) {
       // fire-and-forget 后台刷新(Node 进程长期运行,可接受)
       // 错误由 logError 捕获,不影响当前响应
-      refreshKnowledgeGraph(buildRefreshDeps()).catch(logServerError)
+      refreshServerKnowledgeGraph({ locale: lang }).catch(
+        logServerKnowledgeGraphError
+      )
     }
 
     if (!graph) {
       // 首次启动,无 graph,等待一次同步 refresh
       // 这次可能要 10-60s,设 no-store 避免 CDN 缓存
       try {
-        const result = await refreshKnowledgeGraph(buildRefreshDeps())
+        const result = await refreshServerKnowledgeGraph({ locale: lang })
         if (result.status === 'refreshed') {
           for (const [k, v] of Object.entries(RESPONSE_HEADERS)) {
             res.setHeader(k, v)
@@ -155,7 +106,7 @@ export default async function handler(
           return res.status(200).json(result.graph)
         }
       } catch (e) {
-        logServerError(e)
+        logServerKnowledgeGraphError(e)
         // 即使 refresh 失败,可能 1) 有部分 graph 2) 仅个别页面失败
         const fallback = await store.getGraph()
         if (fallback) {
@@ -185,7 +136,7 @@ export default async function handler(
     }
     return res.status(200).json(graph)
   } catch (error) {
-    logServerError(error)
+    logServerKnowledgeGraphError(error)
     return res.status(503).json({
       error: 'Knowledge graph temporarily unavailable'
     })

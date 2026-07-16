@@ -23,6 +23,65 @@ import {
   resolveLegacyNotionRedirect
 } from '@/lib/utils/legacyNotionRedirect'
 
+const normalizeLocalRedirect = value => {
+  if (
+    typeof value !== 'string' ||
+    !value.startsWith('/') ||
+    value.startsWith('//') ||
+    value.includes('//') ||
+    value.includes('\\') ||
+    value.includes('?') ||
+    value.includes('#') ||
+    /[\u0000-\u001f\u007f]/.test(value)
+  ) {
+    return null
+  }
+  return value.length > 1 ? value.replace(/\/+$/, '') : value
+}
+
+export async function resolveStoredSlugResult({
+  props,
+  segments,
+  locale,
+  revalidate,
+  readStoredRedirect
+}) {
+  if (props.post) {
+    return { props, revalidate }
+  }
+
+  const storedLocale = locale && locale !== BLOG.LANG ? locale : undefined
+  const requestedPath = `/${[
+    ...(storedLocale ? [storedLocale] : []),
+    ...segments
+  ]
+    .map(segment => encodeURIComponent(String(segment)))
+    .join('/')}`
+
+  let destination
+  try {
+    if (typeof readStoredRedirect !== 'function') {
+      throw new TypeError('route-state redirect reader is required')
+    }
+    destination = await readStoredRedirect(storedLocale, requestedPath)
+  } catch (error) {
+    console.error('[stored-slug-redirect] route state unavailable:', error)
+    return { notFound: true }
+  }
+
+  const safeDestination = normalizeLocalRedirect(destination)
+  if (
+    safeDestination === null ||
+    safeDestination === normalizeLocalRedirect(requestedPath)
+  ) {
+    return { notFound: true }
+  }
+
+  return {
+    redirect: { destination: safeDestination, permanent: true }
+  }
+}
+
 /**
  * 根据notion的slug访问页面
  * 只解析一级目录例如 /about
@@ -133,7 +192,17 @@ export async function getStaticPaths() {
   })
 }
 
-export async function getStaticProps({ params: { prefix }, locale }) {
+export async function getStaticProps({
+  params: { prefix },
+  locale,
+  revalidateReason
+}) {
+  // This import must stay directly inside the page data hook. routeState uses
+  // ioredis and must never be traversed by the browser webpack compilation.
+  const { getStoredRedirect, isExplicitlyPrivate } = await import(
+    '@/lib/notion-webhook/routeState'
+  )
+
   if (isLegacyNotionId(prefix)) {
     const allPages = await getSharedAllPages({
       locale,
@@ -150,14 +219,19 @@ export async function getStaticProps({ params: { prefix }, locale }) {
 
   const props = await resolvePostProps({
     prefix,
-    locale
+    locale,
+    isPageExplicitlyPrivate: isExplicitlyPrivate,
+    allowSourceConfirmedWithoutRouteState:
+      revalidateReason === 'build' && !BLOG.REDIS_URL
   })
 
-  return {
+  return resolveStoredSlugResult({
     props,
+    segments: [prefix],
+    locale,
     revalidate: getPublicContentRevalidateSeconds(props.NOTION_CONFIG),
-    notFound: !props.post
-  }
+    readStoredRedirect: getStoredRedirect
+  })
 }
 
 export default Slug

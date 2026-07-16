@@ -62,6 +62,7 @@
     "verify:edgeone-build": "node scripts/verify-edgeone-build-contract.js",
     "probe:edgeone": "node scripts/probe-edgeone-stability.mjs",
     "test:notion-worker": "jest __tests__/cloudflare/notion-api-proxy.test.js __tests__/lib/db/notion/notionTransport.test.js __tests__/lib/db/notion/getNotionAPI.test.js __tests__/deploy/notion-worker-scripts.test.js --runInBand",
+    "test:notion-webhook": "jest __tests__/lib/notion-webhook __tests__/pages/notion-webhook.test.ts __tests__/pages/revalidate-dirty.test.ts __tests__/pages/stored-slug-redirect.test.js __tests__/deploy/notion-webhook-scripts.test.js --runInBand",
     "deploy:notion-worker": "bash deploy/scripts/deploy-notion-worker.sh",
     "translate": "node scripts/translate/index.js",
     "translate:all": "node scripts/translate/index.js --batch",

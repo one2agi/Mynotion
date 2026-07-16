@@ -1,5 +1,10 @@
 import BLOG from '@/blog.config'
 import { cleanCache } from '@/lib/cache/local_file_cache'
+import { timingSafeEqual } from 'node:crypto'
+import {
+  bootstrapRouteState,
+  consumeDirtyPages
+} from '@/lib/notion-webhook/consumer'
 
 /**
  * On-Demand Revalidation API
@@ -38,13 +43,53 @@ export default async function handler(req, res) {
     ? authHeader.slice(7)
     : req.body?.token || ''
 
-  if (receivedToken !== token) {
+  if (!constantTimeTokenEqual(receivedToken, token)) {
     return res.status(401).json({ ok: false, message: 'Unauthorized' })
   }
 
-  const { path, paths, all } = req.body || {}
+  const { path, paths, all, dirty, bootstrap } = req.body || {}
+  const operationCount = [
+    path !== undefined && path !== null,
+    paths !== undefined && paths !== null,
+    all === true,
+    dirty === true,
+    bootstrap === true
+  ].filter(Boolean).length
+  if (operationCount > 1) {
+    return res.status(400).json({
+      ok: false,
+      message: 'Choose exactly one revalidation operation'
+    })
+  }
 
   try {
+    if (dirty === true) {
+      try {
+        const result = await consumeDirtyPages({
+          revalidate: path => res.revalidate(path),
+          now: () => Date.now()
+        })
+        return res.status(200).json({ ok: true, ...result })
+      } catch {
+        return res.status(503).json({
+          ok: false,
+          message: 'Dirty revalidation unavailable'
+        })
+      }
+    }
+
+    if (bootstrap === true) {
+      try {
+        const result = await bootstrapRouteState({ now: () => Date.now() })
+        return res.status(200).json({ ok: true, ...result })
+      } catch {
+        return res.status(503).json({
+          ok: false,
+          message: 'Route bootstrap unavailable'
+        })
+      }
+    }
+
     // 全站刷新：清除本地缓存 + revalidate 首页
     if (all) {
       cleanCache()
@@ -57,7 +102,8 @@ export default async function handler(req, res) {
       }
       return res.status(200).json({
         ok: true,
-        message: 'Full site cache cleared. Homepage revalidated. Other pages will refresh on next visit.',
+        message:
+          'Full site cache cleared. Homepage revalidated. Other pages will refresh on next visit.',
         results
       })
     }
@@ -72,7 +118,11 @@ export default async function handler(req, res) {
         await res.revalidate(normalizedPath)
         results.push({ path: normalizedPath, revalidated: true })
       } catch (e) {
-        results.push({ path: normalizedPath, revalidated: false, error: e.message })
+        results.push({
+          path: normalizedPath,
+          revalidated: false,
+          error: e.message
+        })
       }
     }
 
@@ -102,4 +152,14 @@ function normalizePath(p) {
     normalized = normalized.slice(0, -1)
   }
   return normalized
+}
+
+function constantTimeTokenEqual(received, expected) {
+  if (typeof received !== 'string' || typeof expected !== 'string') return false
+  const receivedBytes = Buffer.from(received)
+  const expectedBytes = Buffer.from(expected)
+  return (
+    receivedBytes.length === expectedBytes.length &&
+    timingSafeEqual(receivedBytes, expectedBytes)
+  )
 }

@@ -26,7 +26,10 @@ interface RefreshStore {
   getPageSnapshot(id: string): Promise<PageSnapshot | null>
   putPageSnapshot(id: string, snapshot: PageSnapshot): Promise<void>
   deletePageSnapshot(id: string): Promise<void>
-  acquireRefreshClaim(owner: string): Promise<RefreshClaim | null>
+  acquireRefreshClaim(
+    owner: string,
+    windowMs?: number
+  ): Promise<RefreshClaim | null>
   putGraph(
     graph: PublicGraph,
     generationId: string,
@@ -66,11 +69,13 @@ export interface RefreshDependencies {
   ): Promise<PageRecordMap | null>
   clock(): number
   createId(): string
+  claimWindowMs?: number
   logError?: (error: unknown) => void
 }
 
 export type RefreshResult =
-  { status: 'refreshed'; graph: PublicGraph } | { status: 'skipped' }
+  | { status: 'refreshed'; graph: PublicGraph; incomplete?: true }
+  | { status: 'skipped' }
 
 type RefreshPage = PublishedPage & {
   lastEditedDate: number
@@ -80,13 +85,17 @@ type RefreshPage = PublishedPage & {
 export async function refreshKnowledgeGraph(
   deps: RefreshDependencies
 ): Promise<RefreshResult> {
-  const claim = await deps.store.acquireRefreshClaim(deps.createId())
+  const claim = await deps.store.acquireRefreshClaim(
+    deps.createId(),
+    deps.claimWindowMs
+  )
   if (!claim) return { status: 'skipped' }
 
   const globalData = await deps.fetchGlobalAllData()
   const pages = publishedArticles(globalData)
   const priorState = await deps.store.getState<RefreshState>()
   const snapshots: PageSnapshotMap = {}
+  let incomplete = false
 
   await mapWithConcurrency(pages, MAX_BLOCK_FETCH_CONCURRENCY, async page => {
     const prior = asRefreshSnapshot(await deps.store.getPageSnapshot(page.id))
@@ -115,6 +124,7 @@ export async function refreshKnowledgeGraph(
       await deps.store.putPageSnapshot(page.id, snapshot)
       snapshots[page.id] = snapshot
     } catch (error) {
+      incomplete = true
       deps.logError?.(error)
       if (prior) snapshots[page.id] = prior
     }
@@ -127,11 +137,13 @@ export async function refreshKnowledgeGraph(
 
   const graph = buildPublicGraph(pages, snapshots)
   await deps.store.putGraph(graph, deps.createId(), claim.windowStart)
-  await deps.store.putState<RefreshState>({
-    status: 'success',
-    refreshedAt: deps.clock(),
-    pageIds: pages.map(page => page.id)
-  })
+  if (!incomplete) {
+    await deps.store.putState<RefreshState>({
+      status: 'success',
+      refreshedAt: deps.clock(),
+      pageIds: pages.map(page => page.id)
+    })
+  }
 
   try {
     await deps.store.cleanupPublications(2)
@@ -139,7 +151,9 @@ export async function refreshKnowledgeGraph(
     deps.logError?.(error)
   }
 
-  return { status: 'refreshed', graph }
+  return incomplete
+    ? { status: 'refreshed', graph, incomplete: true }
+    : { status: 'refreshed', graph }
 }
 
 function publishedArticles(data: GlobalData | GlobalData[]): RefreshPage[] {

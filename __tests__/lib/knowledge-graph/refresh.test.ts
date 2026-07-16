@@ -333,6 +333,7 @@ test('keeps the prior snapshot when one changed page fails', async () => {
   expect(context.store.putPageSnapshot).not.toHaveBeenCalled()
   expect(result).toMatchObject({
     status: 'refreshed',
+    incomplete: true,
     graph: { edges: [{ source: A, target: B }] }
   })
   expect(context.store.putGraph).toHaveBeenCalledWith(
@@ -342,6 +343,7 @@ test('keeps the prior snapshot when one changed page fails', async () => {
     'generation-one',
     1_200_000
   )
+  expect(context.store.putState).not.toHaveBeenCalled()
 })
 
 test('rejects the real global fallback before changing stored graph data', async () => {
@@ -380,6 +382,17 @@ test('leaves the current publication untouched when the claim is denied', async 
   expect(context.fetchGlobalAllData).not.toHaveBeenCalled()
   expect(context.store.putGraph).not.toHaveBeenCalled()
   expect(context.store.putState).not.toHaveBeenCalled()
+})
+
+test('passes a configured dirty claim window to the existing graph store', async () => {
+  const context = setup({ claim: null })
+
+  await refreshKnowledgeGraph({ ...context.deps, claimWindowMs: 60_000 })
+
+  expect(context.store.acquireRefreshClaim).toHaveBeenCalledWith(
+    'generation-one',
+    60_000
+  )
 })
 
 test('publishes immutable graph and marker before successful state and cleanup', async () => {

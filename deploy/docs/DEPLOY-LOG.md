@@ -169,3 +169,29 @@ ssh tencent-vps "cd /opt/notionnext && sudo docker compose logs --since=10m app 
 该命令只删除四个 `NOTION_API_PROXY_*` 运行时变量并重建 app 容器，不删除
 Redis、Docker volumes 或最后成功缓存。部署完成后轮换用于 Wrangler 部署的
 Cloudflare API Token；轮换不会影响已经保存的 Worker Secret。
+
+## Notion Webhook 主动刷新上线（2026-07-15）
+
+- 部署镜像：`notionnext:webhook-20260715-0102921f`。
+- 正式入口：`https://www.one2agi.com/api/notion-webhook`，仅接受经过
+  Notion HMAC 签名的六类页面事件。
+- 调度方式：`notionnext-notion-refresh.timer` 每分钟触发一次；事件先经过
+  60 秒静默窗口，合并同一页面的连续修改，再刷新精确受影响路径。
+- 原有 5 分钟 ISR、Cloudflare Worker/Notion 直连、Redis 内容缓存与评论功能
+  均保留，Webhook 或定时器停用时仍可作为降级通道。
+
+生产验收结果：
+
+| 检查项 | 结果 |
+|---|---|
+| 首页、`/api/health`、文章、知识图谱 | HTTP 200 |
+| 未签名 Webhook 请求 | HTTP 401 |
+| systemd timer | enabled + active |
+| 一次性 setup mode | disabled |
+| 正式验证令牌 | configured |
+| 真实 Notion Draft 创建事件 | Redis 队列 `0 → 1 → 0` |
+| 后台消费日志 | `Notion dirty refresh completed` |
+
+验收使用的临时 Draft 页面在测试后已归档。生产环境新增了独立随机
+`REVALIDATION_TOKEN`，只保存在 root 所有、权限 `0600` 的
+`/opt/notionnext/.env.production`，未写入镜像、Git 或部署日志。
