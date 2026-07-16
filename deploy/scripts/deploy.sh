@@ -98,10 +98,10 @@ sudo cp /tmp/docker-compose.yml /opt/notionnext/docker-compose.yml
 # 早期部署使用 0-notionnext.conf 承载完整 www vhost；新版配置接管后必须先退役，
 # 否则会重复声明 server/upstream。保留备份，便于人工回滚。
 if [ -e /etc/nginx/sites-enabled/0-notionnext.conf ]; then
-  LEGACY_NGINX_BACKUP="/etc/nginx/sites-available/0-notionnext.conf.disabled-$(date +%Y%m%d-%H%M%S)"
+  LEGACY_NGINX_BACKUP="/etc/nginx/sites-available/0-notionnext.conf.disabled-\$(date +%Y%m%d-%H%M%S)"
   sudo mkdir -p /etc/nginx/sites-available
-  sudo mv /etc/nginx/sites-enabled/0-notionnext.conf "$LEGACY_NGINX_BACKUP"
-  echo "    已退役旧 nginx vhost: $LEGACY_NGINX_BACKUP"
+  sudo mv /etc/nginx/sites-enabled/0-notionnext.conf "\$LEGACY_NGINX_BACKUP"
+  echo "    已退役旧 nginx vhost: \$LEGACY_NGINX_BACKUP"
 fi
 sudo cp /tmp/www.one2agi.com.conf /etc/nginx/sites-enabled/www.one2agi.com.conf
 sudo nginx -t
