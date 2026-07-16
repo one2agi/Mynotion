@@ -30,6 +30,7 @@ const filterLinkProps = props => {
 const SmartLink = ({ href, children, ...rest }) => {
   const LINK = siteConfig('LINK')
   const routedHref = resolveSiteHref(href, {
+    role: process.env.NEXT_PUBLIC_SITE_ROLE,
     currentSiteUrl: LINK,
     contentSiteUrl: process.env.NEXT_PUBLIC_CONTENT_SITE_URL
   })
