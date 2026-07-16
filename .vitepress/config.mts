@@ -182,6 +182,7 @@ export default defineConfig({
             { text: '构建性能调优', link: '/user-guide/deploy/build-tuning' },
             { text: 'Netlify', link: '/user-guide/deploy/netlify' },
             { text: 'VPS', link: '/user-guide/deploy/vps' },
+            { text: 'VPS 双域名', link: '/user-guide/deploy/dual-domain-vps' },
             { text: '4EVERLAND', link: '/user-guide/deploy/4everland' },
             { text: 'Zeabur', link: '/user-guide/deploy/zeabur' }
           ]

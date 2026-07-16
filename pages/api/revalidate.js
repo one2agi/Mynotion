@@ -5,6 +5,7 @@ import {
   bootstrapRouteState,
   consumeDirtyPages
 } from '@/lib/notion-webhook/consumer'
+import { revalidateContentPath } from '@/lib/notion-webhook/revalidateTargets'
 
 /**
  * On-Demand Revalidation API
@@ -66,7 +67,11 @@ export default async function handler(req, res) {
     if (dirty === true) {
       try {
         const result = await consumeDirtyPages({
-          revalidate: path => res.revalidate(path),
+          revalidate: path =>
+            revalidateContentPath({
+              path,
+              revalidateLocal: localPath => res.revalidate(localPath)
+            }),
           now: () => Date.now()
         })
         return res.status(200).json({ ok: true, ...result })

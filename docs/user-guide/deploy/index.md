@@ -7,6 +7,7 @@
 1. [Vercel 部署](../deploy-vercel.md)（入门）
 2. [绑定域名](./vercel-domain.md)
 3. 流量增大时：[静态导出](./vercel-static.md) · [Netlify](./netlify.md) · [Cloudflare Pages](./cloudflare-pages.md)
+4. 自建双站：[VPS 品牌首页 + 内容站分离](./dual-domain-vps.md)
 
 ## 全部部署文档
 
@@ -22,6 +23,7 @@
 | [edgeone-pages.md](./edgeone-pages.md) | **腾讯云 EdgeOne**（Node 版本、ENOSPC、Next SSG 预设） |
 | [build-tuning.md](./build-tuning.md) | **构建超时 / Notion 预热与限流**（环境变量） |
 | [vps.md](./vps.md) | VPS / Docker（Node 22+） |
+| [dual-domain-vps.md](./dual-domain-vps.md) | 同一 Notion 库的 starter 品牌首页 + heo 内容站 |
 
 ## 构建超时排错
 

@@ -195,3 +195,17 @@ Cloudflare API Token；轮换不会影响已经保存的 Worker Secret。
 验收使用的临时 Draft 页面在测试后已归档。生产环境新增了独立随机
 `REVALIDATION_TOKEN`，只保存在 root 所有、权限 `0600` 的
 `/opt/notionnext/.env.production`，未写入镜像、Git 或部署日志。
+
+## 品牌首页 / 内容站职责拆分（2026-07-16）
+
+- `www.one2agi.com` 固定为 starter 品牌首页，历史内容路径由 nginx 返回 308
+  到 `way.one2agi.com$request_uri`。
+- `way.one2agi.com` 成为文章、独立页面、归档、分类、标签、搜索、评论、
+  知识图谱、RSS 和内容 Sitemap 的唯一正式入口。
+- Docker 构建显式设置 `NEXT_PUBLIC_LINK`，修复原 Compose 只传
+  `NEXT_PUBLIC_SITE_URL` 导致 canonical 回退到模板域名的问题。
+- 每分钟 Webhook 消费目标从 3030 改到 3031；共享队列只消费一次，只有
+  影响首页列表的变化通过 Docker 内网额外刷新 starter 首页。
+- 两容器共享 Redis 内容事实与队列，但继续使用独立 `.next/cache` volume；
+  landing 限制 1G/768MB V8 heap，content 限制 1800M/1536MB V8 heap，给
+  4G VPS 的 Redis、nginx、Docker 和系统保留余量。

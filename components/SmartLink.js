@@ -1,15 +1,11 @@
 import Link from 'next/link'
 import { siteConfig } from '@/lib/config'
+import { isOwnedContentHref, resolveSiteHref } from '@/lib/site-role'
 
 // 过滤 <a> 标签不能识别的 props
 const filterDOMProps = props => {
-  const {
-    passHref,
-    legacyBehavior,
-    placeholderSrc,
-    fallbackSrc,
-    ...rest
-  } = props
+  const { passHref, legacyBehavior, placeholderSrc, fallbackSrc, ...rest } =
+    props
   return rest
 }
 
@@ -33,21 +29,32 @@ const filterLinkProps = props => {
 
 const SmartLink = ({ href, children, ...rest }) => {
   const LINK = siteConfig('LINK')
+  const routedHref = resolveSiteHref(href, {
+    currentSiteUrl: LINK,
+    contentSiteUrl: process.env.NEXT_PUBLIC_CONTENT_SITE_URL
+  })
 
   // 获取 URL 字符串用于判断是否是外链
   let urlString = ''
 
-  if (typeof href === 'string') {
-    urlString = href
+  if (typeof routedHref === 'string') {
+    urlString = routedHref
   } else if (
-    typeof href === 'object' &&
-    href !== null &&
-    typeof href.pathname === 'string'
+    typeof routedHref === 'object' &&
+    routedHref !== null &&
+    typeof routedHref.pathname === 'string'
   ) {
-    urlString = href.pathname
+    urlString = routedHref.pathname
   }
 
-  const isExternal = urlString.startsWith('http') && !urlString.startsWith(LINK)
+  const isOwnedContent = isOwnedContentHref(
+    urlString,
+    process.env.NEXT_PUBLIC_CONTENT_SITE_URL
+  )
+  const isExternal =
+    urlString.startsWith('http') &&
+    !urlString.startsWith(LINK) &&
+    !isOwnedContent
 
   const getPersistedQuery = () => {
     if (typeof window === 'undefined') return {}
@@ -61,11 +68,13 @@ const SmartLink = ({ href, children, ...rest }) => {
   }
 
   const mergePreservedQueryForStringHref = value => {
-    if (typeof value !== 'string' || !value || value.startsWith('#')) return value
+    if (typeof value !== 'string' || !value || value.startsWith('#'))
+      return value
     const preservedQuery = getPersistedQuery()
     if (Object.keys(preservedQuery).length === 0) return value
 
-    const isAbsolute = value.startsWith('http://') || value.startsWith('https://')
+    const isAbsolute =
+      value.startsWith('http://') || value.startsWith('https://')
     const url = new URL(value, LINK)
     Object.entries(preservedQuery).forEach(([key, paramValue]) => {
       if (!url.searchParams.has(key)) {
@@ -93,14 +102,17 @@ const SmartLink = ({ href, children, ...rest }) => {
   if (isExternal) {
     // 对于外部链接，必须是 string 类型
     const externalUrl =
-      typeof href === 'string' ? href : new URL(href.pathname, LINK).toString()
+      typeof routedHref === 'string'
+        ? routedHref
+        : new URL(routedHref.pathname, LINK).toString()
 
     return (
       <a
         href={externalUrl}
         target='_blank'
         rel='noopener noreferrer'
-        {...filterDOMProps(rest)}>
+        {...filterDOMProps(rest)}
+      >
         {children}
       </a>
     )
@@ -108,9 +120,17 @@ const SmartLink = ({ href, children, ...rest }) => {
 
   // 内部链接（可为对象形式）
   const mergedHref =
-    typeof href === 'string'
-      ? mergePreservedQueryForStringHref(href)
-      : mergePreservedQueryForObjectHref(href)
+    typeof routedHref === 'string'
+      ? mergePreservedQueryForStringHref(routedHref)
+      : mergePreservedQueryForObjectHref(routedHref)
+
+  if (isOwnedContent) {
+    return (
+      <a href={mergedHref} {...filterDOMProps(rest)}>
+        {children}
+      </a>
+    )
+  }
 
   return (
     <Link href={mergedHref} {...filterLinkProps(rest)}>

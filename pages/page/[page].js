@@ -5,6 +5,7 @@ import { formatNotionBlock } from '@/lib/db/notion/getPostBlocks'
 import { adapterNotionBlockMap } from '@/lib/utils/notion.util'
 import { DynamicLayout } from '@/themes/theme'
 import { getPublicContentRevalidateSeconds } from '@/lib/cache/publicContentCache'
+import { getLandingOnlyStaticPaths } from '@/lib/build/staticPaths'
 
 /**
  * 文章列表分页
@@ -17,6 +18,9 @@ const Page = props => {
 }
 
 export async function getStaticPaths() {
+  const landingOnlyResult = getLandingOnlyStaticPaths()
+  if (landingOnlyResult) return landingOnlyResult
+
   const { allPages = [], NOTION_CONFIG } = await fetchGlobalAllData({
     from: 'page-static-path'
   })

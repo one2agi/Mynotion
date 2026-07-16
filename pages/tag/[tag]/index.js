@@ -3,6 +3,7 @@ import { siteConfig } from '@/lib/config'
 import { fetchGlobalAllData } from '@/lib/db/SiteDataApi'
 import { getPublicContentRevalidateSeconds } from '@/lib/cache/publicContentCache'
 import { DynamicLayout } from '@/themes/theme'
+import { getLandingOnlyStaticPaths } from '@/lib/build/staticPaths'
 
 /**
  * 标签下的文章列表
@@ -66,6 +67,9 @@ function getTagNames(tags) {
 }
 
 export async function getStaticPaths() {
+  const landingOnlyResult = getLandingOnlyStaticPaths()
+  if (landingOnlyResult) return landingOnlyResult
+
   const from = 'tag-static-path'
   const { tagOptions } = await fetchGlobalAllData({ from })
   const tagNames = getTagNames(tagOptions)

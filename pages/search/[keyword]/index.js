@@ -6,6 +6,7 @@ import { getPublicContentRevalidateSeconds } from '@/lib/cache/publicContentCach
 import { DynamicLayout } from '@/themes/theme'
 import { getPageContentText } from '@/lib/db/notion/getPageContentText'
 import { getPageBlockCacheKey } from '@/lib/db/notion/getPostBlocks'
+import { getLandingOnlyStaticPaths } from '@/lib/build/staticPaths'
 
 const Index = props => {
   const theme = siteConfig('THEME', BLOG.THEME, props.NOTION_CONFIG)
@@ -49,6 +50,9 @@ export async function getStaticProps({ params: { keyword }, locale }) {
 }
 
 export function getStaticPaths() {
+  const landingOnlyResult = getLandingOnlyStaticPaths()
+  if (landingOnlyResult) return landingOnlyResult
+
   return {
     paths: [{ params: { keyword: 'NotionNext' } }],
     fallback: 'blocking'

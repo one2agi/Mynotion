@@ -20,10 +20,35 @@ const { prefetchAllBlockMaps } = require('@/lib/build/prefetch')
 const { isExport } = require('@/lib/utils/buildMode')
 
 describe('staticPaths build helpers', () => {
+  const originalSiteRole = process.env.NEXT_PUBLIC_SITE_ROLE
+
   beforeEach(() => {
     jest.clearAllMocks()
 
     getOrSetDataWithCache.mockImplementation((_key, loader) => loader())
+  })
+
+  afterEach(() => {
+    if (originalSiteRole === undefined) delete process.env.NEXT_PUBLIC_SITE_ROLE
+    else process.env.NEXT_PUBLIC_SITE_ROLE = originalSiteRole
+  })
+
+  it('does not pre-generate content routes for a landing-only build', async () => {
+    process.env.NEXT_PUBLIC_SITE_ROLE = 'landing'
+    isExport.mockReturnValue(false)
+
+    await jest.isolateModulesAsync(async () => {
+      const { getStaticPathsBase } = require('@/lib/build/staticPaths')
+      await expect(
+        getStaticPathsBase({
+          filterFn: () => true,
+          mapPageToParams: page => ({ params: { slug: page.slug } })
+        })
+      ).resolves.toEqual({ paths: [], fallback: 'blocking' })
+    })
+
+    expect(fetchGlobalAllData).not.toHaveBeenCalled()
+    expect(getOrSetDataWithCache).not.toHaveBeenCalled()
   })
 
   it('shares allPages lookups within a process', async () => {

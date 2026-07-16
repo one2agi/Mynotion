@@ -46,7 +46,7 @@ describe('Notion webhook VPS deployment assets', () => {
     expect(source).toContain('/opt/notionnext/.env.production')
     expect(source).toContain('REVALIDATION_TOKEN')
     expect(source).toMatch(/Authorization: Bearer %s/)
-    expect(source).toContain('url = "http://127.0.0.1:3030/api/revalidate"')
+    expect(source).toContain('url = "http://127.0.0.1:3031/api/revalidate"')
     expect(source).toContain('data = "{\\\\"dirty\\\\":true}"')
     expect(source).toMatch(/curl[\s\\]*--silent[\s\S]*--config -/)
     expect(source).not.toMatch(/curl[^\n]*Authorization:/)

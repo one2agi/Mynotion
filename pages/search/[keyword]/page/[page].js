@@ -5,6 +5,7 @@ import { fetchGlobalAllData } from '@/lib/db/SiteDataApi'
 import { getPublicContentRevalidateSeconds } from '@/lib/cache/publicContentCache'
 import { DynamicLayout } from '@/themes/theme'
 import { getPageBlockCacheKey } from '@/lib/db/notion/getPostBlocks'
+import { getLandingOnlyStaticPaths } from '@/lib/build/staticPaths'
 
 const Index = props => {
   const { keyword } = props
@@ -47,6 +48,9 @@ export async function getStaticProps({ params: { keyword, page }, locale }) {
 }
 
 export function getStaticPaths() {
+  const landingOnlyResult = getLandingOnlyStaticPaths()
+  if (landingOnlyResult) return landingOnlyResult
+
   return {
     paths: [{ params: { keyword: 'NotionNext', page: '1' } }],
     fallback: 'blocking'

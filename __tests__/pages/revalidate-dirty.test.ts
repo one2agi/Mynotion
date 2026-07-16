@@ -21,6 +21,8 @@ import {
 import handler from '@/pages/api/revalidate'
 
 const originalToken = process.env.REVALIDATION_TOKEN
+const originalSiteRole = process.env.NEXT_PUBLIC_SITE_ROLE
+const originalLandingUrl = process.env.LANDING_REVALIDATION_URL
 
 function response() {
   let statusCode = 0
@@ -68,6 +70,13 @@ describe('/api/revalidate dirty compatibility', () => {
   afterEach(() => {
     if (originalToken === undefined) delete process.env.REVALIDATION_TOKEN
     else process.env.REVALIDATION_TOKEN = originalToken
+    if (originalSiteRole === undefined) delete process.env.NEXT_PUBLIC_SITE_ROLE
+    else process.env.NEXT_PUBLIC_SITE_ROLE = originalSiteRole
+    if (originalLandingUrl === undefined) {
+      delete process.env.LANDING_REVALIDATION_URL
+    } else {
+      process.env.LANDING_REVALIDATION_URL = originalLandingUrl
+    }
   })
 
   test('requires POST and bearer authentication', async () => {
@@ -104,6 +113,32 @@ describe('/api/revalidate dirty compatibility', () => {
     const passed = jest.mocked(consumeDirtyPages).mock.calls[0][0]
     await passed.revalidate('/article/test')
     expect(res.revalidate).toHaveBeenCalledWith('/article/test')
+  })
+
+  test('content dirty mode fans only homepage work out to landing', async () => {
+    process.env.NEXT_PUBLIC_SITE_ROLE = 'content'
+    process.env.LANDING_REVALIDATION_URL = 'http://app:3000/api/revalidate'
+    jest.mocked(global.fetch).mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        ok: true,
+        results: [{ path: '/', revalidated: true }]
+      })
+    } as never)
+
+    const res = response()
+    await handler(request({ dirty: true }) as never, res as never)
+    const passed = jest.mocked(consumeDirtyPages).mock.calls[0][0]
+    await passed.revalidate('/')
+    await passed.revalidate('/article/3213')
+
+    expect(res.revalidate).toHaveBeenNthCalledWith(1, '/')
+    expect(res.revalidate).toHaveBeenNthCalledWith(2, '/article/3213')
+    expect(global.fetch).toHaveBeenCalledTimes(1)
+    expect(global.fetch).toHaveBeenCalledWith(
+      'http://app:3000/api/revalidate',
+      expect.objectContaining({ body: JSON.stringify({ path: '/' }) })
+    )
   })
 
   test('bootstraps source-confirmed route state without revalidating', async () => {

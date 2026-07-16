@@ -3,6 +3,7 @@ import { siteConfig } from '@/lib/config'
 import { fetchGlobalAllData } from '@/lib/db/SiteDataApi'
 import { getPublicContentRevalidateSeconds } from '@/lib/cache/publicContentCache'
 import { DynamicLayout } from '@/themes/theme'
+import { getLandingOnlyStaticPaths } from '@/lib/build/staticPaths'
 
 const Tag = props => {
   const theme = siteConfig('THEME', BLOG.THEME, props.NOTION_CONFIG)
@@ -35,6 +36,9 @@ export async function getStaticProps({ params: { tag, page }, locale }) {
 }
 
 export async function getStaticPaths() {
+  const landingOnlyResult = getLandingOnlyStaticPaths()
+  if (landingOnlyResult) return landingOnlyResult
+
   const from = 'tag-page-static-path'
   const { tagOptions, allPages, NOTION_CONFIG } = await fetchGlobalAllData({ from })
   const paths = []

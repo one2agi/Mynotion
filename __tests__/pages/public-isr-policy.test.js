@@ -21,6 +21,22 @@ describe('public dynamic SSG routes', () => {
   })
 })
 
+describe('landing build excludes every dynamic content path', () => {
+  const dynamicContentFiles = [
+    'pages/page/[page].js',
+    'pages/tag/[tag]/index.js',
+    'pages/tag/[tag]/page/[page].js',
+    'pages/category/[category]/index.js',
+    'pages/category/[category]/page/[page].js',
+    'pages/search/[keyword]/index.js',
+    'pages/search/[keyword]/page/[page].js'
+  ]
+
+  test.each(dynamicContentFiles)('%s uses the landing-only path gate', file => {
+    expect(read(file)).toContain('getLandingOnlyStaticPaths')
+  })
+})
+
 const allPublicIsrPages = [
   'pages/index.js',
   'pages/archive/index.js',

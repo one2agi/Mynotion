@@ -101,7 +101,7 @@ trap 'rm -f "$RESPONSE_FILE"' EXIT
 {
   printf 'header = "Authorization: Bearer %s"\n' "$REVALIDATION_TOKEN"
   printf 'header = "Content-Type: application/json"\n'
-  printf 'url = "http://127.0.0.1:3030/api/revalidate"\n'
+  printf 'url = "http://127.0.0.1:3031/api/revalidate"\n'
   printf 'request = "POST"\n'
   printf 'data = "{\\"dirty\\":true}"\n'
 } | curl \

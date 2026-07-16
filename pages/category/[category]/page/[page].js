@@ -3,6 +3,7 @@ import { siteConfig } from '@/lib/config'
 import { fetchGlobalAllData } from '@/lib/db/SiteDataApi'
 import { getPublicContentRevalidateSeconds } from '@/lib/cache/publicContentCache'
 import { DynamicLayout } from '@/themes/theme'
+import { getLandingOnlyStaticPaths } from '@/lib/build/staticPaths'
 
 /**
  * 分类页
@@ -44,6 +45,9 @@ export async function getStaticProps({ params: { category, page } }) {
 }
 
 export async function getStaticPaths() {
+  const landingOnlyResult = getLandingOnlyStaticPaths()
+  if (landingOnlyResult) return landingOnlyResult
+
   const from = 'category-paths'
   const { categoryOptions, allPages, NOTION_CONFIG } = await fetchGlobalAllData({
     from

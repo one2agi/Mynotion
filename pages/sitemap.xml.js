@@ -10,8 +10,26 @@ import {
 } from '@/lib/sitemap-utils'
 import { extractLangId, extractLangPrefix } from '@/lib/utils/pageId'
 import { getServerSideSitemap } from 'next-sitemap'
+import { isLandingSite } from '@/lib/site-role'
 
 export const getServerSideProps = async ctx => {
+  if (isLandingSite()) {
+    const link = normalizeSitemapBaseUrl(siteConfig('LINK', BLOG.LINK))
+    const fields = [
+      {
+        loc: buildSitemapLoc({ baseUrl: link }),
+        lastmod: toSitemapDateString(new Date()),
+        changefreq: 'weekly',
+        priority: '1.0'
+      }
+    ]
+    ctx.res.setHeader(
+      'Cache-Control',
+      'public, max-age=3600, stale-while-revalidate=59'
+    )
+    return getServerSideSitemap(ctx, fields)
+  }
+
   let fields = []
   const siteIds = BLOG.NOTION_PAGE_ID.split(',')
 
@@ -50,7 +68,10 @@ function generateLocalesSitemap(link, allPages, locale) {
 
   const defaultFields = [
     {
-      loc: buildSitemapLoc({ baseUrl: normalizedLink, locale: normalizedLocale }),
+      loc: buildSitemapLoc({
+        baseUrl: normalizedLink,
+        locale: normalizedLocale
+      }),
       lastmod: dateNow,
       changefreq: 'daily',
       priority: '0.7'
@@ -111,7 +132,9 @@ function generateLocalesSitemap(link, allPages, locale) {
     allPages
       ?.filter(p => p.status === BLOG.NOTION_PROPERTY_NAME.status_publish)
       // 过滤掉外部链接(http开头)和锚点链接(#开头)
-      ?.filter(p => p.slug && !p.slug.startsWith('http') && !p.slug.startsWith('#'))
+      ?.filter(
+        p => p.slug && !p.slug.startsWith('http') && !p.slug.startsWith('#')
+      )
       ?.map(post => {
         const loc = buildSitemapLoc({
           baseUrl: normalizedLink,
@@ -138,7 +161,10 @@ function getUniqueFields(fields) {
   fields.forEach(field => {
     const existingField = uniqueFieldsMap.get(field.loc)
 
-    if (!existingField || new Date(field.lastmod) > new Date(existingField.lastmod)) {
+    if (
+      !existingField ||
+      new Date(field.lastmod) > new Date(existingField.lastmod)
+    ) {
       uniqueFieldsMap.set(field.loc, field)
     }
   })
@@ -146,4 +172,4 @@ function getUniqueFields(fields) {
   return Array.from(uniqueFieldsMap.values())
 }
 
-export default () => { }
+export default () => {}

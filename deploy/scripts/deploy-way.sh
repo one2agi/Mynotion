@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# 一键部署 way.one2agi.com 子域名 (heo 主题)
+# 仅用于 way 主题文件的紧急单站更新。
+# 共享代码、路由、Webhook 或缓存逻辑变化必须使用 deploy.sh 同步部署双站。
 #
 # 用法: ./deploy/scripts/deploy-way.sh user@server
 #   或: DEPLOY_TAG=v1.2.3 ./deploy/scripts/deploy-way.sh user@server
@@ -82,7 +83,7 @@ REMOTE
 
 echo "==> 2/7 scp 推送代码 + .env.production"
 # 注意:.env.production 是 secrets,只覆盖服务器上同路径文件
-ssh -o ConnectTimeout=30 "$SERVER" 'sudo mkdir -p /opt/notionnext'
+ssh -o ConnectTimeout=30 "$SERVER" 'sudo mkdir -p /opt/notionnext /tmp/notionnext-staging/themes/heo/components && sudo chown -R "$(id -u):$(id -g)" /tmp/notionnext-staging'
 scp docker-compose.yml \
     themes/heo/components/Hero.js \
     themes/heo/config.js \

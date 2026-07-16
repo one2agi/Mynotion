@@ -24,6 +24,7 @@
 | 🚀 安装部署 | `deploy-notion-next-with-netlify` | [deploy/netlify.md](./deploy/netlify.md) |
 | 🚀 安装部署 | `deploy-notion-next-with-edge-one` | [deploy/edgeone-pages.md](./deploy/edgeone-pages.md) |
 | 🚀 安装部署 | `deploy-notion-next-on-vps` | [deploy/vps.md](./deploy/vps.md) |
+| 本仓库运维 | `dual-domain-vps` | [deploy/dual-domain-vps.md](./deploy/dual-domain-vps.md) |
 | 🚀 安装部署 | `notionnext-deploy-web3.0-4everland` | [deploy/4everland.md](./deploy/4everland.md) |
 | 🚀 安装部署 | `deploy-notion-next-with-zeabur` | [deploy/zeabur.md](./deploy/zeabur.md) |
 | ✒ Notion教程 | `example-1` | [notion/example-article.md](./notion/example-article.md) |
