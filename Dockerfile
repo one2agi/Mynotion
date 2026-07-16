@@ -40,9 +40,9 @@ RUN apt-get update \
  && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
-COPY package.json pnpm-lock.yaml .npmrc ./
+COPY package.json .npmrc ./
 RUN corepack enable && corepack prepare pnpm@9.15.0 --activate
-# pnpm install 不带 frozen-lockfile(frozen 在 COPY 后会误判 absent,见 2026-07-14 修复)
+# .npmrc 配置 lockfile=false，仓库也忽略 pnpm-lock.yaml；Docker 构建只使用已跟踪清单。
 RUN pnpm install --prefer-offline
 
 # ============================================================

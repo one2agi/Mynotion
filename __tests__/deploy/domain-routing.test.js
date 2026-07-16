@@ -56,6 +56,10 @@ describe('one2agi domain ownership contracts', () => {
 
   test('Docker build exposes role and canonical variables to Next.js', () => {
     const dockerfile = read('Dockerfile')
+    expect(dockerfile).not.toContain(
+      'COPY package.json pnpm-lock.yaml .npmrc ./'
+    )
+    expect(dockerfile).toContain('COPY package.json .npmrc ./')
     for (const variable of [
       'NEXT_PUBLIC_LINK',
       'NEXT_PUBLIC_SITE_ROLE',
@@ -74,6 +78,7 @@ describe('one2agi domain ownership contracts', () => {
     expect(deploy).toContain(
       'sudo --preserve-env=IMAGE_TAG docker compose --env-file .env.production up -d'
     )
+    expect(deploy).toContain('0-notionnext.conf.disabled-')
     expect(deploy).toContain('notionnext-way:$IMAGE_TAG')
     expect(deploy).toContain('cleanup_repository notionnext')
     expect(deploy).toContain('cleanup_repository notionnext-way')
