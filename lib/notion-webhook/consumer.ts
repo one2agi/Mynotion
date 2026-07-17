@@ -61,11 +61,15 @@ type PlannedPage = {
   preliminaryOk: boolean
 }
 
+type PathOperation = (path: string) => Promise<void>
+
 export async function consumeDirtyPages({
   revalidate,
+  warmPath = () => Promise.resolve(),
   now = () => Date.now()
 }: {
-  revalidate: (path: string) => Promise<void>
+  revalidate: PathOperation
+  warmPath?: PathOperation
   now?: Clock
 }): Promise<ConsumeResult> {
   const startedAt = now()
@@ -170,6 +174,8 @@ export async function consumeDirtyPages({
       }
       try {
         await revalidate(path)
+        lease.assertOwned()
+        await warmPath(path)
         lease.assertOwned()
         pathResults.set(path, { path, ok: true })
       } catch (error) {

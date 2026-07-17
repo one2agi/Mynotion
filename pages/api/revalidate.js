@@ -6,6 +6,7 @@ import {
   consumeDirtyPages
 } from '@/lib/notion-webhook/consumer'
 import { revalidateContentPath } from '@/lib/notion-webhook/revalidateTargets'
+import { warmRevalidatedPath } from '@/lib/notion-webhook/warmPath'
 
 /**
  * On-Demand Revalidation API
@@ -72,6 +73,7 @@ export default async function handler(req, res) {
               path,
               revalidateLocal: localPath => res.revalidate(localPath)
             }),
+          warmPath: path => warmRevalidatedPath({ path }),
           now: () => Date.now()
         })
         return res.status(200).json({ ok: true, ...result })

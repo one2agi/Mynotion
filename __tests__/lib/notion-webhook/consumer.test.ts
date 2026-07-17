@@ -341,6 +341,52 @@ describe('Notion webhook dirty consumer', () => {
     expect(ackDirtyPage).not.toHaveBeenCalled()
   })
 
+  test('warms each revalidated path before acknowledging the dirty page', async () => {
+    const calls: string[] = []
+    const revalidate = jest.fn(async (path: string) => {
+      calls.push(`revalidate:${path}`)
+    })
+    const warmPath = jest.fn(async (path: string) => {
+      calls.push(`warm:${path}`)
+    })
+
+    await expect(
+      consumeDirtyPages({ revalidate, warmPath, now: () => 1_000 })
+    ).resolves.toMatchObject({
+      status: 'processed',
+      selected: 1,
+      acknowledged: 1,
+      retained: 0,
+      paths: [{ path: '/article/a', ok: true }]
+    })
+
+    expect(calls).toEqual(['revalidate:/article/a', 'warm:/article/a'])
+    expect(warmPath).toHaveBeenCalledWith('/article/a')
+    expect(ackDirtyPage).toHaveBeenCalledWith(pageA, 100)
+  })
+
+  test('retains a dirty page when warming the revalidated path fails', async () => {
+    jest.mocked(getDirtyQueueDepth).mockResolvedValue(1)
+    const revalidate = jest.fn().mockResolvedValue(undefined)
+    const warmPath = jest.fn().mockRejectedValue(new Error('warm timeout'))
+
+    await expect(
+      consumeDirtyPages({ revalidate, warmPath, now: () => 1_000 })
+    ).resolves.toMatchObject({
+      status: 'processed',
+      selected: 1,
+      acknowledged: 0,
+      retained: 1,
+      queueDepth: 1,
+      paths: [{ path: '/article/a', ok: false, error: 'warm timeout' }]
+    })
+
+    expect(revalidate).toHaveBeenCalledWith('/article/a')
+    expect(warmPath).toHaveBeenCalledWith('/article/a')
+    expect(putRouteSnapshot).not.toHaveBeenCalled()
+    expect(ackDirtyPage).not.toHaveBeenCalled()
+  })
+
   test('retains only pages whose required shared or private path failed', async () => {
     jest.mocked(listQuietDirtyPages).mockResolvedValue([
       { pageId: pageA, score: 100 },
