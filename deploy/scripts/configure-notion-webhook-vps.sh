@@ -222,8 +222,10 @@ show_status() {
 set -euo pipefail
 ENV_FILE=/opt/notionnext/.env.production
 
-printf 'timer-enabled=%s\n' "$(systemctl is-enabled notionnext-notion-refresh.timer 2>/dev/null || true)"
-printf 'timer-active=%s\n' "$(systemctl is-active notionnext-notion-refresh.timer 2>/dev/null || true)"
+timer_enabled=$(systemctl is-enabled notionnext-notion-refresh.timer 2>/dev/null || true)
+timer_active=$(systemctl is-active notionnext-notion-refresh.timer 2>/dev/null || true)
+printf 'timer-enabled=%s\n' "$timer_enabled"
+printf 'timer-active=%s\n' "$timer_active"
 printf 'service-active=%s\n' "$(systemctl is-active notionnext-notion-refresh.service 2>/dev/null || true)"
 if awk -F= '$1 == "NOTION_WEBHOOK_VERIFICATION_TOKEN" && length($2) > 0 { found=1 } END { exit !found }' "$ENV_FILE"; then
   echo 'verification-token=configured'
@@ -236,6 +238,10 @@ else
   echo 'setup-mode=disabled'
 fi
 systemctl list-timers notionnext-notion-refresh.timer --no-pager
+if ! { [ "$timer_enabled" = enabled ] && [ "$timer_active" = active ]; }; then
+  echo 'Notion refresh timer is not enabled and active' >&2
+  exit 1
+fi
 REMOTE
 }
 

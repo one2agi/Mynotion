@@ -23,6 +23,8 @@ import {
   resolveLegacyNotionRedirect
 } from '@/lib/utils/legacyNotionRedirect'
 
+export const TEMPORARY_NOT_FOUND_REVALIDATE_SECONDS = 60
+
 const normalizeLocalRedirect = value => {
   if (
     typeof value !== 'string' ||
@@ -66,7 +68,10 @@ export async function resolveStoredSlugResult({
     destination = await readStoredRedirect(storedLocale, requestedPath)
   } catch (error) {
     console.error('[stored-slug-redirect] route state unavailable:', error)
-    return { notFound: true }
+    return {
+      notFound: true,
+      revalidate: TEMPORARY_NOT_FOUND_REVALIDATE_SECONDS
+    }
   }
 
   const safeDestination = normalizeLocalRedirect(destination)
@@ -74,7 +79,10 @@ export async function resolveStoredSlugResult({
     safeDestination === null ||
     safeDestination === normalizeLocalRedirect(requestedPath)
   ) {
-    return { notFound: true }
+    return {
+      notFound: true,
+      revalidate: TEMPORARY_NOT_FOUND_REVALIDATE_SECONDS
+    }
   }
 
   return {

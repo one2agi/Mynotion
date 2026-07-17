@@ -197,9 +197,10 @@ assert_webhook_public_contract() {
 }
 
 assert_refresh_timer_active() {
+  TIMER_ENABLED=$(ssh "$SERVER" 'systemctl is-enabled notionnext-notion-refresh.timer 2>/dev/null || true')
   TIMER_STATUS=$(ssh "$SERVER" 'systemctl is-active notionnext-notion-refresh.timer 2>/dev/null || true')
-  echo "    notion refresh timer: $TIMER_STATUS"
-  [ "$TIMER_STATUS" = "active" ] || SMOKE_FAIL=1
+  echo "    notion refresh timer: enabled=$TIMER_ENABLED active=$TIMER_STATUS"
+  [ "$TIMER_ENABLED" = "enabled" ] && [ "$TIMER_STATUS" = "active" ] || SMOKE_FAIL=1
 }
 
 assert_webhook_runtime_ready || SMOKE_FAIL=1

@@ -162,7 +162,7 @@ describe('stored old-slug redirects', () => {
         params: { prefix: 'article', slug: 'old' },
         locale: 'zh-CN'
       })
-    ).resolves.toEqual({ notFound: true })
+    ).resolves.toEqual({ notFound: true, revalidate: 60 })
   })
 
   test('degrades a redirect-store outage to notFound', async () => {
@@ -174,10 +174,19 @@ describe('stored old-slug redirects', () => {
         params: { prefix: 'article', slug: 'old' },
         locale: 'zh-CN'
       })
-    ).resolves.toEqual({ notFound: true })
+    ).resolves.toEqual({ notFound: true, revalidate: 60 })
     expect(errorSpy).toHaveBeenCalledWith(
       expect.stringContaining('route state unavailable'),
       expect.any(Error)
     )
+  })
+
+  test('uses a short revalidate for a missing article without a stored redirect', async () => {
+    await expect(
+      resolveTwoSegments({
+        params: { prefix: 'article', slug: 'missing' },
+        locale: 'zh-CN'
+      })
+    ).resolves.toEqual({ notFound: true, revalidate: 60 })
   })
 })

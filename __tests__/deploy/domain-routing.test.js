@@ -101,6 +101,7 @@ describe('one2agi domain ownership contracts', () => {
     expect(deploy).toContain('assert_webhook_runtime_ready')
     expect(deploy).toContain('assert_webhook_public_contract')
     expect(deploy).toContain('assert_refresh_timer_active')
+    expect(deploy).toContain('systemctl is-enabled notionnext-notion-refresh.timer')
     expect(deploy).toContain('NOTION_WEBHOOK_SETUP_MODE=true')
     expect(deploy).toContain('NOTION_WEBHOOK_VERIFICATION_TOKEN')
     expect(deploy).toContain('https://www.one2agi.com/api/notion-webhook')

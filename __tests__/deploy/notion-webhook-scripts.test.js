@@ -97,6 +97,20 @@ describe('Notion webhook VPS deployment assets', () => {
     expect(finish).not.toMatch(/grep[^\n]*BOOTSTRAP_RESPONSE/)
   })
 
+  test('status fails when the refresh timer is not enabled and active', () => {
+    const source = read('deploy/scripts/configure-notion-webhook-vps.sh')
+    const status = source.slice(
+      source.indexOf('show_status() {'),
+      source.indexOf('\ndisable_scheduler() {')
+    )
+
+    expect(status).toContain('timer_enabled=')
+    expect(status).toContain('timer_active=')
+    expect(status).toContain('[ "$timer_enabled" = enabled ]')
+    expect(status).toContain('[ "$timer_active" = active ]')
+    expect(status).toContain('exit 1')
+  })
+
   test.each(scripts)('%s rejects unsafe environment-file references', file => {
     const source = read(file)
 

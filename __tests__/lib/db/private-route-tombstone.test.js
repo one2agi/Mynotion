@@ -129,6 +129,34 @@ describe('private route tombstone enforcement', () => {
     )
   })
 
+  test('does not publish a half-rendered article when body blocks are unavailable', async () => {
+    isExplicitlyPrivate.mockResolvedValue(false)
+    fetchNotionPageBlocks.mockResolvedValueOnce(null)
+
+    await expect(
+      resolvePostProps({
+        prefix: 'article',
+        slug: 'stale-post',
+        locale: 'zh-CN',
+        isPageExplicitlyPrivate: isExplicitlyPrivate
+      })
+    ).rejects.toThrow('Unable to load Notion page blocks')
+  })
+
+  test('does not publish a half-rendered article when the body block map is malformed', async () => {
+    isExplicitlyPrivate.mockResolvedValue(false)
+    fetchNotionPageBlocks.mockResolvedValueOnce({ collection: {} })
+
+    await expect(
+      resolvePostProps({
+        prefix: 'article',
+        slug: 'stale-post',
+        locale: 'zh-CN',
+        isPageExplicitlyPrivate: isExplicitlyPrivate
+      })
+    ).rejects.toThrow('Unable to load Notion page blocks')
+  })
+
   test('fails closed before body fetch when route state is unavailable', async () => {
     const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {})
     isExplicitlyPrivate.mockRejectedValue(new Error('redis unavailable'))
