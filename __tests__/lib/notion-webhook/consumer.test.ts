@@ -272,6 +272,35 @@ describe('Notion webhook dirty consumer', () => {
     expect(ackDirtyPage).toHaveBeenCalledWith(pageB, 101)
   })
 
+  test('retains a dirty page when Notion directory has not caught up to the webhook event', async () => {
+    jest
+      .mocked(listQuietDirtyPages)
+      .mockResolvedValue([{ pageId: pageA, score: 120_000 }])
+    jest
+      .mocked(fetchFreshConfiguredGlobalData)
+      .mockResolvedValue(
+        freshDirectory([sourcePage(pageA, { lastEditedDate: 1_000 })])
+      )
+    jest.mocked(getDirtyQueueDepth).mockResolvedValue(1)
+    const revalidate = jest.fn()
+
+    await expect(
+      consumeDirtyPages({ revalidate, now: () => 1_000 })
+    ).resolves.toMatchObject({
+      status: 'processed',
+      selected: 1,
+      acknowledged: 0,
+      retained: 1,
+      queueDepth: 1,
+      paths: []
+    })
+
+    expect(planRouteRevalidation).not.toHaveBeenCalled()
+    expect(revalidate).not.toHaveBeenCalled()
+    expect(putRouteSnapshot).not.toHaveBeenCalled()
+    expect(ackDirtyPage).not.toHaveBeenCalled()
+  })
+
   test('retains only pages whose required shared or private path failed', async () => {
     jest.mocked(listQuietDirtyPages).mockResolvedValue([
       { pageId: pageA, score: 100 },

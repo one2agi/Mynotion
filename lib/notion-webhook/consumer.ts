@@ -29,6 +29,11 @@ import {
 
 const CONSUMER_BATCH_SIZE = 50
 const GRAPH_CLAIM_WINDOW_MS = 60_000
+// Notion collection reads can lag behind the webhook event briefly. If the
+// source directory is still older than the event, retain the dirty page so the
+// next timer run regenerates from a caught-up source instead of caching stale
+// HTML again.
+const SOURCE_FRESHNESS_TOLERANCE_MS = 30_000
 // Leave thirty seconds inside the 240-second lease for final writes and release.
 const WORK_START_BUDGET_MS = 210_000
 
@@ -91,6 +96,14 @@ export async function consumeDirtyPages({
       const oldSnapshot = await getRouteSnapshot(dirty.pageId)
       lease.assertOwned()
       const newPage = directory.byId.get(dirty.pageId) || null
+      if (!isSourceFreshForDirtyEvent(newPage, dirty.score)) {
+        console.warn('[notion-webhook] source directory is stale; retaining dirty page', {
+          pageId: dirty.pageId,
+          eventAt: dirty.score,
+          sourceLastEditedAt: newPage?.lastEditedDate
+        })
+        continue
+      }
       const routeLocale = newPage?.locale || oldSnapshot?.locale || BLOG.LANG
       const plan = planRouteRevalidation({
         selectedQueueScore: dirty.score,
@@ -318,6 +331,14 @@ function successfulSnapshot(item: PlannedPage): RouteSnapshot | null {
   const final = { ...next, processedEventAt: item.score }
   delete final.pendingEventAt
   return final
+}
+
+function isSourceFreshForDirtyEvent(
+  newPage: RoutePageMetadata | null,
+  eventScore: number
+): boolean {
+  if (!newPage) return true
+  return newPage.lastEditedDate + SOURCE_FRESHNESS_TOLERANCE_MS >= eventScore
 }
 
 function buildDirectory(fresh: FreshConfiguredData): {
