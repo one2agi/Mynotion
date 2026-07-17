@@ -74,8 +74,35 @@ assert_webhook_not_in_setup_mode() {
   fi
 }
 
+assert_notion_proxy_env_configured() {
+  local env_file=/opt/notionnext/.env.production
+  local proxy_url proxy_origin
+
+  proxy_url=$(sudo awk -F= '$1 == "NOTION_API_PROXY_URL" && length($2) > 0 { print $2; exit }' "$env_file")
+  if [ -z "$proxy_url" ]; then
+    echo "❌ VPS 缺少 NOTION_API_PROXY_URL；Notion Worker 反代未启用" >&2
+    echo "   先运行: ./deploy/scripts/configure-notion-proxy-vps.sh tencent-vps" >&2
+    exit 1
+  fi
+  if ! sudo awk -F= '$1 == "NOTION_API_PROXY_TOKEN" && length($2) > 0 { found=1 } END { exit !found }' "$env_file"; then
+    echo "❌ VPS 缺少 NOTION_API_PROXY_TOKEN；Notion Worker 反代未启用" >&2
+    echo "   先运行: ./deploy/scripts/configure-notion-proxy-vps.sh tencent-vps" >&2
+    exit 1
+  fi
+
+  proxy_origin="${proxy_url%/api/v3}"
+  if [ "$proxy_origin" != "$proxy_url" ]; then
+    if ! curl -fsS --max-time 8 "$proxy_origin/health" | grep -q '"ok":true'; then
+      echo "❌ Notion Worker health check failed: $proxy_origin/health" >&2
+      exit 1
+    fi
+  fi
+}
+
 assert_webhook_not_in_setup_mode
 echo "    webhook env: ok"
+assert_notion_proxy_env_configured
+echo "    notion proxy env: ok"
 REMOTE
 
 echo "==> 0/7 版本解析"
@@ -203,9 +230,15 @@ assert_refresh_timer_active() {
   [ "$TIMER_ENABLED" = "enabled" ] && [ "$TIMER_STATUS" = "active" ] || SMOKE_FAIL=1
 }
 
+assert_notion_proxy_runtime_ready() {
+  ssh "$SERVER" 'cd /opt/notionnext && for service in app way; do sudo docker compose exec -T "$service" node -e '"'"'process.exit(process.env.NOTION_API_PROXY_URL && process.env.NOTION_API_PROXY_TOKEN ? 0 : 1)'"'"'; done'
+  echo "    notion proxy 容器环境: ok"
+}
+
 assert_webhook_runtime_ready || SMOKE_FAIL=1
 assert_webhook_public_contract
 assert_refresh_timer_active
+assert_notion_proxy_runtime_ready || SMOKE_FAIL=1
 
 if [ "$SMOKE_FAIL" -ne 0 ]; then
   echo ""

@@ -82,6 +82,13 @@ ssh tencent-vps 'systemctl is-enabled notionnext-notion-refresh.timer && systemc
 
 **构建缓存**:`deploy.sh` 不带 `--no-cache`,改业务代码 ~2-3 min,改 `package.json`/`Dockerfile` 自动全量重跑。怀疑缓存异常时临时加 `--no-cache` 排查。
 
+**Notion Worker 反代**:生产部署要求 VPS `.env.production` 保留
+`NOTION_API_PROXY_URL` 和 `NOTION_API_PROXY_TOKEN`。`deploy.sh` 会在部署前
+检查 Worker `/health`,并在部署后检查 `app`/`way` 容器运行时是否拿到这两个
+变量。旧 token 丢失时不要找回,直接生成新共享密钥,重新执行
+`deploy-notion-worker.sh` 写入 Cloudflare Worker secret,再执行
+`configure-notion-proxy-vps.sh tencent-vps` 写入 VPS。
+
 ### Content Refresh and ISR
 
 Content pages use Next.js ISR with `NEXT_PUBLIC_REVALIDATE_SECOND=300`.

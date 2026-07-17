@@ -61,17 +61,27 @@ cd /opt/notionnext
 CURRENT_IMAGE=$(sudo docker inspect --format='{{.Config.Image}}' notionnext-app)
 IMAGE_TAG=${CURRENT_IMAGE#notionnext:}
 export IMAGE_TAG
-sudo --preserve-env=IMAGE_TAG docker compose up -d --no-deps --force-recreate app
+sudo --preserve-env=IMAGE_TAG docker compose up -d --no-deps --force-recreate app way
+
+if [ "$MODE" = "enable" ]; then
+  for container in notionnext-app notionnext-way; do
+    sudo docker exec "$container" sh -lc '
+      test -n "${NOTION_API_PROXY_URL:-}" &&
+      test -n "${NOTION_API_PROXY_TOKEN:-}"
+    '
+  done
+fi
 
 for attempt in $(seq 1 24); do
-  if curl -fsS http://127.0.0.1:3030/api/health | grep -q '"ok":true'; then
-    echo "Notion proxy mode=$MODE; app health=ok"
+  if curl -fsS http://127.0.0.1:3030/api/health | grep -q '"ok":true' &&
+     curl -fsS http://127.0.0.1:3031/api/health | grep -q '"ok":true'; then
+    echo "Notion proxy mode=$MODE; app/way health=ok"
     exit 0
   fi
   sleep 5
 done
 
 echo "Application health check failed after proxy mode=$MODE" >&2
-sudo docker compose logs --tail 80 app >&2
+sudo docker compose logs --tail 80 app way >&2
 exit 1
 REMOTE

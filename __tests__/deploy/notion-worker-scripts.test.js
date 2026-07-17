@@ -35,8 +35,21 @@ describe('Notion Worker deployment scripts', () => {
     expect(source).toMatch(/ssh [^\n]+< "\$FRAGMENT"/)
     expect(source).toContain('--disable')
     expect(source).toContain('NOTION_API_PROXY_')
-    expect(source).toContain('docker compose up -d --no-deps --force-recreate app')
+    expect(source).toContain('docker compose up -d --no-deps --force-recreate app way')
     expect(source).toContain('http://127.0.0.1:3030/api/health')
+    expect(source).toContain('http://127.0.0.1:3031/api/health')
+    expect(source).toContain('notionnext-app notionnext-way')
+  })
+
+  test('coordinated deploy fails when Notion Worker proxy is missing from runtime', () => {
+    const source = read('deploy/scripts/deploy.sh')
+
+    expect(source).toContain('assert_notion_proxy_runtime_ready')
+    expect(source).toContain('NOTION_API_PROXY_URL')
+    expect(source).toContain('NOTION_API_PROXY_TOKEN')
+    expect(source).toContain('notion proxy env: ok')
+    expect(source).toContain('notion proxy 容器环境: ok')
+    expect(source).toContain('/health')
   })
 
   test('package scripts expose repeatable Worker operations', () => {
