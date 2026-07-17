@@ -54,6 +54,29 @@ fi
 
 cd "$PROJECT_DIR"
 ARCHIVE="/tmp/notionnext-${IMAGE_TAG}-$(date +%Y%m%d-%H%M%S).tar.gz"
+ARCHIVE_NAME="$(basename "$ARCHIVE")"
+
+echo "==> 0.5/7 VPS webhook 状态预检"
+ssh -o StrictHostKeyChecking=accept-new "$SERVER" 'bash -s' <<'REMOTE'
+set -euo pipefail
+
+assert_webhook_not_in_setup_mode() {
+  local env_file=/opt/notionnext/.env.production
+  if sudo awk -F= '$1 == "NOTION_WEBHOOK_SETUP_MODE" && $2 == "true" { found=1 } END { exit !found }' "$env_file"; then
+    echo "❌ VPS 仍处于 NOTION_WEBHOOK_SETUP_MODE=true；请先完成 Notion webhook finish 后再部署" >&2
+    echo "   webhook 地址: https://www.one2agi.com/api/notion-webhook" >&2
+    exit 1
+  fi
+  if ! sudo awk -F= '$1 == "NOTION_WEBHOOK_VERIFICATION_TOKEN" && length($2) > 0 { found=1 } END { exit !found }' "$env_file"; then
+    echo "❌ VPS 缺少 NOTION_WEBHOOK_VERIFICATION_TOKEN；请先完成 Notion webhook 配置" >&2
+    echo "   webhook 地址: https://www.one2agi.com/api/notion-webhook" >&2
+    exit 1
+  fi
+}
+
+assert_webhook_not_in_setup_mode
+echo "    webhook env: ok"
+REMOTE
 
 echo "==> 0/7 版本解析"
 echo "    IMAGE_TAG: $IMAGE_TAG (来源: $SOURCE)"
@@ -82,17 +105,30 @@ echo "    tar.gz: $(du -h "$ARCHIVE" | cut -f1)"
 echo "    包含 tags: $TAGS_TO_SAVE"
 
 echo "==> 4/7 scp 推送镜像与双站路由配置到 $SERVER"
-scp "$ARCHIVE" docker-compose.yml deploy/nginx/www.one2agi.com.conf "${SERVER}:/tmp/"
+scp "$ARCHIVE" "${SERVER}:/tmp/$ARCHIVE_NAME"
+scp docker-compose.yml deploy/nginx/www.one2agi.com.conf "${SERVER}:/tmp/"
 
 echo "==> 5/7 SSH 服务器: 加载 + 替换新容器(暂不清理旧)"
-ssh -o StrictHostKeyChecking=accept-new "$SERVER" "IMAGE_TAG='$IMAGE_TAG' bash -s" <<REMOTE
+ssh -o StrictHostKeyChecking=accept-new "$SERVER" "IMAGE_TAG='$IMAGE_TAG' ARCHIVE_NAME='$ARCHIVE_NAME' bash -s" <<'REMOTE'
 set -euo pipefail
-ARCHIVE_REMOTE=\$(ls -t /tmp/notionnext-*.tar.gz | head -1)
-echo "    镜像: \$ARCHIVE_REMOTE"
-echo "    IMAGE_TAG: \$IMAGE_TAG"
+ARCHIVE_REMOTE="/tmp/$ARCHIVE_NAME"
+
+assert_image_exists() {
+  local image="$1"
+  if ! sudo docker image inspect "$image" >/dev/null 2>&1; then
+    echo "Expected image $image not found after docker load; aborting instead of building or pulling" >&2
+    exit 1
+  fi
+}
+
+test -f "$ARCHIVE_REMOTE"
+echo "    镜像: $ARCHIVE_REMOTE"
+echo "    IMAGE_TAG: $IMAGE_TAG"
 
 echo "    [1/3] docker load 加载新镜像"
-sudo docker load -i "\$ARCHIVE_REMOTE"
+sudo docker load -i "$ARCHIVE_REMOTE"
+assert_image_exists "notionnext:$IMAGE_TAG"
+assert_image_exists "notionnext-way:$IMAGE_TAG"
 
 cd /opt/notionnext
 sudo cp /tmp/docker-compose.yml /opt/notionnext/docker-compose.yml
@@ -100,10 +136,10 @@ sudo cp /tmp/docker-compose.yml /opt/notionnext/docker-compose.yml
 # 早期部署使用 0-notionnext.conf 承载完整 www vhost；新版配置接管后必须先退役，
 # 否则会重复声明 server/upstream。保留备份，便于人工回滚。
 if [ -e /etc/nginx/sites-enabled/0-notionnext.conf ]; then
-  LEGACY_NGINX_BACKUP="/etc/nginx/sites-available/0-notionnext.conf.disabled-\$(date +%Y%m%d-%H%M%S)"
+  LEGACY_NGINX_BACKUP="/etc/nginx/sites-available/0-notionnext.conf.disabled-$(date +%Y%m%d-%H%M%S)"
   sudo mkdir -p /etc/nginx/sites-available
-  sudo mv /etc/nginx/sites-enabled/0-notionnext.conf "\$LEGACY_NGINX_BACKUP"
-  echo "    已退役旧 nginx vhost: \$LEGACY_NGINX_BACKUP"
+  sudo mv /etc/nginx/sites-enabled/0-notionnext.conf "$LEGACY_NGINX_BACKUP"
+  echo "    已退役旧 nginx vhost: $LEGACY_NGINX_BACKUP"
 fi
 sudo cp /tmp/www.one2agi.com.conf /etc/nginx/sites-enabled/www.one2agi.com.conf
 sudo nginx -t
@@ -114,16 +150,16 @@ sudo docker compose --env-file .env.production down
 echo "    [3/3] docker compose up -d 启动新容器"
 # sudo 默认会重置环境变量(EnvReset),需要 -E 保留 IMAGE_TAG
 # 同时把 IMAGE_TAG 写到 .env 文件供 docker compose 读(更稳)
-echo "IMAGE_TAG=\$IMAGE_TAG" > .env.image_tag
+echo "IMAGE_TAG=$IMAGE_TAG" > .env.image_tag
 sudo --preserve-env=IMAGE_TAG docker compose --env-file .env.production up -d
 
 echo "    等 healthy (最多 90s)"
 for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18; do
   sleep 5
-  APP_STATUS=\$(sudo docker inspect --format='{{.State.Health.Status}}' notionnext-app 2>/dev/null || echo "starting")
-  WAY_STATUS=\$(sudo docker inspect --format='{{.State.Health.Status}}' notionnext-way 2>/dev/null || echo "starting")
-  echo "        \${i}*5s: app=\$APP_STATUS way=\$WAY_STATUS"
-  [ "\$APP_STATUS" = "healthy" ] && [ "\$WAY_STATUS" = "healthy" ] && break
+  APP_STATUS=$(sudo docker inspect --format='{{.State.Health.Status}}' notionnext-app 2>/dev/null || echo "starting")
+  WAY_STATUS=$(sudo docker inspect --format='{{.State.Health.Status}}' notionnext-way 2>/dev/null || echo "starting")
+  echo "        ${i}*5s: app=$APP_STATUS way=$WAY_STATUS"
+  [ "$APP_STATUS" = "healthy" ] && [ "$WAY_STATUS" = "healthy" ] && break
 done
 REMOTE
 
@@ -149,6 +185,27 @@ CHECK=$(ssh "$SERVER" 'curl -s -o /dev/null -w "%{http_code}" https://www.one2ag
 echo "    www 历史内容 308: HTTP $CHECK"
 [ "$CHECK" != "308" ] && SMOKE_FAIL=1
 
+assert_webhook_runtime_ready() {
+  CHECK=$(ssh "$SERVER" 'cd /opt/notionnext && sudo docker compose exec -T app node -e '"'"'process.exit(process.env.NOTION_WEBHOOK_VERIFICATION_TOKEN ? 0 : 1)'"'"'')
+  echo "    webhook 容器环境: ok"
+}
+
+assert_webhook_public_contract() {
+  WEBHOOK_HTTP=$(curl -sS -o /dev/null -w "%{http_code}" -X POST https://www.one2agi.com/api/notion-webhook -H 'content-type: application/json' --data '{}')
+  echo "    webhook 未签名 POST: HTTP $WEBHOOK_HTTP"
+  [ "$WEBHOOK_HTTP" = "401" ] || SMOKE_FAIL=1
+}
+
+assert_refresh_timer_active() {
+  TIMER_STATUS=$(ssh "$SERVER" 'systemctl is-active notionnext-notion-refresh.timer 2>/dev/null || true')
+  echo "    notion refresh timer: $TIMER_STATUS"
+  [ "$TIMER_STATUS" = "active" ] || SMOKE_FAIL=1
+}
+
+assert_webhook_runtime_ready || SMOKE_FAIL=1
+assert_webhook_public_contract
+assert_refresh_timer_active
+
 if [ "$SMOKE_FAIL" -ne 0 ]; then
   echo ""
   echo "❌ 冒烟测试失败!不清理,保留旧镜像以便回滚"
@@ -161,7 +218,7 @@ echo "    [1/3] 清理本地临时 tar.gz"
 rm -f "$ARCHIVE"
 
 echo "    [2/3] SSH 服务器: 保留双站当前 tag + latest,删其他旧 hash"
-ssh "$SERVER" "IMAGE_TAG='$IMAGE_TAG' bash -s" <<'REMOTE'
+ssh "$SERVER" "IMAGE_TAG='$IMAGE_TAG' ARCHIVE_NAME='$ARCHIVE_NAME' bash -s" <<'REMOTE'
 set -euo pipefail
 echo "      IMAGE_TAG: $IMAGE_TAG"
 
@@ -194,8 +251,8 @@ cleanup_repository() {
 cleanup_repository notionnext
 cleanup_repository notionnext-way
 
-# 只删 notionnext 临时 tar.gz
-rm -f /tmp/notionnext-*.tar.gz
+# 只删本次上传的 notionnext 临时 tar.gz
+rm -f "/tmp/$ARCHIVE_NAME"
 
 echo "      当前双站镜像列表:"
 sudo docker images --format "        {{.Repository}}:{{.Tag}} {{.ID}} {{.Size}}" | grep -E '^        notionnext(-way)?:' || true
@@ -206,7 +263,7 @@ echo ""
 echo "✅ 部署完成 → $SERVER (IMAGE_TAG=$IMAGE_TAG)"
 echo ""
 echo "后续可选:"
-echo "  推送 .env.production(如改了): scp .env.production ${SERVER}:/opt/notionnext/.env.production && ssh ${SERVER} 'cd /opt/notionnext && IMAGE_TAG=$IMAGE_TAG sudo docker compose --env-file .env.production restart app way'"
+echo "  推送 .env.production(如改了): scp .env.production ${SERVER}:/opt/notionnext/.env.production && ssh ${SERVER} 'cd /opt/notionnext && sudo env IMAGE_TAG=$IMAGE_TAG docker compose --env-file .env.production restart app way'"
 echo "  实时日志: ssh ${SERVER} 'cd /opt/notionnext && sudo docker compose logs -f app'"
-echo "  回滚到上一版: ssh ${SERVER} 'cd /opt/notionnext && sudo docker compose --env-file .env.production down && IMAGE_TAG=<old-tag> sudo --preserve-env=IMAGE_TAG docker compose --env-file .env.production up -d'"
+echo "  回滚到上一版: ssh ${SERVER} 'cd /opt/notionnext && sudo docker compose --env-file .env.production down && sudo env IMAGE_TAG=<old-tag> docker compose --env-file .env.production up -d'"
 echo "  查看双站镜像: ssh ${SERVER} 'sudo docker images --format \"{{.Repository}}:{{.Tag}} {{.ID}} {{.Size}}\" | grep notionnext'"

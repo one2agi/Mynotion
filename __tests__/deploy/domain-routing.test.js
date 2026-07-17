@@ -73,8 +73,9 @@ describe('one2agi domain ownership contracts', () => {
   test('coordinated deploy builds and ships both role images', () => {
     const deploy = read('deploy/scripts/deploy.sh')
     expect(deploy).toContain(
-      'docker compose --env-file .env.production build --no-cache app way'
+      'docker compose --env-file .env.production build app way'
     )
+    expect(deploy).not.toContain('build --no-cache app way')
     expect(deploy).toContain(
       'sudo --preserve-env=IMAGE_TAG docker compose --env-file .env.production up -d'
     )
@@ -84,5 +85,26 @@ describe('one2agi domain ownership contracts', () => {
     expect(deploy).toContain('cleanup_repository notionnext-way')
     expect(deploy).toContain('http://127.0.0.1:3030/')
     expect(deploy).toContain('http://127.0.0.1:3031/')
+  })
+
+  test('coordinated deploy fails fast on unsafe webhook or image state', () => {
+    const deploy = read('deploy/scripts/deploy.sh')
+
+    expect(deploy).toContain('ARCHIVE_NAME=')
+    expect(deploy).toContain('ARCHIVE_REMOTE="/tmp/$ARCHIVE_NAME"')
+    expect(deploy).not.toContain('ls -t /tmp/notionnext-*.tar.gz')
+
+    expect(deploy).toContain('assert_image_exists "notionnext:$IMAGE_TAG"')
+    expect(deploy).toContain('assert_image_exists "notionnext-way:$IMAGE_TAG"')
+
+    expect(deploy).toContain('assert_webhook_not_in_setup_mode')
+    expect(deploy).toContain('assert_webhook_runtime_ready')
+    expect(deploy).toContain('assert_webhook_public_contract')
+    expect(deploy).toContain('assert_refresh_timer_active')
+    expect(deploy).toContain('NOTION_WEBHOOK_SETUP_MODE=true')
+    expect(deploy).toContain('NOTION_WEBHOOK_VERIFICATION_TOKEN')
+    expect(deploy).toContain('https://www.one2agi.com/api/notion-webhook')
+    expect(deploy).toContain('webhook 未签名 POST: HTTP $WEBHOOK_HTTP')
+    expect(deploy).toContain('sudo env IMAGE_TAG=$IMAGE_TAG')
   })
 })
