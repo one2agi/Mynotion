@@ -59,7 +59,9 @@ echo "==> 0/7 版本解析"
 echo "    IMAGE_TAG: $IMAGE_TAG (来源: $SOURCE)"
 
 echo "==> 1/7 本地 build 双站 (IMAGE_TAG=$IMAGE_TAG)"
-IMAGE_TAG="$IMAGE_TAG" docker compose --env-file .env.production build --no-cache app way
+# 不带 --no-cache:复用 Docker layer cache。改代码 ~2-3 min,改 package.json 自动失效 pnpm install,改 Dockerfile 自动全重。
+# 怀疑缓存异常时临时加 --no-cache 排查。
+IMAGE_TAG="$IMAGE_TAG" docker compose --env-file .env.production build app way
 
 echo "==> 2/7 打 latest tag"
 if [ "$IMAGE_TAG" != "latest" ]; then
