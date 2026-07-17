@@ -52,6 +52,58 @@ pnpm dev-tools clean     # Clean caches and build artifacts
 pnpm setup-hooks         # Install git hooks
 ```
 
+## Production Deployment (Self-Hosted Docker on Tencent VPS)
+
+The blog runs as Docker containers on a Tencent Cloud VPS (124.220.65.87). The
+landing site is served from `https://www.one2agi.com`; `https://one2agi.com`
+redirects to `https://www.one2agi.com`; content routes live on
+`https://way.one2agi.com`. EdgeOne Pages `mynotion` is disabled and retained
+only as history. Detailed log: `deploy/docs/DEPLOY-LOG.md`.
+
+```bash
+# 一键部署(本地 build → save → scp → 服务器 load → up → 冒烟测试)
+cd /home/morav/myblog/NotionNext
+./deploy/scripts/deploy.sh tencent-vps
+
+# 实时看应用日志
+ssh tencent-vps 'cd /opt/notionnext && sudo docker compose logs -f app way'
+
+# 容器状态(app/way/redis 应为 Up 且 healthy)
+ssh tencent-vps 'cd /opt/notionnext && sudo docker compose ps'
+
+# 自动刷新 timer 状态(必须 enabled + active)
+ssh tencent-vps 'systemctl is-enabled notionnext-notion-refresh.timer && systemctl is-active notionnext-notion-refresh.timer'
+```
+
+**注意**:容器 healthcheck 使用普通 GET 校验 `/api/health` 的 `"ok":true`。
+如果 `docker compose ps` 显示 `unhealthy`,优先检查 Notion 连通性和
+`curl http://127.0.0.1:3030/api/health` /
+`curl http://127.0.0.1:3031/api/health` 的真实响应。
+
+**构建缓存**:`deploy.sh` 不带 `--no-cache`,改业务代码 ~2-3 min,改 `package.json`/`Dockerfile` 自动全量重跑。怀疑缓存异常时临时加 `--no-cache` 排查。
+
+### Content Refresh and ISR
+
+Content pages use Next.js ISR with `NEXT_PUBLIC_REVALIDATE_SECOND=300`.
+Normal article updates rely on this active refresh chain:
+
+`Notion webhook -> Redis dirty queue -> systemd timer -> way /api/revalidate {dirty:true} -> res.revalidate(path)`.
+
+Operational rules:
+
+- `notionnext-notion-refresh.timer` must stay `enabled` and `active`; the deploy
+  script checks this and should fail if the timer is disabled.
+- `www.one2agi.com` receives the Notion webhook; `way.one2agi.com` serves and
+  revalidates content pages.
+- Redis content/data cache and Next.js page HTML cache are different. A post can
+  exist in Redis/Notion while an old cached HTML 404 is still being served.
+- If old article 404s appear with `x-nextjs-cache: HIT`, use `/api/revalidate`
+  with the affected paths or the dirty queue; do not assume passive ISR alone
+  will recover it immediately.
+- Notion block fetch failures must not be cached as successful empty article
+  pages. Treat `loadPageChunk` network failures as a content fetch failure and
+  verify `/api/health` plus container logs before revalidating widely.
+
 ## High-Level Architecture
 
 ### Configuration
