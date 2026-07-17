@@ -334,7 +334,7 @@ describe('Notion webhook dirty consumer', () => {
     })
 
     expect(getDataFromCache).toHaveBeenCalledWith(
-      'page_block_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa_150',
+      'page_block_aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa_150',
       true
     )
     expect(putRouteSnapshot).not.toHaveBeenCalled()

@@ -351,7 +351,7 @@ async function hasRenderedPublicPageVersion(
   if (snapshot.type !== 'Post' && snapshot.type !== 'Page') return true
 
   const cacheKey = getPageBlockCacheKey(
-    normalizePageId(snapshot.pageId) || snapshot.pageId,
+    toPageBlockCacheId(snapshot.pageId),
     snapshot.lastEditedDate
   )
   const renderedBlock: unknown = await getDataFromCache(cacheKey, true)
@@ -367,6 +367,15 @@ async function hasRenderedPublicPageVersion(
 
 function getPageBlockCacheKey(id: string, cacheVersion: number): string {
   return `page_block_${id}_${cacheVersion}`
+}
+
+function toPageBlockCacheId(id: string): string {
+  const normalized = normalizePageId(id)
+  if (!normalized) return id
+  return `${normalized.slice(0, 8)}-${normalized.slice(8, 12)}-${normalized.slice(
+    12,
+    16
+  )}-${normalized.slice(16, 20)}-${normalized.slice(20)}`
 }
 
 function isSourceFreshForDirtyEvent(
