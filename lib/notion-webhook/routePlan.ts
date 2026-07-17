@@ -250,6 +250,28 @@ const addAffectedTaxonomies = ({
   }
 }
 
+const sourceAdvancedBeyondSnapshot = (
+  oldSnapshot: RouteSnapshot | null,
+  newPage: RoutePageMetadata | null
+): boolean => {
+  if (!oldSnapshot || !newPage) return false
+  return (
+    newPage.lastEditedDate > oldSnapshot.lastEditedDate ||
+    newPage.href !== oldSnapshot.href ||
+    newPage.slug !== oldSnapshot.slug ||
+    newPage.public !== oldSnapshot.public ||
+    newPage.type !== oldSnapshot.type ||
+    newPage.status !== oldSnapshot.status ||
+    newPage.title !== oldSnapshot.title ||
+    newPage.summary !== oldSnapshot.summary ||
+    !sameValues(newPage.categories, oldSnapshot.categories) ||
+    !sameValues(newPage.tags, oldSnapshot.tags)
+  )
+}
+
+const processedEventAt = (input: RoutePlanInput): number =>
+  Math.max(input.selectedQueueScore, input.oldSnapshot?.processedEventAt || 0)
+
 export function planRouteRevalidation(input: RoutePlanInput): RoutePlan {
   if (!Number.isInteger(input.postsPerPage) || input.postsPerPage <= 0) {
     throw new Error('postsPerPage must be a positive integer')
@@ -287,7 +309,8 @@ export function planRouteRevalidation(input: RoutePlanInput): RoutePlan {
   if (
     input.oldSnapshot &&
     input.oldSnapshot.processedEventAt >= input.selectedQueueScore &&
-    !pendingPrivate
+    !pendingPrivate &&
+    !sourceAdvancedBeyondSnapshot(input.oldSnapshot, input.newPage)
   ) {
     return emptyPlan(input.oldSnapshot)
   }
@@ -401,7 +424,7 @@ export function planRouteRevalidation(input: RoutePlanInput): RoutePlan {
   } else {
     nextSnapshot = {
       ...input.newPage!,
-      processedEventAt: input.selectedQueueScore
+      processedEventAt: processedEventAt(input)
     }
   }
 

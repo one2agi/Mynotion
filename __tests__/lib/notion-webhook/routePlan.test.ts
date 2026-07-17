@@ -425,6 +425,33 @@ describe('pure Notion webhook route planner', () => {
     expect(result.refreshGraph).toBe(true)
   })
 
+  test('does not skip a stale webhook score when the source page advanced', () => {
+    const updated = page({
+      title: 'Updated title',
+      lastEditedDate: 150
+    })
+    const result = planRouteRevalidation(
+      input({
+        selectedQueueScore: 120,
+        oldSnapshot: snapshot({
+          processedEventAt: 130,
+          title: 'Old title',
+          lastEditedDate: 100
+        }),
+        newPage: updated,
+        publicDirectory: [...directory(3), updated]
+      })
+    )
+
+    expect(result.paths).toEqual(
+      ['/', '/archive', '/article/guides/notion', '/page/2', '/search'].sort()
+    )
+    expect(result.nextSnapshot).toEqual({
+      ...updated,
+      processedEventAt: 130
+    })
+  })
+
   test('includes explicit taxonomy page 1 through every known numbered page', () => {
     const changed = page({
       categories: ['工程'],
