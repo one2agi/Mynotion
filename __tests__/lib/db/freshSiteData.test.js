@@ -6,6 +6,7 @@ jest.mock('@/blog.config', () => ({
   BUNDLE_ANALYZER: false,
   THEME: 'simple',
   ENABLE_CACHE: true,
+  LANG: 'zh-CN',
   NOTION_PROPERTY_NAME: {}
 }))
 
@@ -174,6 +175,17 @@ describe('fetchFreshConfiguredGlobalData', () => {
     expect(setDataToCacheStrict).toHaveBeenCalledWith(globalKey, result[0].data)
     expect(saveFallbackStrict).toHaveBeenCalledWith(siteKey, expect.any(Object))
     expect(saveFallbackStrict).toHaveBeenCalledWith(globalKey, result[0].data)
+  })
+
+  test('refreshes the default locale global cache for an unprefixed database', async () => {
+    const result = await fetchFreshConfiguredGlobalData({ from: 'fresh-test' })
+
+    const localeKey = getGlobalDataCacheKey({
+      pageId: BLOG.NOTION_PAGE_ID,
+      locale: BLOG.LANG
+    })
+    expect(setDataToCacheStrict).toHaveBeenCalledWith(localeKey, result[0].data)
+    expect(saveFallbackStrict).toHaveBeenCalledWith(localeKey, result[0].data)
   })
 
   test('refreshes configured locales in declaration order', async () => {
