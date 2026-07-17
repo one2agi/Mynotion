@@ -6,6 +6,19 @@ const path = require('path')
 const read = file => fs.readFileSync(path.join(process.cwd(), file), 'utf8')
 
 describe('one2agi domain ownership contracts', () => {
+  test('apex domain redirects permanently to www on both HTTP and HTTPS', () => {
+    const nginx = read('deploy/nginx/www.one2agi.com.conf')
+
+    expect(nginx).toMatch(
+      /server\s*\{[\s\S]*server_name one2agi\.com;[\s\S]*return 301 https:\/\/www\.one2agi\.com\$request_uri;[\s\S]*\}/
+    )
+    expect(nginx).toMatch(
+      /server\s*\{[\s\S]*listen 443 ssl http2;[\s\S]*server_name one2agi\.com;[\s\S]*return 301 https:\/\/www\.one2agi\.com\$request_uri;[\s\S]*\}/
+    )
+    expect(nginx).toMatch(/server_name www\.one2agi\.com;/)
+    expect(nginx).not.toMatch(/server_name www\.one2agi\.com one2agi\.com;/)
+  })
+
   test('www proxies root and infrastructure but permanently redirects content', () => {
     const nginx = read('deploy/nginx/www.one2agi.com.conf')
     expect(nginx).toMatch(
