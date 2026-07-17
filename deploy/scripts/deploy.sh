@@ -245,10 +245,18 @@ assert_notion_proxy_runtime_ready() {
   echo "    notion proxy 容器环境: ok"
 }
 
+warm_all_content_paths() {
+  WARM_RESULT=$(ssh "$SERVER" 'cd /opt/notionnext && TOKEN=$(sudo awk -F= '"'"'$1 == "REVALIDATION_TOKEN" { print $2; exit }'"'"' /opt/notionnext/.env.production); curl -sS --max-time 900 -X POST http://127.0.0.1:3031/api/revalidate -H "Authorization: Bearer ${TOKEN}" -H "Content-Type: application/json" --data '"'"'{"warmAll":true}'"'"'')
+  echo "    部署后内容预热: $(printf "%s" "$WARM_RESULT" | head -c 240)..."
+  printf "%s" "$WARM_RESULT" | grep -q '"ok":true' || return 1
+  printf "%s" "$WARM_RESULT" | grep -q '"failed":0' || return 1
+}
+
 assert_webhook_runtime_ready || SMOKE_FAIL=1
 assert_webhook_public_contract
 assert_refresh_timer_active
 assert_notion_proxy_runtime_ready || SMOKE_FAIL=1
+warm_all_content_paths || SMOKE_FAIL=1
 
 if [ "$SMOKE_FAIL" -ne 0 ]; then
   echo ""

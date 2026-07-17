@@ -122,7 +122,7 @@ describe('staticPaths build helpers', () => {
     })
   })
 
-  it('returns every matching path with blocking fallback in ISR mode', async () => {
+  it('skips matching paths by default in ISR mode', async () => {
     isExport.mockReturnValue(false)
     fetchGlobalAllData.mockResolvedValue({
       allPages: [
@@ -143,6 +143,34 @@ describe('staticPaths build helpers', () => {
       })
 
       expect(prefetchAllBlockMaps).not.toHaveBeenCalled()
+      expect(result).toEqual({
+        paths: [],
+        fallback: 'blocking'
+      })
+    })
+  })
+
+  it('can pre-generate matching paths in ISR mode when explicitly enabled', async () => {
+    isExport.mockReturnValue(false)
+    fetchGlobalAllData.mockResolvedValue({
+      allPages: [
+        { id: '1', slug: 'about', type: 'Page', status: 'Published' },
+        { id: '2', slug: 'article/hello', type: 'Post', status: 'Published' },
+        { id: '3', slug: 'article/world', type: 'Post', status: 'Published' }
+      ]
+    })
+
+    await jest.isolateModulesAsync(async () => {
+      const { getStaticPathsBase } = require('@/lib/build/staticPaths')
+      const result = await getStaticPathsBase({
+        prerenderInIsrBuild: true,
+        filterFn: page => page.slug.startsWith('article/'),
+        mapPageToParams: page => {
+          const [prefix, slug] = page.slug.split('/')
+          return { params: { prefix, slug } }
+        }
+      })
+
       expect(result).toEqual({
         paths: [
           { params: { prefix: 'article', slug: 'hello' } },

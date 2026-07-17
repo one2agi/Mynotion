@@ -7,6 +7,7 @@ import {
 } from '@/lib/notion-webhook/consumer'
 import { revalidateContentPath } from '@/lib/notion-webhook/revalidateTargets'
 import { warmRevalidatedPath } from '@/lib/notion-webhook/warmPath'
+import { warmAllContentPaths } from '@/lib/notion-webhook/warmAll'
 
 /**
  * On-Demand Revalidation API
@@ -49,13 +50,14 @@ export default async function handler(req, res) {
     return res.status(401).json({ ok: false, message: 'Unauthorized' })
   }
 
-  const { path, paths, all, dirty, bootstrap } = req.body || {}
+  const { path, paths, all, dirty, bootstrap, warmAll } = req.body || {}
   const operationCount = [
     path !== undefined && path !== null,
     paths !== undefined && paths !== null,
     all === true,
     dirty === true,
-    bootstrap === true
+    bootstrap === true,
+    warmAll === true
   ].filter(Boolean).length
   if (operationCount > 1) {
     return res.status(400).json({
@@ -93,6 +95,32 @@ export default async function handler(req, res) {
         return res.status(503).json({
           ok: false,
           message: 'Route bootstrap unavailable'
+        })
+      }
+    }
+
+    if (warmAll === true) {
+      try {
+        const result = await warmAllContentPaths({
+          revalidate: path =>
+            revalidateContentPath({
+              path,
+              revalidateLocal: localPath => res.revalidate(localPath)
+            }),
+          warmPath: path => warmRevalidatedPath({ path }),
+          concurrency: Number.parseInt(
+            process.env.NOTION_REFRESH_WARM_ALL_CONCURRENCY || '3',
+            10
+          )
+        })
+        return res.status(result.failed > 0 ? 207 : 200).json({
+          ok: result.failed === 0,
+          ...result
+        })
+      } catch {
+        return res.status(503).json({
+          ok: false,
+          message: 'Warm-all revalidation unavailable'
         })
       }
     }
