@@ -16,6 +16,9 @@ declare const expect: any
 jest.mock('@/lib/db/SiteDataApi', () => ({
   fetchFreshConfiguredGlobalData: jest.fn()
 }))
+jest.mock('@/lib/cache/cache_manager', () => ({
+  getDataFromCache: jest.fn()
+}))
 jest.mock('@/lib/notion-webhook/queue', () => ({
   ackDirtyPage: jest.fn(),
   getDirtyQueueDepth: jest.fn(),
@@ -37,6 +40,7 @@ jest.mock('@/lib/knowledge-graph/serverRefresh', () => ({
 }))
 
 import BLOG from '@/blog.config'
+import { getDataFromCache } from '@/lib/cache/cache_manager'
 import { fetchFreshConfiguredGlobalData } from '@/lib/db/SiteDataApi'
 import {
   createServerKnowledgeGraphStore,
@@ -158,6 +162,7 @@ describe('Notion webhook dirty consumer', () => {
       }))
     jest.mocked(ackDirtyPage).mockResolvedValue(true)
     jest.mocked(putRouteSnapshot).mockResolvedValue(undefined)
+    jest.mocked(getDataFromCache).mockResolvedValue({ block: {} })
     jest.mocked(saveFlattenedRedirect).mockResolvedValue('/target')
     jest.mocked(refreshServerKnowledgeGraph).mockResolvedValue({
       status: 'refreshed',
@@ -297,6 +302,41 @@ describe('Notion webhook dirty consumer', () => {
 
     expect(planRouteRevalidation).not.toHaveBeenCalled()
     expect(revalidate).not.toHaveBeenCalled()
+    expect(putRouteSnapshot).not.toHaveBeenCalled()
+    expect(ackDirtyPage).not.toHaveBeenCalled()
+  })
+
+  test('retains a public page when revalidation did not render the expected page-block version', async () => {
+    jest.mocked(planRouteRevalidation).mockReturnValue({
+      paths: ['/article/a'],
+      nextSnapshot: {
+        ...snapshot(pageA),
+        lastEditedDate: 150,
+        processedEventAt: 100
+      },
+      redirect: null,
+      refreshGraph: false,
+      becamePrivate: false
+    })
+    jest.mocked(getDataFromCache).mockResolvedValue(null)
+    jest.mocked(getDirtyQueueDepth).mockResolvedValue(1)
+    const revalidate = jest.fn().mockResolvedValue(undefined)
+
+    await expect(
+      consumeDirtyPages({ revalidate, now: () => 1_000 })
+    ).resolves.toMatchObject({
+      status: 'processed',
+      selected: 1,
+      acknowledged: 0,
+      retained: 1,
+      queueDepth: 1,
+      paths: [{ path: '/article/a', ok: true }]
+    })
+
+    expect(getDataFromCache).toHaveBeenCalledWith(
+      'page_block_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa_150',
+      true
+    )
     expect(putRouteSnapshot).not.toHaveBeenCalled()
     expect(ackDirtyPage).not.toHaveBeenCalled()
   })

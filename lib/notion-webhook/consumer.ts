@@ -1,4 +1,5 @@
 import BLOG from '@/blog.config'
+import { getDataFromCache } from '@/lib/cache/cache_manager'
 import { siteConfig } from '@/lib/config'
 import { fetchFreshConfiguredGlobalData } from '@/lib/db/SiteDataApi'
 import { normalizePageId } from '@/lib/knowledge-graph/normalizePageId'
@@ -206,9 +207,12 @@ export async function consumeDirtyPages({
       const pathsCompleted = item.plan.paths.every(
         path => pathResults.get(path)?.ok === true
       )
+      const renderedVersionAvailable =
+        pathsCompleted && (await hasRenderedPublicPageVersion(item))
       const pageCompleted =
         item.preliminaryOk &&
         pathsCompleted &&
+        renderedVersionAvailable &&
         (!item.plan.refreshGraph || graphCompleted)
       if (!pageCompleted || !canStartWork(startedAt, now, lease)) continue
 
@@ -331,6 +335,32 @@ function successfulSnapshot(item: PlannedPage): RouteSnapshot | null {
   const final = { ...next, processedEventAt: item.score }
   delete final.pendingEventAt
   return final
+}
+
+async function hasRenderedPublicPageVersion(
+  item: PlannedPage
+): Promise<boolean> {
+  const snapshot = successfulSnapshot(item)
+  if (!snapshot?.public) return true
+  if (snapshot.type !== 'Post' && snapshot.type !== 'Page') return true
+
+  const cacheKey = getPageBlockCacheKey(
+    normalizePageId(snapshot.pageId) || snapshot.pageId,
+    snapshot.lastEditedDate
+  )
+  const renderedBlock: unknown = await getDataFromCache(cacheKey, true)
+  if (renderedBlock) return true
+
+  console.warn('[notion-webhook] rendered page block is missing; retaining dirty page', {
+    pageId: item.pageId,
+    eventAt: item.score,
+    cacheKey
+  })
+  return false
+}
+
+function getPageBlockCacheKey(id: string, cacheVersion: number): string {
+  return `page_block_${id}_${cacheVersion}`
 }
 
 function isSourceFreshForDirtyEvent(
