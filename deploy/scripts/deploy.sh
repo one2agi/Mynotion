@@ -134,6 +134,10 @@ echo "    包含 tags: $TAGS_TO_SAVE"
 echo "==> 4/7 scp 推送镜像与双站路由配置到 $SERVER"
 scp "$ARCHIVE" "${SERVER}:/tmp/$ARCHIVE_NAME"
 scp docker-compose.yml deploy/nginx/www.one2agi.com.conf "${SERVER}:/tmp/"
+scp deploy/scripts/run-notion-refresh.sh \
+  deploy/systemd/notionnext-notion-refresh.service \
+  deploy/systemd/notionnext-notion-refresh.timer \
+  "${SERVER}:/tmp/"
 
 echo "==> 5/7 SSH 服务器: 加载 + 替换新容器(暂不清理旧)"
 ssh -o StrictHostKeyChecking=accept-new "$SERVER" "IMAGE_TAG='$IMAGE_TAG' ARCHIVE_NAME='$ARCHIVE_NAME' bash -s" <<'REMOTE'
@@ -159,6 +163,10 @@ assert_image_exists "notionnext-way:$IMAGE_TAG"
 
 cd /opt/notionnext
 sudo cp /tmp/docker-compose.yml /opt/notionnext/docker-compose.yml
+sudo install -o root -g root -m 755 /tmp/run-notion-refresh.sh /usr/local/sbin/run-notion-refresh
+sudo install -o root -g root -m 644 /tmp/notionnext-notion-refresh.service /etc/systemd/system/notionnext-notion-refresh.service
+sudo install -o root -g root -m 644 /tmp/notionnext-notion-refresh.timer /etc/systemd/system/notionnext-notion-refresh.timer
+sudo systemctl daemon-reload
 
 # 早期部署使用 0-notionnext.conf 承载完整 www vhost；新版配置接管后必须先退役，
 # 否则会重复声明 server/upstream。保留备份，便于人工回滚。
@@ -228,6 +236,8 @@ assert_refresh_timer_active() {
   TIMER_STATUS=$(ssh "$SERVER" 'systemctl is-active notionnext-notion-refresh.timer 2>/dev/null || true')
   echo "    notion refresh timer: enabled=$TIMER_ENABLED active=$TIMER_STATUS"
   [ "$TIMER_ENABLED" = "enabled" ] && [ "$TIMER_STATUS" = "active" ] || SMOKE_FAIL=1
+  ssh "$SERVER" "sudo grep -q '127.0.0.1:3031/api/revalidate' /usr/local/sbin/run-notion-refresh"
+  echo "    notion refresh target: way(3031)"
 }
 
 assert_notion_proxy_runtime_ready() {
