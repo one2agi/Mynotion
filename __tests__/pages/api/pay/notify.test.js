@@ -27,11 +27,16 @@ jest.mock('@/lib/notion-token', () => ({
 jest.mock('@/lib/dead-letter', () => ({
   notifyDeadLetter: jest.fn()
 }))
+jest.mock('@/lib/notion-discount', () => ({
+  lookupDiscountCode: jest.fn(),
+  markDiscountCodeUsed: jest.fn()
+}))
 
 const { verifySign, queryOrder } = require('@/lib/zpay')
 const { createOrderPage, incrementRetryCount } = require('@/lib/notion-order')
 const { lookupUnusedToken, markTokenAsUsed } = require('@/lib/notion-token')
 const { notifyDeadLetter } = require('@/lib/dead-letter')
+const { lookupDiscountCode, markDiscountCodeUsed } = require('@/lib/notion-discount')
 
 // Factory for mock response object
 function mkRes() {
@@ -580,6 +585,93 @@ describe('POST /api/pay/notify', () => {
     // 空对象 → 解析成功但 email/name 缺失 → 视为订单数据不完整
     expect(res.send).toHaveBeenCalledWith('error')
     expect(createOrderPage).not.toHaveBeenCalled()
+  })
+
+  // ─── 一次性优惠码支持（2026-07-18）───
+
+  test('paid + 一次性码 → 调 markDiscountCodeUsed(pageId)', async () => {
+    verifySign.mockReturnValue(true)
+    queryOrder.mockResolvedValue({ tradeStatus: '1', tradeNo: 'ZPAY123', money: '29.90' })
+    lookupUnusedToken.mockResolvedValue({ token: 'mock-token', pageId: 'mock-token-page' })
+    markTokenAsUsed.mockResolvedValue(true)
+    createOrderPage.mockResolvedValue('new-page-id')
+    // 关键：一次性码未使用
+    lookupDiscountCode.mockResolvedValue({
+      amount: 10,
+      name: 'ONE2AGI25',
+      isOneTime: true,
+      used: false,
+      code: 'ONE2AGI25',
+      pageId: 'one-time-page-id'
+    })
+
+    const req = mkParamReq(JSON.stringify({ email: 'a@b.com', name: '张三', discountCode: 'ONE2AGI25' }))
+    const res = mkRes()
+
+    await handler(req, res)
+
+    expect(res.send).toHaveBeenCalledWith('success')
+    // 必须调到 markDiscountCodeUsed, pageId 是 lookup 出来的 not 订单 pageId
+    expect(markDiscountCodeUsed).toHaveBeenCalledTimes(1)
+    expect(markDiscountCodeUsed).toHaveBeenCalledWith('one-time-page-id')
+  })
+
+  test('paid + 永久码 → 不调 markDiscountCodeUsed（永久码 0 代码改动回归保护）', async () => {
+    verifySign.mockReturnValue(true)
+    queryOrder.mockResolvedValue({ tradeStatus: '1', tradeNo: 'ZPAY123', money: '29.90' })
+    lookupUnusedToken.mockResolvedValue({ token: 'mock-token', pageId: 'mock-token-page' })
+    markTokenAsUsed.mockResolvedValue(true)
+    createOrderPage.mockResolvedValue('new-page-id')
+    // 永久码 — isOneTime:false
+    lookupDiscountCode.mockResolvedValue({
+      amount: 10,
+      name: 'PERM',
+      isOneTime: false,
+      used: false,
+      code: 'PERM',
+      pageId: 'perm-page-id'
+    })
+
+    const req = mkParamReq(JSON.stringify({ email: 'a@b.com', name: '张三', discountCode: 'PERM' }))
+    const res = mkRes()
+
+    await handler(req, res)
+
+    expect(res.send).toHaveBeenCalledWith('success')
+    // 永久码路径不调 markDiscountCodeUsed
+    expect(markDiscountCodeUsed).not.toHaveBeenCalled()
+  })
+
+  test('paid + 一次性码 + markDiscountCodeUsed 抛错 → notify 仍 200（吞错不让 Z-Pay 重试）', async () => {
+    verifySign.mockReturnValue(true)
+    queryOrder.mockResolvedValue({ tradeStatus: '1', tradeNo: 'ZPAY123', money: '29.90' })
+    lookupUnusedToken.mockResolvedValue({ token: 'mock-token', pageId: 'mock-token-page' })
+    markTokenAsUsed.mockResolvedValue(true)
+    createOrderPage.mockResolvedValue('new-page-id')
+    lookupDiscountCode.mockResolvedValue({
+      amount: 10,
+      name: 'ONE2AGI25',
+      isOneTime: true,
+      used: false,
+      code: 'ONE2AGI25',
+      pageId: 'one-time-page-id'
+    })
+    markDiscountCodeUsed.mockRejectedValue(new Error('Notion 5xx 模拟'))
+
+    const req = mkParamReq(JSON.stringify({ email: 'a@b.com', name: '张三', discountCode: 'ONE2AGI25' }))
+    const res = mkRes()
+
+    const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      await handler(req, res)
+
+      // 关键：notify 仍 200 success — 不让 Z-Pay 重试导致副作用
+      expect(res.send).toHaveBeenCalledWith('success')
+      // 错误已记日志
+      expect(errorSpy).toHaveBeenCalled()
+    } finally {
+      errorSpy.mockRestore()
+    }
   })
 })
 

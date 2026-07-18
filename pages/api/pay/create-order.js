@@ -94,6 +94,15 @@ export default async function handler(req, res) {
       if (!discount) {
         return res.status(400).json({ success: false, error: '优惠码不存在或已过期', code: 'INVALID_DISCOUNT' })
       }
+      // 一次性码已使用 → 拒绝（2026-07-18）
+      // 永久码（isOneTime=false）走不到这里，行为 100% 不变
+      if (discount.isOneTime && discount.used) {
+        return res.status(400).json({
+          success: false,
+          error: '优惠码已被使用',
+          code: 'DISCOUNT_USED'
+        })
+      }
       discountAmount = discount.amount
     }
 

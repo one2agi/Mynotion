@@ -435,4 +435,71 @@ describe('POST /api/pay/create-order', () => {
       expect.objectContaining({ money: 0.01 })
     )
   })
+
+  // ─── 一次性优惠码支持（2026-07-18）───
+
+  test('一次性码已使用 → 400 DISCOUNT_USED 且绝不能调 createNativeOrder', async () => {
+    lookupDiscountCode.mockResolvedValue({
+      amount: 30,
+      name: 'ONE2AGI25',
+      isOneTime: true,
+      used: true,           // ← 关键：已用
+      code: 'ONE2AGI25',
+      pageId: 'one-time-page-id'
+    })
+
+    const req = {
+      method: 'POST',
+      headers: VALID_ORIGIN_HEADER,
+      body: {
+        name: '张三',
+        email: 'zhangsan@example.com',
+        discountCode: 'ONE2AGI25',
+        productId: 'starter-basic'
+      }
+    }
+    const res = mkRes()
+
+    await handler(req, res)
+
+    expect(res.status).toHaveBeenCalledWith(400)
+    expect(res.json.mock.calls[0][0].code).toBe('DISCOUNT_USED')
+    expect(res.json.mock.calls[0][0].error).toBe('优惠码已被使用')
+    // 关键：绝不能调用 Z-Pay 创建订单（防止已废码被滥用）
+    expect(createNativeOrder).not.toHaveBeenCalled()
+  })
+
+  test('一次性码未使用 + 减 10 元 → 通过 Z-Pay 创建订单（应用折扣）', async () => {
+    lookupDiscountCode.mockResolvedValue({
+      amount: 10,           // 用 10 元而不是 30（避免触发 0 元防护拦截）
+      name: 'ONE2AGI25',
+      isOneTime: true,
+      used: false,          // ← 关键：未用
+      code: 'ONE2AGI25',
+      pageId: 'one-time-page-id'
+    })
+    createNativeOrder.mockResolvedValue({ qrcode: 'weixin://wxpay/xxx' })
+
+    const req = {
+      method: 'POST',
+      headers: VALID_ORIGIN_HEADER,
+      body: {
+        name: '张三',
+        email: 'zhangsan@example.com',
+        discountCode: 'ONE2AGI25',
+        productId: 'starter-basic'  // ¥19.9 - ¥10 = ¥9.9
+      }
+    }
+    const res = mkRes()
+
+    await handler(req, res)
+
+    expect(res.status).toHaveBeenCalledWith(200)
+    const jsonData = res.json.mock.calls[0][0]
+    expect(jsonData.success).toBe(true)
+    expect(jsonData.data.originalAmount).toBe(19.9)
+    expect(jsonData.data.discountAmount).toBe(10)
+    expect(jsonData.data.amount).toBe(9.9)
+    expect(createNativeOrder).toHaveBeenCalledTimes(1)
+  })
 })
