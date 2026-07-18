@@ -4,8 +4,15 @@
  */
 
 jest.mock('@notionhq/client')
+jest.mock('@/lib/cache/redis_cache', () => ({
+  redisClient: {
+    set: jest.fn(),
+    del: jest.fn()
+  }
+}))
 
 const { Client } = require('@notionhq/client')
+const { redisClient } = require('@/lib/cache/redis_cache')
 
 const mockQuery = jest.fn()
 Client.mockImplementation(() => ({
@@ -148,6 +155,44 @@ describe('优惠码查询', () => {
 
     expect(result.isOneTime).toBe(false)
     expect(result.used).toBe(false)
+  })
+})
+
+describe('一次性码待支付占用', () => {
+  beforeEach(() => {
+    jest.clearAllMocks()
+  })
+
+  test('reserveDiscountCode 用 Redis NX + EX 占用同一个优惠码 pageId', async () => {
+    redisClient.set.mockResolvedValue('OK')
+    const { reserveDiscountCode } = require('@/lib/notion-discount')
+
+    const reserved = await reserveDiscountCode('discount-page-id', 'NN123')
+
+    expect(reserved).toBe(true)
+    expect(redisClient.set).toHaveBeenCalledWith(
+      'notionnext:discount-reservation:discount-page-id',
+      'NN123',
+      'EX',
+      1800,
+      'NX'
+    )
+  })
+
+  test('reserveDiscountCode 返回 false 表示优惠码已被其他待支付订单占用', async () => {
+    redisClient.set.mockResolvedValue(null)
+    const { reserveDiscountCode } = require('@/lib/notion-discount')
+
+    await expect(reserveDiscountCode('discount-page-id', 'NN123')).resolves.toBe(false)
+  })
+
+  test('releaseDiscountReservation 删除对应占用 key', async () => {
+    redisClient.del.mockResolvedValue(1)
+    const { releaseDiscountReservation } = require('@/lib/notion-discount')
+
+    await releaseDiscountReservation('discount-page-id')
+
+    expect(redisClient.del).toHaveBeenCalledWith('notionnext:discount-reservation:discount-page-id')
   })
 })
 

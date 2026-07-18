@@ -10,7 +10,9 @@ jest.mock('@/lib/zpay', () => ({
   createNativeOrder: jest.fn()
 }))
 jest.mock('@/lib/notion-discount', () => ({
-  lookupDiscountCode: jest.fn()
+  lookupDiscountCode: jest.fn(),
+  reserveDiscountCode: jest.fn(),
+  releaseDiscountReservation: jest.fn()
 }))
 jest.mock('@/lib/config', () => ({
   siteConfig: jest.fn((key, defaultVal) => {
@@ -28,7 +30,11 @@ jest.mock('@/lib/config', () => ({
 }))
 
 const { createNativeOrder } = require('@/lib/zpay')
-const { lookupDiscountCode } = require('@/lib/notion-discount')
+const {
+  lookupDiscountCode,
+  reserveDiscountCode,
+  releaseDiscountReservation
+} = require('@/lib/notion-discount')
 const { siteConfig } = require('@/lib/config')
 
 // CSRF 白名单：与 process.env.NEXT_PUBLIC_SITE_URL 一致
@@ -50,6 +56,8 @@ const VALID_ORIGIN_HEADER = { origin: ALLOWED_ORIGIN }
 describe('POST /api/pay/create-order', () => {
   beforeEach(() => {
     jest.clearAllMocks()
+    reserveDiscountCode.mockResolvedValue(true)
+    releaseDiscountReservation.mockResolvedValue()
   })
 
   test('无优惠码创建订单成功', async () => {
@@ -501,5 +509,35 @@ describe('POST /api/pay/create-order', () => {
     expect(jsonData.data.discountAmount).toBe(10)
     expect(jsonData.data.amount).toBe(9.9)
     expect(createNativeOrder).toHaveBeenCalledTimes(1)
+  })
+
+  test('一次性码已被待支付订单占用 → 409 DISCOUNT_RESERVED 且不调 createNativeOrder', async () => {
+    lookupDiscountCode.mockResolvedValue({
+      amount: 10,
+      name: 'ONE2AGI25',
+      isOneTime: true,
+      used: false,
+      code: 'ONE2AGI25',
+      pageId: 'one-time-page-id'
+    })
+    reserveDiscountCode.mockResolvedValue(false)
+
+    const req = {
+      method: 'POST',
+      headers: VALID_ORIGIN_HEADER,
+      body: {
+        name: '张三',
+        email: 'zhangsan@example.com',
+        discountCode: 'ONE2AGI25',
+        productId: 'starter-basic'
+      }
+    }
+    const res = mkRes()
+
+    await handler(req, res)
+
+    expect(res.status).toHaveBeenCalledWith(409)
+    expect(res.json.mock.calls[0][0].code).toBe('DISCOUNT_RESERVED')
+    expect(createNativeOrder).not.toHaveBeenCalled()
   })
 })

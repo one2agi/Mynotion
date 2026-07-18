@@ -168,6 +168,24 @@ export default async function handler(req, res) {
       await markTokenAsUsed(tokenInfo.pageId)
     }
 
+    // === 一次性码：paid 时 mark used（2026-07-18）===
+    // 位置：订单成功写入后、token 失败分支返回前，避免已支付订单因发货 token 缺失跳过优惠码消费。
+    // 永久码路径（extra.discountCode 为永久码）：lookup 返回 isOneTime=false → 不进内层 if
+    // 抛错：吞掉不让 notify 返非 200（避免 Z-Pay 重试副作用）
+    if (pageId && extra.discountCode) {
+      try {
+        const fresh = await lookupDiscountCode(extra.discountCode)
+        if (fresh && fresh.isOneTime && !fresh.used) {
+          await markDiscountCodeUsed(fresh.pageId)
+        }
+      } catch (e) {
+        console.error('[notify] mark discount used failed', {
+          outTradeNo,
+          err: e?.message
+        })
+      }
+    }
+
     // === 严格模式（2026-06-24）：任何 token 失败都视为可重试错误 ===
     // 来源：NN1782277180228PZI1KW 缺链接事故
     // 行为：返 'error' 让 Z-Pay 重试；累计 5 次失败后推死信 webhook（仅推一次，防重复）
@@ -201,24 +219,6 @@ export default async function handler(req, res) {
       const giveUp = newCount >= TOKEN_RETRY_THRESHOLD
       res.setHeader('Content-Type', 'text/plain; charset=utf-8')
       return res.status(200).send(giveUp ? 'success' : 'error')
-    }
-
-    // === 一次性码：paid 时 mark used（2026-07-18）===
-    // 位置：所有 token retry 决策完成后，确保只在"订单成功写入"路径上执行
-    // 永久码路径（extra.discountCode 为永久码）：lookup 返回 isOneTime=false → 不进内层 if
-    // 抛错：吞掉不让 notify 返非 200（避免 Z-Pay 重试副作用）
-    if (pageId && extra.discountCode) {
-      try {
-        const fresh = await lookupDiscountCode(extra.discountCode)
-        if (fresh && fresh.isOneTime && !fresh.used) {
-          await markDiscountCodeUsed(fresh.pageId)
-        }
-      } catch (e) {
-        console.error('[notify] mark discount used failed', {
-          outTradeNo,
-          err: e?.message
-        })
-      }
     }
 
     res.setHeader('Content-Type', 'text/plain; charset=utf-8')

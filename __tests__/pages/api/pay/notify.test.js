@@ -673,6 +673,30 @@ describe('POST /api/pay/notify', () => {
       errorSpy.mockRestore()
     }
   })
+
+  test('paid + 一次性码 + token 缺失 → 仍先标记优惠码已使用再返回 token 重试错误', async () => {
+    verifySign.mockReturnValue(true)
+    queryOrder.mockResolvedValue({ tradeStatus: '1', tradeNo: 'ZPAY123', money: '29.90' })
+    lookupUnusedToken.mockResolvedValue(null)
+    createOrderPage.mockResolvedValue('new-page-id')
+    incrementRetryCount.mockResolvedValue({ newCount: 1, webhookPushed: false })
+    lookupDiscountCode.mockResolvedValue({
+      amount: 10,
+      name: 'ONE2AGI25',
+      isOneTime: true,
+      used: false,
+      code: 'ONE2AGI25',
+      pageId: 'one-time-page-id'
+    })
+
+    const req = mkParamReq(JSON.stringify({ email: 'a@b.com', name: '张三', discountCode: 'ONE2AGI25' }))
+    const res = mkRes()
+
+    await handler(req, res)
+
+    expect(markDiscountCodeUsed).toHaveBeenCalledWith('one-time-page-id')
+    expect(res.send).toHaveBeenCalledWith('error')
+  })
 })
 
 // === 回归保护：Z-Pay 实际用 GET 调 notify（不是 POST） ===

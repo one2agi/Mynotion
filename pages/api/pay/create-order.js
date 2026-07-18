@@ -3,7 +3,11 @@
  * 验证优惠码 → 创建订单 → 返回微信支付二维码链接
  */
 import { createNativeOrder } from '@/lib/zpay'
-import { lookupDiscountCode } from '@/lib/notion-discount'
+import {
+  lookupDiscountCode,
+  reserveDiscountCode,
+  releaseDiscountReservation
+} from '@/lib/notion-discount'
 import { siteConfig } from '@/lib/config'
 import { Validator } from '@/lib/utils/validation'
 import starterConfig from '@/themes/starter/config'
@@ -87,10 +91,11 @@ export default async function handler(req, res) {
     const { name: productName, price: originalAmount } = getProductConfig(productIndex)
 
     let discountAmount = 0
+    let discount = null
 
     // 验证优惠码（如有）
     if (discountCode && discountCode.trim() !== '') {
-      const discount = await lookupDiscountCode(discountCode.trim())
+      discount = await lookupDiscountCode(discountCode.trim())
       if (!discount) {
         return res.status(400).json({ success: false, error: '优惠码不存在或已过期', code: 'INVALID_DISCOUNT' })
       }
@@ -123,6 +128,18 @@ export default async function handler(req, res) {
 
     // 生成订单号
     const outTradeNo = generateOutTradeNo()
+    let reservedDiscountPageId = null
+    if (discount?.isOneTime) {
+      const reserved = await reserveDiscountCode(discount.pageId, outTradeNo)
+      if (!reserved) {
+        return res.status(409).json({
+          success: false,
+          error: '优惠码已有待支付订单，请稍后再试',
+          code: 'DISCOUNT_RESERVED'
+        })
+      }
+      reservedDiscountPageId = discount.pageId
+    }
 
     // 回调地址
     const notifyUrl = siteConfig('STARTER_PAYMENT_NOTIFY_URL', process.env.ZPAY_NOTIFY_URL, starterConfig)
@@ -130,14 +147,30 @@ export default async function handler(req, res) {
     // 附加参数（回调时返回，用于写入 Notion）
     const param = JSON.stringify({ email, name, discountCode: discountCode || '' })
 
-    // 调用 Z-Pay 创建订单
-    const { qrcode } = await createNativeOrder({
-      outTradeNo,
-      name: productName,
-      money: amount,
-      notifyUrl,
-      param
-    })
+    let qrcode
+    try {
+      // 调用 Z-Pay 创建订单
+      const order = await createNativeOrder({
+        outTradeNo,
+        name: productName,
+        money: amount,
+        notifyUrl,
+        param
+      })
+      qrcode = order.qrcode
+    } catch (error) {
+      if (reservedDiscountPageId) {
+        try {
+          await releaseDiscountReservation(reservedDiscountPageId)
+        } catch (releaseError) {
+          console.error('[create-order] 释放一次性优惠码占用失败', {
+            outTradeNo,
+            err: releaseError?.message
+          })
+        }
+      }
+      throw error
+    }
 
     return res.status(200).json({
       success: true,
