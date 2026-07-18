@@ -210,6 +210,16 @@ export default async function handler(req, res) {
     if (pageId && extra.discountCode) {
       try {
         const fresh = await lookupDiscountCode(extra.discountCode)
+        // DEBUG(2026-07-18): 把 fresh 全字段打出来查 why pageId 是 undefined
+        console.log('[notify-debug] lookupDiscountCode return', {
+          outTradeNo,
+          discountCode: extra.discountCode,
+          freshKeys: fresh ? Object.keys(fresh) : null,
+          freshPageId: fresh?.pageId,
+          freshPageIdType: typeof fresh?.pageId,
+          freshIsOneTime: fresh?.isOneTime,
+          freshUsed: fresh?.used
+        })
         if (fresh && fresh.isOneTime && !fresh.used) {
           await markDiscountCodeUsed(fresh.pageId)
         }
