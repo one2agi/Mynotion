@@ -171,10 +171,14 @@ describe('markDiscountCodeUsed', () => {
     await markDiscountCodeUsed('page-uuid-to-mark')
 
     expect(mockPagesUpdate).toHaveBeenCalledTimes(1)
+    // 必须用 object 形式 { page_id, properties } — 不能 positional
+    // 参照 markTokenAsUsed (lib/notion-token.js:91-102) 工作写法
     expect(mockPagesUpdate).toHaveBeenCalledWith(
-      'page-uuid-to-mark',
       expect.objectContaining({
-        '已使用(一次性)': { checkbox: true }
+        page_id: 'page-uuid-to-mark',
+        properties: expect.objectContaining({
+          '已使用(一次性)': { checkbox: true }
+        })
       })
     )
   })
