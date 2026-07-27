@@ -434,10 +434,13 @@ const nextConfig = {
   }
   ,
   experimental: {
-    // Local Vercel build runs out of memory with default worker concurrency.
-    // Vercel's hosted environment has 8 GB; locally we have ~6 GB available.
-    // Limit CPUs to 1 to keep webpack + render workers within budget.
-    cpus: 1,
+    // VERCEL_ENV is set by Vercel build infrastructure ("production",
+    // "preview", or "development"). On Docker (no VERCEL_ENV), keep the
+    // default multi-core static generation so 8-core VPS builds stay fast.
+    // Vercel's hosted builders have only 2 cores but our local envs vary;
+    // limit to 1 only for hosted Vercel to cap memory pressure on
+    // 8 GB hosts that share cores with other builds.
+    cpus: process.env.VERCEL ? 1 : undefined,
     scrollRestoration: true,
     swrDelta: 86400,
     // 性能优化实验性功能
