@@ -4,5 +4,18 @@
   "installCommand": "npm install --legacy-peer-deps",
   "cleanUrls": true,
   "trailingSlash": false,
-  "headers": []
+  "headers": [],
+  "redirects": [
+    {
+      "source": "/:path*",
+      "has": [
+        {
+          "type": "host",
+          "value": "jichang.world"
+        }
+      ],
+      "destination": "https://www.jichang.world/:path*",
+      "statusCode": 301
+    }
+  ]
 }
