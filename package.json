@@ -1,7 +1,7 @@
 {
   "name": "notion-next",
   "version": "4.10.6",
-  "packageManager": "pnpm@9.15.4",
+  "packageManager": "pnpm@9.15.9",
   "homepage": "https://github.com/tangly1024/NotionNext.git",
   "license": "MIT",
   "engines": {
