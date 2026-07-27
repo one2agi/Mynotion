@@ -1,0 +1,25 @@
+# Vercel ignores — files NOT uploaded to the build container.
+# Mirrors .gitignore PLUS excludes large docs assets that bloat
+# the deploy source tarball past Vercel's 10 MB limit.
+node_modules/
+.next/
+.vercel/
+node_modules.stale-pnpm/
+
+# Legacy documentation images (NotionNext docs site, not production runtime).
+docs/
+
+# Local-only artifacts (IDE, scripts).
+.vscode/
+.idea/
+*.bak
+*.bak.*
+package.json.bak
+package.json.modified
+
+# TypeScript build artifacts.
+*.tsbuildinfo
+
+# Test artifacts.
+coverage/
+test-results/
