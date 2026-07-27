@@ -434,7 +434,10 @@ const nextConfig = {
   }
   ,
   experimental: {
-    // cpus: 1,
+    // Local Vercel build runs out of memory with default worker concurrency.
+    // Vercel's hosted environment has 8 GB; locally we have ~6 GB available.
+    // Limit CPUs to 1 to keep webpack + render workers within budget.
+    cpus: 1,
     scrollRestoration: true,
     swrDelta: 86400,
     // 性能优化实验性功能

@@ -1,7 +1,7 @@
 {
   "framework": "nextjs",
-  "buildCommand": "next build",
-  "installCommand": "npm install --legacy-peer-deps",
+  "buildCommand": "NODE_OPTIONS='--max-old-space-size=5120' next build",
+  "installCommand": "bash scripts/vercel-install.sh",
   "cleanUrls": true,
   "trailingSlash": false,
   "headers": [],
