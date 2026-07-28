@@ -1,4 +1,5 @@
 // import '@/styles/animate.css' // @see https://animate.style/
+// trigger Vercel redeploy: clear stale ISR cache after Menu slug cleanup
 import '@/styles/globals.css'
 import '@/styles/utility-patterns.css'
 
