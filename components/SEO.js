@@ -81,6 +81,12 @@ const SEO = props => {
     NOTION_CONFIG
   )
 
+  const SEO_BAIDU_SITE_VERIFICATION = siteConfig(
+    'SEO_BAIDU_SITE_VERIFICATION',
+    null,
+    NOTION_CONFIG
+  )
+
   const SEO_GOOGLE_SITE_VERIFICATION = siteConfig(
     'SEO_GOOGLE_SITE_VERIFICATION',
     null,
@@ -144,6 +150,12 @@ const SEO = props => {
         <meta
           name='msvalidate.01'
           content={SEO_BING_VERIFICATION}
+        />
+      )}
+      {SEO_BAIDU_SITE_VERIFICATION && (
+        <meta
+          name='baidu-site-verification'
+          content={SEO_BAIDU_SITE_VERIFICATION}
         />
       )}
 
