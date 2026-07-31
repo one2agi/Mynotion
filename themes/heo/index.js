@@ -7,6 +7,7 @@
  */
 
 import Comment from '@/components/Comment'
+import SEO from '@/components/SEO'
 import { AdSlot } from '@/components/GoogleAdsense'
 import { HashTag } from '@/components/HeroIcons'
 import LazyImage from '@/components/LazyImage'
@@ -139,15 +140,18 @@ const LayoutBase = props => {
  */
 const LayoutIndex = props => {
   return (
-    <div id='post-outer-wrapper' className='px-5 md:px-0'>
-      {/* 文章分类条 */}
-      <CategoryBar {...props} />
-      {siteConfig('POST_LIST_STYLE') === 'page' ? (
-        <BlogPostListPage {...props} />
-      ) : (
-        <BlogPostListScroll {...props} />
-      )}
-    </div>
+    <>
+      <SEO {...props} />
+      <div id='post-outer-wrapper' className='px-5 md:px-0'>
+        {/* 文章分类条 */}
+        <CategoryBar {...props} />
+        {siteConfig('POST_LIST_STYLE') === 'page' ? (
+          <BlogPostListPage {...props} />
+        ) : (
+          <BlogPostListScroll {...props} />
+        )}
+      </div>
+    </>
   )
 }
 
@@ -158,15 +162,18 @@ const LayoutIndex = props => {
  */
 const LayoutPostList = props => {
   return (
-    <div id='post-outer-wrapper' className='px-5  md:px-0'>
-      {/* 文章分类条 */}
-      <CategoryBar {...props} />
-      {siteConfig('POST_LIST_STYLE') === 'page' ? (
-        <BlogPostListPage {...props} />
-      ) : (
-        <BlogPostListScroll {...props} />
-      )}
-    </div>
+    <>
+      <SEO {...props} />
+      <div id='post-outer-wrapper' className='px-5  md:px-0'>
+        {/* 文章分类条 */}
+        <CategoryBar {...props} />
+        {siteConfig('POST_LIST_STYLE') === 'page' ? (
+          <BlogPostListPage {...props} />
+        ) : (
+          <BlogPostListScroll {...props} />
+        )}
+      </div>
+    </>
   )
 }
 
@@ -197,21 +204,24 @@ const LayoutSearch = props => {
     }
   }, [currentSearch])
   return (
-    <div data-current-search={currentSearch || ''}>
-      <div id='post-outer-wrapper' className='px-5  md:px-0'>
-        {!currentSearch ? (
-          <SearchNav {...props} />
-        ) : (
-          <div id='posts-wrapper'>
-            {siteConfig('POST_LIST_STYLE') === 'page' ? (
-              <BlogPostListPage {...props} />
-            ) : (
-              <BlogPostListScroll {...props} />
-            )}
-          </div>
-        )}
+    <>
+      <SEO {...props} />
+      <div data-current-search={currentSearch || ''}>
+        <div id='post-outer-wrapper' className='px-5  md:px-0'>
+          {!currentSearch ? (
+            <SearchNav {...props} />
+          ) : (
+            <div id='posts-wrapper'>
+              {siteConfig('POST_LIST_STYLE') === 'page' ? (
+                <BlogPostListPage {...props} />
+              ) : (
+                <BlogPostListScroll {...props} />
+              )}
+            </div>
+          )}
+        </div>
       </div>
-    </div>
+    </>
   )
 }
 
@@ -226,20 +236,23 @@ const LayoutArchive = props => {
   // 归档页顶部显示条，如果是默认归档则不显示。分类详情页显示分类列表，标签详情页显示当前标签
 
   return (
-    <div className='p-5 rounded-xl border dark:border-gray-600 max-w-6xl w-full bg-white dark:bg-[#1e1e1e]'>
-      {/* 文章分类条 */}
-      <CategoryBar {...props} border={false} />
+    <>
+      <SEO {...props} />
+      <div className='p-5 rounded-xl border dark:border-gray-600 max-w-6xl w-full bg-white dark:bg-[#1e1e1e]'>
+        {/* 文章分类条 */}
+        <CategoryBar {...props} border={false} />
 
-      <div className='px-3'>
-        {Object.keys(archivePosts).map(archiveTitle => (
-          <BlogPostArchive
-            key={archiveTitle}
-            posts={archivePosts[archiveTitle]}
-            archiveTitle={archiveTitle}
-          />
-        ))}
+        <div className='px-3'>
+          {Object.keys(archivePosts).map(archiveTitle => (
+            <BlogPostArchive
+              key={archiveTitle}
+              posts={archivePosts[archiveTitle]}
+              archiveTitle={archiveTitle}
+            />
+          ))}
+        </div>
       </div>
-    </div>
+    </>
   )
 }
 
@@ -294,6 +307,7 @@ const LayoutSlug = props => {
   }, [post, router, waiting404])
   return (
     <>
+      <SEO {...props} />
       <div
         className={`article h-full w-full ${fullWidth ? '' : 'xl:max-w-5xl'} ${hasCode ? 'xl:w-[73.15vw]' : ''}  bg-white dark:bg-[#18171d] dark:border-gray-600 lg:hover:shadow lg:border rounded-2xl lg:px-2 lg:py-4 `}>
         {/* 文章锁 */}
@@ -366,6 +380,7 @@ const Layout404 = props => {
   const { onLoading, fullWidth } = useGlobal()
   return (
     <>
+      <SEO {...props} />
       {/* 主区块 */}
       <main
         id='wrapper-outer'
@@ -425,10 +440,12 @@ const LayoutCategoryIndex = props => {
   const { locale } = useGlobal()
 
   return (
-    <div id='category-outer-wrapper' className='mt-8 px-5 md:px-0'>
-      <div className='text-4xl font-extrabold dark:text-gray-200 mb-5'>
-        {locale.COMMON.CATEGORY}
-      </div>
+    <>
+      <SEO {...props} />
+      <div id='category-outer-wrapper' className='mt-8 px-5 md:px-0'>
+        <div className='text-4xl font-extrabold dark:text-gray-200 mb-5'>
+          {locale.COMMON.CATEGORY}
+        </div>
       <div
         id='category-list'
         className='duration-200 flex flex-wrap m-10 justify-center'>
@@ -453,7 +470,8 @@ const LayoutCategoryIndex = props => {
           )
         })}
       </div>
-    </div>
+      </div>
+    </>
   )
 }
 
@@ -467,10 +485,12 @@ const LayoutTagIndex = props => {
   const { locale } = useGlobal()
 
   return (
-    <div id='tag-outer-wrapper' className='px-5 mt-8 md:px-0'>
-      <div className='text-4xl font-extrabold dark:text-gray-200 mb-5'>
-        {locale.COMMON.TAGS}
-      </div>
+    <>
+      <SEO {...props} />
+      <div id='tag-outer-wrapper' className='px-5 mt-8 md:px-0'>
+        <div className='text-4xl font-extrabold dark:text-gray-200 mb-5'>
+          {locale.COMMON.TAGS}
+        </div>
       <div
         id='tag-list'
         className='duration-200 flex flex-wrap space-x-5 space-y-5 m-10 justify-center'>
@@ -495,7 +515,8 @@ const LayoutTagIndex = props => {
           )
         })}
       </div>
-    </div>
+      </div>
+    </>
   )
 }
 
