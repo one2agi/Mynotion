@@ -75,8 +75,8 @@ const SEO = props => {
   const favicon = siteConfig('BLOG_FAVICON')
   const BACKGROUND_DARK = siteConfig('BACKGROUND_DARK', '', NOTION_CONFIG)
 
-  const SEO_BAIDU_SITE_VERIFICATION = siteConfig(
-    'SEO_BAIDU_SITE_VERIFICATION',
+  const SEO_BING_VERIFICATION = siteConfig(
+    'SEO_BING_VERIFICATION',
     null,
     NOTION_CONFIG
   )
@@ -140,10 +140,10 @@ const SEO = props => {
           content={SEO_GOOGLE_SITE_VERIFICATION}
         />
       )}
-      {SEO_BAIDU_SITE_VERIFICATION && (
+      {SEO_BING_VERIFICATION && (
         <meta
-          name='baidu-site-verification'
-          content={SEO_BAIDU_SITE_VERIFICATION}
+          name='msvalidate.01'
+          content={SEO_BING_VERIFICATION}
         />
       )}
 
