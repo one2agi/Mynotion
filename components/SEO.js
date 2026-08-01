@@ -364,7 +364,7 @@ const getSEOMeta = (props, router, locale) => {
   const { post, siteInfo, tag, category, page } = props
   const keyword = router?.query?.s
 
-  const TITLE = siteConfig('TITLE')
+  const TITLE = siteInfo?.title || siteConfig('TITLE')
   switch (router.route) {
     case '/':
       return {
@@ -427,7 +427,7 @@ const getSEOMeta = (props, router, locale) => {
     case '/search/[keyword]/page/[page]':
       return {
         title: `${keyword || ''}${keyword ? ' | ' : ''}${locale.NAV.SEARCH} | ${siteInfo?.title}`,
-        description: TITLE,
+        description: `${siteInfo?.description}`,
         image: `${siteInfo?.pageCover}`,
         slug: 'search/' + (keyword || ''),
         type: 'website'
