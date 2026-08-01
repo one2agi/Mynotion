@@ -1,7 +1,7 @@
 {
   "framework": "nextjs",
   "buildCommand": "NODE_OPTIONS='--max-old-space-size=5120' next build",
-  "installCommand": "pnpm install --prod",
+  "installCommand": "bash scripts/vercel-install.sh",
   "cleanUrls": true,
   "trailingSlash": false,
   "headers": [],
