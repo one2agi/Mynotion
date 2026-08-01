@@ -1,6 +1,6 @@
 {
   "framework": "nextjs",
-  "buildCommand": "next build",
+  "buildCommand": "BUILD_MODE=true next build",
   "installCommand": "bash scripts/vercel-install.sh",
   "cleanUrls": true,
   "trailingSlash": false,
