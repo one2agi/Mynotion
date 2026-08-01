@@ -47,8 +47,8 @@ describe('Vercel build contract', () => {
         nextArguments
       }).toEqual({
         buildMode: 'true',
-        notionRateMaxPerMinute: '20',
-        notionRateMinIntervalMs: '3000',
+        notionRateMaxPerMinute: '50',
+        notionRateMinIntervalMs: '1200',
         nextArguments: 'build'
       })
     } finally {

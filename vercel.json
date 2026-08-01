@@ -1,6 +1,6 @@
 {
   "framework": "nextjs",
-  "buildCommand": "BUILD_MODE=true NOTION_BUILD_RATE_MAX_PER_MINUTE=20 NOTION_BUILD_RATE_MIN_INTERVAL_MS=3000 next build",
+  "buildCommand": "BUILD_MODE=true NOTION_BUILD_RATE_MAX_PER_MINUTE=50 NOTION_BUILD_RATE_MIN_INTERVAL_MS=1200 next build",
   "installCommand": "bash scripts/vercel-install.sh",
   "cleanUrls": true,
   "trailingSlash": false,
