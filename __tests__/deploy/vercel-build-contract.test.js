@@ -19,7 +19,7 @@ describe('Vercel build contract', () => {
 
     writeFileSync(
       fakeNext,
-      '#!/bin/sh\nprintf \'%s\\n%s\\n\' "$BUILD_MODE" "$*" > "$VERCEL_BUILD_PROBE"\n'
+      '#!/bin/sh\nprintf \'%s\\n%s\\n%s\\n%s\\n\' "$BUILD_MODE" "$NOTION_BUILD_RATE_MAX_PER_MINUTE" "$NOTION_BUILD_RATE_MIN_INTERVAL_MS" "$*" > "$VERCEL_BUILD_PROBE"\n'
     )
     chmodSync(fakeNext, 0o755)
 
@@ -33,12 +33,22 @@ describe('Vercel build contract', () => {
         }
       })
 
-      const [buildMode, nextArguments] = readFileSync(probeOutput, 'utf8')
-        .trimEnd()
-        .split('\n')
+      const [
+        buildMode,
+        notionRateMaxPerMinute,
+        notionRateMinIntervalMs,
+        nextArguments
+      ] = readFileSync(probeOutput, 'utf8').trimEnd().split('\n')
 
-      expect({ buildMode, nextArguments }).toEqual({
+      expect({
+        buildMode,
+        notionRateMaxPerMinute,
+        notionRateMinIntervalMs,
+        nextArguments
+      }).toEqual({
         buildMode: 'true',
+        notionRateMaxPerMinute: '20',
+        notionRateMinIntervalMs: '3000',
         nextArguments: 'build'
       })
     } finally {

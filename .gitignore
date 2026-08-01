@@ -64,6 +64,7 @@ package-lock.json
 # yarn.lock
 
 .notion-api-lock
+.notion-api-lock.state
 .tmp/
 .perf/
 /.artifacts/
