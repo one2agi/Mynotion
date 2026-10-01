@@ -1,11 +1,27 @@
 import BLOG, { LAYOUT_MAPPINGS } from '@/blog.config'
+import { THEME_SWITCH_MANIFEST } from '@/conf/themeSwitch.manifest'
 import getConfig from 'next/config'
 import dynamic from 'next/dynamic'
 import { useRouter } from 'next/router'
 import { getQueryParam, getQueryVariable, isBrowser } from '../lib/utils'
 
-// 在next.config.js中扫描所有主题
-export const { THEMES = [] } = getConfig()?.publicRuntimeConfig || {}
+// 优先使用编译期静态注入的白名单，其次使用 publicRuntimeConfig，最后以清单为兜底
+let resolvedThemes = []
+try {
+  if (process.env.NEXT_PUBLIC_ALLOWED_THEMES) {
+    resolvedThemes = JSON.parse(process.env.NEXT_PUBLIC_ALLOWED_THEMES)
+  }
+} catch {
+  // ignore json parse error
+}
+if (!resolvedThemes || resolvedThemes.length === 0) {
+  const { THEMES: scannedThemes = [] } = getConfig()?.publicRuntimeConfig || {}
+  resolvedThemes =
+    scannedThemes && scannedThemes.length > 0
+      ? scannedThemes
+      : Object.keys(THEME_SWITCH_MANIFEST)
+}
+export const THEMES = resolvedThemes
 const baseLayoutCache = new Map()
 const layoutByThemeCache = new Map()
 let domFixTimer = null
@@ -69,10 +85,13 @@ const getLayoutLoading = layoutName => {
 }
 
 const normalizeThemeName = themeValue => {
-  if (!themeValue || typeof themeValue !== 'string') return BLOG.THEME
+  const fallback = THEMES.includes(BLOG.THEME)
+    ? BLOG.THEME
+    : THEMES[0] || BLOG.THEME
+  if (!themeValue || typeof themeValue !== 'string') return fallback
   const firstTheme = themeValue.split(',')[0].trim()
-  if (!firstTheme) return BLOG.THEME
-  return THEMES.includes(firstTheme) ? firstTheme : BLOG.THEME
+  if (!firstTheme) return fallback
+  return THEMES.includes(firstTheme) ? firstTheme : fallback
 }
 
 const scheduleFixThemeDOM = (delay = 120) => {
@@ -144,15 +163,29 @@ export const getBaseLayoutByTheme = theme => {
   }
   const DynamicBaseLayout = dynamic(
     () =>
-      import(`@/themes/${normalizedTheme}`).then(m => {
-        const Base = m['LayoutBase']
-        if (!Base) {
-          throw new Error(
-            `[theme] LayoutBase missing in themes/${normalizedTheme}`
+      import(`@/themes/${normalizedTheme}`)
+        .then(m => {
+          const Base = m['LayoutBase']
+          if (!Base) {
+            throw new Error(
+              `[theme] LayoutBase missing in themes/${normalizedTheme}`
+            )
+          }
+          return Base
+        })
+        .catch(err => {
+          console.error(
+            `[theme] Failed to load LayoutBase for "${normalizedTheme}", falling back:`,
+            err
           )
-        }
-        return Base
-      }),
+          const fallback = THEMES[0] || BLOG.THEME
+          if (fallback && fallback !== normalizedTheme) {
+            return import(`@/themes/${fallback}`).then(
+              m => m['LayoutBase'] || LayoutLoading
+            )
+          }
+          return LayoutLoading
+        }),
     { ssr: true }
   )
   baseLayoutCache.set(normalizedTheme, DynamicBaseLayout)
@@ -186,16 +219,30 @@ export const useLayoutByTheme = ({ layoutName, theme }) => {
   }
 
   const loadLayout = () =>
-    import(`@/themes/${themeQuery}`).then(componentsSource => {
-      const Selected =
-        componentsSource[layoutName] || componentsSource.LayoutSlug
-      if (!Selected) {
-        throw new Error(
-          `[theme] Layout "${layoutName}" missing in themes/${themeQuery}`
+    import(`@/themes/${themeQuery}`)
+      .then(componentsSource => {
+        const Selected =
+          componentsSource[layoutName] || componentsSource.LayoutSlug
+        if (!Selected) {
+          throw new Error(
+            `[theme] Layout "${layoutName}" missing in themes/${themeQuery}`
+          )
+        }
+        return Selected
+      })
+      .catch(err => {
+        console.error(
+          `[theme] Failed to load layout "${layoutName}" for "${themeQuery}", falling back:`,
+          err
         )
-      }
-      return Selected
-    })
+        const fallback = THEMES[0] || BLOG.THEME
+        if (fallback && fallback !== themeQuery) {
+          return import(`@/themes/${fallback}`).then(
+            m => m[layoutName] || m.LayoutSlug || LayoutLoading
+          )
+        }
+        return LayoutLoading
+      })
   const DynamicLayoutComponent = dynamic(loadLayout, {
     ssr: true,
     loading: getLayoutLoading(layoutName)

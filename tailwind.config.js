@@ -1,12 +1,26 @@
+const path = require('node:path')
 const BLOG = require('./blog.config')
 const { fontFamilies } = require('./lib/utils/font')
+const {
+  resolveAllowedThemes,
+  getTailwindThemeContentPaths
+} = require('./lib/build/themeFilter')
+
+const { allowedThemes, allThemes } = resolveAllowedThemes({
+  themesDir: path.resolve(__dirname, 'themes'),
+  themeSwitchEnabled: BLOG.THEME_SWITCH
+})
 
 module.exports = {
   content: [
-    './pages/**/*.js',
-    './components/**/*.js',
-    './layouts/**/*.js',
-    './themes/**/*.js'
+    './pages/**/*.{js,jsx,ts,tsx}',
+    './components/**/*.{js,jsx,ts,tsx}',
+    './layouts/**/*.{js,jsx,ts,tsx}',
+    ...getTailwindThemeContentPaths({
+      allowedThemes,
+      allThemes,
+      baseThemesDir: './themes'
+    })
   ],
   darkMode: BLOG.APPEARANCE === 'class' ? 'media' : 'class', // or 'media' or 'class'
   theme: {

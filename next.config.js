@@ -10,8 +10,18 @@ const withBundleAnalyzer = require('@next/bundle-analyzer')({
   enabled: BLOG.BUNDLE_ANALYZER
 })
 
-// 扫描项目 /themes下的目录名
-const themes = scanSubdirectories(path.resolve(__dirname, 'themes'))
+const { resolveAllowedThemes } = require('./lib/build/themeFilter')
+
+// 解析本次构建允许的主题列表（支持 BUILD_THEMES 白名单按需瘦身）
+const {
+  allowedThemes,
+  allThemes,
+  isFiltered: isThemesFiltered
+} = resolveAllowedThemes({
+  themesDir: path.resolve(__dirname, 'themes'),
+  themeSwitchEnabled: BLOG.THEME_SWITCH
+})
+const themes = allowedThemes
 // 检测用户开启的多语言
 const locales = (function () {
   // 根据BLOG_NOTION_PAGE_ID 检查支持多少种语言数据.
@@ -35,7 +45,11 @@ const locales = (function () {
 // next dev 时配置可能被多个 worker 各自加载一次，globalThis 无法跨进程去重；用独占文件锁只打印一行。
 ;(function printDevCacheHint() {
   if (process.env.npm_lifecycle_event !== 'dev') return
-  const lockFile = path.join(__dirname, '.next', 'dev-cache-hint.lock')
+  const lockFile = path.join(
+    __dirname,
+    process.env.NEXT_DIST_DIR || '.next',
+    'dev-cache-hint.lock'
+  )
   const siblingWindowMs = 15_000 // 同一次 dev 内多 worker；间隔超过则视为新会话，删掉旧锁再提示
   try {
     fs.mkdirSync(path.dirname(lockFile), { recursive: true })
@@ -163,27 +177,6 @@ function pruneTransientNotionDataCache(dataDir) {
 }
 
 /**
- * 扫描指定目录下的文件夹名，用于获取所有主题
- * @param {*} directory
- * @returns
- */
-function scanSubdirectories(directory) {
-  const subdirectories = []
-
-  fs.readdirSync(directory).forEach(file => {
-    const fullPath = path.join(directory, file)
-    const stats = fs.statSync(fullPath)
-    if (stats.isDirectory()) {
-      subdirectories.push(file)
-    }
-
-    // subdirectories.push(file)
-  })
-
-  return subdirectories
-}
-
-/**
  * @type {import('next').NextConfig}
  */
 
@@ -194,6 +187,10 @@ function getOutput() {
 }
 
 const nextConfig = {
+  distDir: process.env.NEXT_DIST_DIR || '.next',
+  env: {
+    NEXT_PUBLIC_ALLOWED_THEMES: JSON.stringify(allowedThemes)
+  },
   eslint: {
     ignoreDuringBuilds: true
   },
@@ -335,11 +332,22 @@ const nextConfig = {
             }
           ]
         },
+        // 敏感金融与控制台路由：严禁任何第三方 iframe 嵌入（防点击劫持与 UI 钓鱼）
+        // 覆盖 /affiliate, /activate, /api 根路径及所有子路由 (/:sub*)
+        {
+          source: '/:path(affiliate|activate|api)/:sub*',
+          headers: [
+            { key: 'X-Frame-Options', value: 'DENY' },
+            {
+              key: 'Content-Security-Policy',
+              value: "frame-ancestors 'none'"
+            }
+          ]
+        },
         {
           source: '/:path*{/}?',
           headers: [
-            // 为了博客兼容性，不做过多安全限制
-            { key: 'Access-Control-Allow-Credentials', value: 'true' },
+            // 符合 W3C 标准的公共 CORS 策略（Token/公开接口无需跨域 Cookie 凭据）
             { key: 'Access-Control-Allow-Origin', value: '*' },
             {
               key: 'Access-Control-Allow-Methods',
@@ -350,41 +358,6 @@ const nextConfig = {
               value:
                 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version'
             }
-            // 安全头部 相关配置，谨慎开启
-            //   { key: 'X-Frame-Options', value: 'DENY' },
-            //   { key: 'X-Content-Type-Options', value: 'nosniff' },
-            //   { key: 'X-XSS-Protection', value: '1; mode=block' },
-            //   { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
-            //   { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=()' },
-            //   {
-            //     key: 'Strict-Transport-Security',
-            //     value: 'max-age=31536000; includeSubDomains; preload'
-            //   },
-            //   {
-            //     key: 'Content-Security-Policy',
-            //     value: [
-            //       "default-src 'self'",
-            //       "script-src 'self' 'unsafe-inline' 'unsafe-eval' *.googleapis.com *.gstatic.com *.google-analytics.com *.googletagmanager.com",
-            //       "style-src 'self' 'unsafe-inline' *.googleapis.com *.gstatic.com",
-            //       "img-src 'self' data: blob: *.notion.so *.unsplash.com *.githubusercontent.com *.gravatar.com",
-            //       "font-src 'self' *.googleapis.com *.gstatic.com",
-            //       "connect-src 'self' *.google-analytics.com *.googletagmanager.com",
-            //       "frame-src 'self' *.youtube.com *.vimeo.com",
-            //       "object-src 'none'",
-            //       "base-uri 'self'",
-            //       "form-action 'self'"
-            //     ].join('; ')
-            //   },
-
-            //   // CORS 配置（更严格）
-            //   { key: 'Access-Control-Allow-Credentials', value: 'false' },
-            //   {
-            //     key: 'Access-Control-Allow-Origin',
-            //     value: process.env.NODE_ENV === 'production'
-            //       ? siteConfig('LINK') || 'https://yourdomain.com'
-            //       : '*'
-            //   },
-            //   { key: 'Access-Control-Max-Age', value: '86400' }
           ]
         },
         //   {
@@ -402,7 +375,7 @@ const nextConfig = {
         //   }
       ]
     },
-  webpack: (config, { dev, isServer }) => {
+  webpack: (config, { dev, isServer, webpack }) => {
     // 动态主题：添加 resolve.alias 配置，将动态路径映射到实际路径
     config.resolve.alias['@'] = path.resolve(__dirname)
     config.resolve.alias['lodash.throttle'] = path.resolve(
@@ -410,7 +383,25 @@ const nextConfig = {
       'lib/utils/throttle.js'
     )
 
+    // 按需构建主题：若被白名单过滤，限制 Webpack 动态导入上下文，避免打包未启用主题
+    if (isThemesFiltered && webpack) {
+      const themePattern = allowedThemes
+        .map(t => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+        .join('|')
+      config.plugins.push(
+        new webpack.ContextReplacementPlugin(
+          /[/\\]themes[/\\]?$/,
+          new RegExp(`^\\./(${themePattern})(/.*)?$`)
+        )
+      )
+    }
+
     if (!isServer) {
+      if (isThemesFiltered) {
+        console.log(
+          `[ThemeFilter] Building with ${allowedThemes.length}/${allThemes.length} themes: [${allowedThemes.join(', ')}]`
+        )
+      }
       console.log(
         '[ThemeResolver][webpack]',
         JSON.stringify({
